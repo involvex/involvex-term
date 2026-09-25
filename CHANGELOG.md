@@ -2,7 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.4.0] - Unreleased
+## [0.5.0] - Unreleased
+
+### Added
+
+- Footer Git menu: switch branch (local/remote), open repo in Explorer, copy
+  remote URL / branch name
+- OpenCode multi-session picker in the footer (new, continue last, pick by id)
+
+## [0.4.0] - 2026-09-25
 
 ### Added
 

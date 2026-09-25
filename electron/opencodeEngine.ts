@@ -18,6 +18,8 @@ export interface OpencodeStatus {
 	latest: OpencodeSession | null
 	/** True when `latest` belongs to the active cwd / project. */
 	projectMatch: boolean
+	/** Recent sessions (newest first), for the picker. */
+	sessions: OpencodeSession[]
 }
 
 function normPath(p: string): string {
@@ -63,6 +65,12 @@ async function opencodeAvailable(): Promise<boolean> {
 
 export {opencodeAvailable}
 
+function sessionMatchesCwd(s: OpencodeSession, cwdN: string): boolean {
+	if (!cwdN || !s.directory) return false
+	const d = normPath(s.directory)
+	return d === cwdN || cwdN.startsWith(d + '\\') || cwdN.startsWith(d + '/')
+}
+
 /** List recent OpenCode sessions; optionally prefer ones under `cwd`. */
 export async function getOpencodeStatus(cwd?: string): Promise<OpencodeStatus> {
 	const available = await opencodeAvailable()
@@ -72,12 +80,13 @@ export async function getOpencodeStatus(cwd?: string): Promise<OpencodeStatus> {
 			sessionCount: 0,
 			latest: null,
 			projectMatch: false,
+			sessions: [],
 		}
 	}
 	try {
 		const {stdout} = await execFileAsync(
 			'opencode',
-			['session', 'list', '--format', 'json', '-n', '20'],
+			['session', 'list', '--format', 'json', '-n', '30'],
 			{
 				timeout: 15_000,
 				windowsHide: true,
@@ -87,13 +96,7 @@ export async function getOpencodeStatus(cwd?: string): Promise<OpencodeStatus> {
 		const sessions = parseSessions(stdout).sort((a, b) => b.updated - a.updated)
 		const cwdN = cwd ? normPath(cwd) : ''
 		const match = cwdN
-			? sessions.find(
-					s =>
-						s.directory &&
-						(normPath(s.directory) === cwdN ||
-							cwdN.startsWith(normPath(s.directory) + '\\') ||
-							cwdN.startsWith(normPath(s.directory) + '/')),
-				)
+			? sessions.find(s => sessionMatchesCwd(s, cwdN))
 			: undefined
 		const latest = match ?? sessions[0] ?? null
 		return {
@@ -101,6 +104,7 @@ export async function getOpencodeStatus(cwd?: string): Promise<OpencodeStatus> {
 			sessionCount: sessions.length,
 			latest,
 			projectMatch: Boolean(match),
+			sessions,
 		}
 	} catch {
 		return {
@@ -108,6 +112,7 @@ export async function getOpencodeStatus(cwd?: string): Promise<OpencodeStatus> {
 			sessionCount: 0,
 			latest: null,
 			projectMatch: false,
+			sessions: [],
 		}
 	}
 }

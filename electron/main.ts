@@ -14,7 +14,13 @@ import os from 'node:os'
 import path from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {sniffCwd} from './cwdTracker.js'
-import {getGitStatus, invalidateGitCache} from './gitEngine.js'
+import {
+	checkoutBranch,
+	getGitStatus,
+	getRemoteUrl,
+	invalidateGitCache,
+	listBranches,
+} from './gitEngine.js'
 import {buildMenu} from './hotkeys.js'
 import {getOpencodeStatus, opencodeAvailable} from './opencodeEngine.js'
 import {getPty, killPty, setCwd, spawnPty} from './ptyManager.js'
@@ -244,6 +250,19 @@ function registerIpc() {
 
 	ipcMain.handle('git:get', async (_e, {cwd}: {cwd: string}) =>
 		getGitStatus(cwd),
+	)
+	ipcMain.handle('git:branches', async (_e, {cwd}: {cwd: string}) =>
+		listBranches(cwd),
+	)
+	ipcMain.handle(
+		'git:checkout',
+		async (_e, {cwd, branch}: {cwd: string; branch: string}) =>
+			checkoutBranch(cwd, branch),
+	)
+	ipcMain.handle(
+		'git:remoteUrl',
+		async (_e, {cwd, remote}: {cwd: string; remote?: string} = {cwd: ''}) =>
+			getRemoteUrl(cwd, remote || 'origin'),
 	)
 
 	// Live cwd per pty (tracked via OSC7) — used for session snapshots.

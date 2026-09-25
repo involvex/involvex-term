@@ -100,3 +100,105 @@ export function invalidateGitCache(repoRoot?: string): void {
 	if (repoRoot) cache.delete(repoRoot)
 	else cache.clear()
 }
+
+export interface BranchList {
+	current: string
+	local: string[]
+	remote: string[]
+}
+
+function resolveRepo(cwd: string): string | null {
+	try {
+		if (!fs.existsSync(cwd)) return null
+		const st = fs.statSync(cwd)
+		const dir = st.isDirectory() ? cwd : path.dirname(cwd)
+		return findRepoRoot(dir)
+	} catch {
+		return null
+	}
+}
+
+export async function listBranches(cwd: string): Promise<BranchList> {
+	const root = resolveRepo(cwd)
+	if (!root) return {current: '', local: [], remote: []}
+	try {
+		const git = simpleGit(root)
+		const summary = await git.branch(['-a', '--no-color'])
+		const current = summary.current || ''
+		const local: string[] = []
+		const remote: string[] = []
+		for (const name of Object.keys(summary.branches)) {
+			if (name === 'HEAD' || name.includes('HEAD')) continue
+			if (name.startsWith('remotes/')) {
+				const short = name.replace(/^remotes\//, '')
+				// skip remote HEAD pointers
+				if (short.endsWith('/HEAD') || short.includes('/HEAD')) continue
+				remote.push(short)
+			} else {
+				local.push(name)
+			}
+		}
+		local.sort((a, b) => a.localeCompare(b))
+		remote.sort((a, b) => a.localeCompare(b))
+		return {current, local, remote}
+	} catch {
+		return {current: '', local: [], remote: []}
+	}
+}
+
+export async function checkoutBranch(
+	cwd: string,
+	branch: string,
+): Promise<{ok: boolean; error?: string; branch?: string}> {
+	const root = resolveRepo(cwd)
+	if (!root) return {ok: false, error: 'Not a git repository'}
+	let ref = branch.trim().replace(/^remotes\//, '')
+	if (!ref) return {ok: false, error: 'Empty branch'}
+	try {
+		const git = simpleGit(root)
+		const locals = await git.branchLocal()
+		// origin/feature → create local tracking branch when missing
+		if (ref.includes('/') && !locals.branches[ref]) {
+			const slash = ref.indexOf('/')
+			const remote = ref.slice(0, slash)
+			const name = ref.slice(slash + 1)
+			if (name && !locals.branches[name]) {
+				await git.checkout(['-b', name, '--track', `${remote}/${name}`])
+				invalidateGitCache(root)
+				return {ok: true, branch: name}
+			}
+			if (name && locals.branches[name]) ref = name
+		}
+		await git.checkout(ref)
+		invalidateGitCache(root)
+		return {ok: true, branch: ref}
+	} catch (e) {
+		return {ok: false, error: e instanceof Error ? e.message : String(e)}
+	}
+}
+
+export async function getRemoteUrl(
+	cwd: string,
+	remote = 'origin',
+): Promise<string | null> {
+	const root = resolveRepo(cwd)
+	if (!root) return null
+	try {
+		const git = simpleGit(root)
+		const raw = await git.remote(['get-url', remote])
+		const url = typeof raw === 'string' ? raw.trim() : ''
+		return url || null
+	} catch {
+		try {
+			const git = simpleGit(root)
+			const remotes = await git.getRemotes(true)
+			const hit =
+				remotes.find(r => r.name === remote) ??
+				remotes.find(r => r.name === 'origin') ??
+				remotes[0]
+			return hit?.refs?.fetch || hit?.refs?.push || null
+		} catch {
+			return null
+		}
+	}
+}

@@ -32,6 +32,13 @@ export interface OpencodeStatus {
 	sessionCount: number
 	latest: OpencodeSession | null
 	projectMatch: boolean
+	sessions: OpencodeSession[]
+}
+
+export interface BranchList {
+	current: string
+	local: string[]
+	remote: string[]
 }
 
 export interface ShellProfile {
@@ -142,6 +149,12 @@ export interface TermApiShape {
 	onPtyData: (id: string, cb: (data: string) => void) => () => void
 	onPtyExit: (id: string, cb: () => void) => () => void
 	gitGet: (cwd: string) => Promise<GitStatus>
+	gitBranches: (cwd: string) => Promise<BranchList>
+	gitCheckout: (
+		cwd: string,
+		branch: string,
+	) => Promise<{ok: boolean; error?: string; branch?: string}>
+	gitRemoteUrl: (cwd: string, remote?: string) => Promise<string | null>
 	onGitChanged: (
 		cb: (msg: {tabId: string} & Partial<GitStatus>) => void,
 	) => () => void

@@ -30,6 +30,7 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
 - Command snippets in the palette; clear buffer / prompt marks
 - In-app update check (packaged NSIS/AppImage via GitHub Releases)
 - Export / import settings from Settings
+- Footer Git menu (branch switch, Explorer, copy remote) + OpenCode session picker
 
 ## Quickstart (Bun, PowerShell)
 

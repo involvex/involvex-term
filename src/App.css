@@ -364,6 +364,18 @@ body {
 	padding: 0;
 	text-align: left;
 }
+.footer-git-btn {
+	background: transparent;
+	border: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+	padding: 0;
+	text-align: left;
+}
+.footer-git-btn:hover .footer-branch {
+	text-decoration: underline;
+}
 .footer-oc-btn:hover .footer-oc-title,
 .footer-oc-btn:hover .footer-oc-label {
 	text-decoration: underline;
@@ -385,6 +397,99 @@ body {
 .footer-sep {
 	opacity: 0.4;
 	margin: 0 6px;
+}
+
+.footer-menu {
+	position: fixed;
+	z-index: 10000;
+	min-width: 220px;
+	max-width: min(420px, 92vw);
+	max-height: min(360px, 70vh);
+	overflow: auto;
+	padding: 4px 0;
+	background: #252526;
+	border: 1px solid #3c3c3c;
+	border-radius: 6px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+	font-size: 12px;
+	color: #cccccc;
+}
+
+.footer-menu-wide {
+	min-width: 280px;
+}
+
+.footer-menu-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	width: 100%;
+	padding: 6px 12px;
+	background: transparent;
+	border: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.footer-menu-item:hover:not(:disabled) {
+	background: #094771;
+	color: #ffffff;
+}
+
+.footer-menu-item:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.footer-menu-item.active {
+	color: #4ec9b0;
+}
+
+.footer-menu-item.match .footer-menu-session-title {
+	color: #4ec9b0;
+}
+
+.footer-menu-back {
+	opacity: 0.85;
+}
+
+.footer-menu-sep {
+	height: 1px;
+	margin: 4px 0;
+	background: #3c3c3c;
+}
+
+.footer-menu-section,
+.footer-menu-meta {
+	padding: 4px 12px;
+	font-size: 11px;
+	opacity: 0.55;
+}
+
+.footer-menu-session {
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+}
+
+.footer-menu-session-title {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
+}
+
+.footer-menu-session-dir {
+	font-size: 10px;
+	opacity: 0.55;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
+	padding-left: 14px;
 }
 
 .web-warning {

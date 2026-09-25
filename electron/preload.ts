@@ -15,6 +15,12 @@ export interface TermApi {
 	onPtyData: (id: string, cb: (data: string) => void) => () => void
 	onPtyExit: (id: string, cb: () => void) => () => void
 	gitGet: (cwd: string) => Promise<unknown>
+	gitBranches: (cwd: string) => Promise<unknown>
+	gitCheckout: (
+		cwd: string,
+		branch: string,
+	) => Promise<{ok: boolean; error?: string; branch?: string}>
+	gitRemoteUrl: (cwd: string, remote?: string) => Promise<string | null>
 	onGitChanged: (
 		cb: (msg: {tabId: string} & Record<string, unknown>) => void,
 	) => () => void
@@ -46,6 +52,13 @@ export interface TermApi {
 			created: number
 		} | null
 		projectMatch: boolean
+		sessions: Array<{
+			id: string
+			title: string
+			directory: string
+			updated: number
+			created: number
+		}>
 	}>
 	dialogConfirm: (opts: {
 		message: string
@@ -86,6 +99,11 @@ const api: TermApi = {
 	onPtyData: (id, cb) => sub(`pty:data-${id}`, cb as never),
 	onPtyExit: (id, cb) => sub(`pty:exit-${id}`, cb as never),
 	gitGet: cwd => ipcRenderer.invoke('git:get', {cwd}),
+	gitBranches: cwd => ipcRenderer.invoke('git:branches', {cwd}),
+	gitCheckout: (cwd, branch) =>
+		ipcRenderer.invoke('git:checkout', {cwd, branch}),
+	gitRemoteUrl: (cwd, remote) =>
+		ipcRenderer.invoke('git:remoteUrl', {cwd, remote}),
 	onGitChanged: cb => sub('git:changed', cb as never),
 	onGitChangedFor: (tabId, cb) => sub(`git:changed-${tabId}`, cb as never),
 	sysGet: () => ipcRenderer.invoke('sys:get'),

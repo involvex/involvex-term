@@ -41,13 +41,11 @@ Shipped in tree (see CHANGELOG 0.2.0 unreleased):
 3. ~~Export / import settings~~
 4. ~~Marked prompts / clear-buffer actions~~
 
-## v0.5+ — Beyond Windows Terminal
+## v0.5 — Beyond Windows Terminal
 
-Stay differentiated; do not become a second OpenCode UI:
-
-- Deeper OpenCode host (attach/serve status, multi-session picker)
-- Richer Git actions from the footer (branch menu, open in Explorer)
-- Optional AI-agnostic env hooks only (no competing chat UI)
+1. ~~Footer Git actions (branch menu, open in Explorer, copy remote)~~
+2. ~~OpenCode multi-session picker~~
+3. Optional AI-agnostic env hooks only (no competing chat UI)
 
 ## Explicitly out of scope
 

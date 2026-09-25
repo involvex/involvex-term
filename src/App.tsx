@@ -208,6 +208,7 @@ export default function App() {
 							sessionCount: 0,
 							latest: null,
 							projectMatch: false,
+							sessions: [],
 						})
 				})
 		}
@@ -974,6 +975,15 @@ export default function App() {
 				settings={settings}
 				cwd={cwd}
 				onOpencodeContinue={continueOpencode}
+				onOpencodeNew={launchOpencode}
+				onGitRefreshed={s => {
+					setGit(s)
+					if (s.cwd) setCwd(s.cwd)
+				}}
+				onToast={msg => {
+					setToast(msg)
+					window.setTimeout(() => setToast(null), 2800)
+				}}
 			/>
 			{showSettings && (
 				<SettingsModal
