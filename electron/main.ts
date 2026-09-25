@@ -9,7 +9,13 @@ import { spawnPty, getPty, killPty, setCwd } from "./ptyManager.js";
 import { sniffCwd } from "./cwdTracker.js";
 import { getGitStatus, invalidateGitCache } from "./gitEngine.js";
 import { getSysStats } from "./sysEngine.js";
-import { loadSettings, saveSettings, SETTINGS_FILE } from "./settingsStore.js";
+import {
+  loadSettings,
+  saveSettings,
+  loadSession,
+  saveSession,
+  SETTINGS_FILE,
+} from "./settingsStore.js";
 import { buildMenu } from "./hotkeys.js";
 import { destroyTray, setupTray } from "./tray.js";
 import {
@@ -209,6 +215,23 @@ function registerIpc() {
   ipcMain.handle("git:get", async (_e, { cwd }: { cwd: string }) =>
     getGitStatus(cwd),
   );
+
+  // Live cwd per pty (tracked via OSC7) — used for session snapshots.
+  ipcMain.handle("pty:cwd", (_e, { ids }: { ids: string[] }) =>
+    (Array.isArray(ids) ? ids : []).map((id) => ({
+      id,
+      cwd: getPty(id)?.cwd ?? null,
+    })),
+  );
+
+  ipcMain.handle("session:get", () => loadSession());
+  const onSessionSave = (
+    _e: unknown,
+    state: { tabs?: Array<{ title: string; root: unknown }> },
+  ) => saveSession({ version: 1, tabs: state?.tabs ?? [] });
+  ipcMain.handle("session:save", onSessionSave);
+  // Fire-and-forget variant for unload/shutdown flushes.
+  ipcMain.on("session:save", onSessionSave as never);
 
   ipcMain.handle("sys:get", async () => getSysStats());
 

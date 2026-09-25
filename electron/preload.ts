@@ -23,6 +23,10 @@ export interface TermApi {
   ) => () => void;
   sysGet: () => Promise<unknown>;
   onSysTick: (cb: (stats: Record<string, unknown>) => void) => () => void;
+  ptyCwd: (ids: string[]) => Promise<Array<{ id: string; cwd: string | null }>>;
+  sessionGet: () => Promise<unknown>;
+  sessionSave: (state: unknown) => Promise<unknown>;
+  sessionSaveSync: (state: unknown) => void;
   clipboardWrite: (text: string) => Promise<void>;
   clipboardRead: () => Promise<string>;
   settingsGet: () => Promise<unknown>;
@@ -52,6 +56,10 @@ const api: TermApi = {
   onGitChangedFor: (tabId, cb) => sub(`git:changed-${tabId}`, cb as never),
   sysGet: () => ipcRenderer.invoke("sys:get"),
   onSysTick: (cb) => sub("sys:tick", cb as never),
+  ptyCwd: (ids) => ipcRenderer.invoke("pty:cwd", { ids }),
+  sessionGet: () => ipcRenderer.invoke("session:get"),
+  sessionSave: (state) => ipcRenderer.invoke("session:save", state),
+  sessionSaveSync: (state) => ipcRenderer.send("session:save", state),
   clipboardWrite: (text) => ipcRenderer.invoke("clipboard:write", { text }),
   clipboardRead: () => ipcRenderer.invoke("clipboard:read"),
   settingsGet: () => ipcRenderer.invoke("settings:get"),

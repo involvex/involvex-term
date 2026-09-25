@@ -225,6 +225,7 @@ body {
   width: 100%;
   height: 100%;
   gap: 3px;
+  position: relative;
 }
 
 .split-leaf {
@@ -242,6 +243,26 @@ body {
 .split-leaf.focused {
   outline: 1px solid #4ec9b0;
   outline-offset: -1px;
+}
+
+.pane-divider {
+  position: absolute;
+  z-index: 5;
+  background: transparent;
+}
+
+.pane-divider.h {
+  height: 7px;
+  cursor: row-resize;
+}
+
+.pane-divider.v {
+  width: 7px;
+  cursor: col-resize;
+}
+
+.pane-divider:hover {
+  background: rgba(78, 201, 176, 0.45);
 }
 
 .hotkey-row {

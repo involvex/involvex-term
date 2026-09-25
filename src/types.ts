@@ -30,7 +30,7 @@ export interface AppSettings {
     refreshMs: number;
   };
   hotkeys: Record<string, string>;
-  tabs: { confirmClose: boolean };
+  tabs: { confirmClose: boolean; restoreSession: boolean };
   terminal: { startDir: string };
   window: {
     width: number;
@@ -46,6 +46,17 @@ export interface AppSettings {
     heightPercent: number;
     hideOnFocusLoss: boolean;
   };
+}
+
+export interface SessionTab {
+  title: string;
+  /** Pane tree JSON (validated/normalized on load). */
+  root: unknown;
+}
+
+export interface SessionState {
+  version: 1;
+  tabs: SessionTab[];
 }
 
 export interface TermApiShape {
@@ -71,6 +82,11 @@ export interface TermApiShape {
   ) => () => void;
   sysGet: () => Promise<SysStats>;
   onSysTick: (cb: (stats: SysStats) => void) => () => void;
+  ptyCwd: (ids: string[]) => Promise<Array<{ id: string; cwd: string | null }>>;
+  sessionGet: () => Promise<SessionState | null>;
+  sessionSave: (state: SessionState) => Promise<unknown>;
+  /** Fire-and-forget (safe to call during page unload). */
+  sessionSaveSync: (state: SessionState) => void;
   clipboardWrite: (text: string) => Promise<void>;
   clipboardRead: () => Promise<string>;
   settingsGet: () => Promise<AppSettings>;

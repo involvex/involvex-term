@@ -274,6 +274,18 @@ export default function SettingsModal({ settings, onChange, onClose }: Props) {
             />{" "}
             Confirm before closing last tab
           </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.tabs.restoreSession}
+              onChange={(e) =>
+                set({
+                  tabs: { ...settings.tabs, restoreSession: e.target.checked },
+                })
+              }
+            />{" "}
+            Restore tabs and splits on launch
+          </label>
         </section>
 
         <section>

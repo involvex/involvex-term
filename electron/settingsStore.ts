@@ -2,9 +2,11 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 import { z } from "zod";
+import type { SessionState } from "./types.js";
 
 export const SETTINGS_DIR = path.join(os.homedir(), ".involvex-term");
 export const SETTINGS_FILE = path.join(SETTINGS_DIR, "settings.json");
+export const SESSION_FILE = path.join(SETTINGS_DIR, "session.json");
 
 const ThemeSchema = z.object({
   bg: z.string().default("#1e1e1e"),
@@ -40,6 +42,7 @@ const HotkeysSchema = z.record(z.string(), z.string()).default({
 
 const TabsSchema = z.object({
   confirmClose: z.boolean().default(false),
+  restoreSession: z.boolean().default(true),
 });
 
 const TerminalSchema = z.object({
@@ -132,4 +135,48 @@ export function saveSettings(next: AppSettings): AppSettings {
     fs.mkdirSync(SETTINGS_DIR, { recursive: true });
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(parsed, null, 2));
   return parsed;
+}
+
+function isValidSessionTab(t: unknown): t is { title: unknown; root: unknown } {
+  return (
+    !!t &&
+    typeof t === "object" &&
+    "root" in (t as Record<string, unknown>) &&
+    !!(t as Record<string, unknown>)["root"] &&
+    typeof (t as Record<string, unknown>)["root"] === "object"
+  );
+}
+
+export function loadSession(): SessionState | null {
+  try {
+    if (!fs.existsSync(SESSION_FILE)) return null;
+    const raw = JSON.parse(fs.readFileSync(SESSION_FILE, "utf-8")) as {
+      tabs?: unknown;
+    };
+    if (!raw || !Array.isArray(raw.tabs)) return null;
+    const tabs = raw.tabs.filter(isValidSessionTab).map((t) => ({
+      title: typeof t.title === "string" ? t.title : "shell",
+      root: t.root,
+    }));
+    if (tabs.length === 0) return null;
+    return { version: 1, tabs };
+  } catch {
+    return null;
+  }
+}
+
+export function saveSession(next: SessionState): void {
+  try {
+    if (!fs.existsSync(SETTINGS_DIR))
+      fs.mkdirSync(SETTINGS_DIR, { recursive: true });
+    const tabs = Array.isArray(next?.tabs)
+      ? next.tabs.filter(isValidSessionTab).map((t) => ({
+          title: typeof t.title === "string" ? t.title : "shell",
+          root: t.root,
+        }))
+      : [];
+    fs.writeFileSync(SESSION_FILE, JSON.stringify({ version: 1, tabs }));
+  } catch {
+    /* session persistence is best-effort */
+  }
 }

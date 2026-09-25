@@ -8,8 +8,12 @@ import {
   countLeaves,
   findLeaf,
   firstLeaf,
+  mapLeafCwd,
+  normalizeSessionRoot,
+  newPaneId,
   removeLeaf,
   splitLeaf,
+  updateSplitRatio,
   type PaneLeaf,
   type SplitDir,
 } from "./lib/panes";
@@ -55,7 +59,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     "zoom-out": "Ctrl+-",
     "zoom-reset": "Ctrl+0",
   },
-  tabs: { confirmClose: false },
+  tabs: { confirmClose: false, restoreSession: true },
   terminal: { startDir: "" },
   window: { width: 1200, height: 800, x: null, y: null, maximized: false },
   tray: { enabled: true, minimizeToTray: true, closeToTray: true },
@@ -68,11 +72,6 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 let tabSeq = 0;
-let paneSeq = 0;
-function newPaneId(): string {
-  paneSeq += 1;
-  return `pane-${Date.now()}-${paneSeq}`;
-}
 function newTab(cwd?: string): TabInfo {
   tabSeq += 1;
   const paneId = newPaneId();
@@ -113,13 +112,41 @@ export default function App() {
 
   const activeTab = tabs.find((t) => t.id === activeId) || tabs[0];
 
-  // Load settings
+  // Load settings (+ restore previous session on fresh launch)
   useEffect(() => {
     const api = termApi();
     if (!api) return;
     api
       .settingsGet()
-      .then((s) => setSettings({ ...DEFAULT_SETTINGS, ...(s as AppSettings) }))
+      .then(async (s) => {
+        const merged = { ...DEFAULT_SETTINGS, ...(s as AppSettings) };
+        setSettings(merged);
+        if (!merged.tabs.restoreSession) return;
+        try {
+          const session = await api.sessionGet();
+          const saved = session?.tabs ?? [];
+          if (saved.length === 0) return;
+          const restored: TabInfo[] = [];
+          for (const [i, st] of saved.entries()) {
+            const root = normalizeSessionRoot(st.root);
+            if (!root) continue;
+            tabSeq += 1;
+            restored.push({
+              id: `tab-restored-${Date.now()}-${i}`,
+              title: st.title || `Tab ${tabSeq}`,
+              cwd: undefined,
+              root,
+              activePaneId: firstLeaf(root).paneId,
+            });
+          }
+          if (restored.length > 0) {
+            setTabs(restored);
+            setActiveId(restored[0].id);
+          }
+        } catch {
+          /* fall back to the default tab */
+        }
+      })
       .catch(() => undefined);
     const off = api.onSettingsChanged((s) =>
       setSettings({ ...DEFAULT_SETTINGS, ...(s as AppSettings) }),
@@ -246,6 +273,19 @@ export default function App() {
     [git?.cwd, cwd],
   );
 
+  // Drag a split divider to a new ratio.
+  const resizeSplit = useCallback(
+    (tabId: string, splitId: string, ratio: number) => {
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === tabId
+            ? { ...t, root: updateSplitRatio(t.root, splitId, ratio) }
+            : t,
+        ),
+      );
+    },
+    [],
+  );
   // Close the active pane; last pane closes the tab instead.
   const closePane = useCallback(() => {
     const tabId = activeRef.current;
@@ -365,6 +405,58 @@ export default function App() {
       .catch(() => undefined);
   }, []);
 
+  // Snapshot tabs (split trees + live per-pane cwds) for session restore.
+  const persistSession = useCallback(async () => {
+    const api = termApi();
+    if (!api) return;
+    try {
+      const tabsNow = tabsRef.current;
+      const ids = tabsNow.flatMap((t) =>
+        collectLeaves(t.root).map((l) => l.paneId),
+      );
+      const cwds = new Map<string, string | null>();
+      if (ids.length > 0) {
+        for (const { id, cwd } of await api.ptyCwd(ids)) cwds.set(id, cwd);
+      }
+      await api.sessionSave({
+        version: 1,
+        tabs: tabsNow.map((t) => ({
+          title: t.title,
+          root: mapLeafCwd(t.root, cwds),
+        })),
+      });
+    } catch {
+      /* best-effort */
+    }
+  }, []);
+
+  // Debounced save on any tab/pane change…
+  useEffect(() => {
+    if (!termApi()) return;
+    const timer = setTimeout(() => {
+      void persistSession();
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [tabs, persistSession]);
+
+  // …plus a fire-and-forget flush on unload (uses last-known cwds).
+  useEffect(() => {
+    const flush = () => {
+      const api = termApi();
+      if (!api) return;
+      try {
+        api.sessionSaveSync({
+          version: 1,
+          tabs: tabsRef.current.map((t) => ({ title: t.title, root: t.root })),
+        });
+      } catch {
+        /* noop */
+      }
+    };
+    window.addEventListener("beforeunload", flush);
+    return () => window.removeEventListener("beforeunload", flush);
+  }, []);
+
   const paletteCommands: PaletteCommand[] = [
     {
       id: "cmd:new-tab",
@@ -469,6 +561,9 @@ export default function App() {
             bg={settings.theme.bg}
             fg={settings.theme.fg}
             onFocusPane={(paneId) => focusPane(t.id, paneId)}
+            onResizeSplit={(splitId, ratio) =>
+              resizeSplit(t.id, splitId, ratio)
+            }
           />
         ))}
       </div>
