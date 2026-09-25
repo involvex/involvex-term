@@ -51,20 +51,22 @@ function newTab(cwd?: string): TabInfo {
 
 export default function App() {
   const [tabs, setTabs] = useState<TabInfo[]>(() => [newTab()]);
-  const [activeId, setActiveId] = useState<string>(() => "");
+  const [activeId, setActiveId] = useState<string>(() => tabs[0]?.id ?? "");
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
   const [git, setGit] = useState<GitStatus | null>(null);
   const [sys, setSys] = useState<SysStats | null>(null);
   const [cwd, setCwd] = useState("");
+  // Latest-value refs for use inside IPC callbacks (synced in effects,
+  // never written during render).
   const tabsRef = useRef(tabs);
-  tabsRef.current = tabs;
   const activeRef = useRef(activeId);
-  activeRef.current = activeId;
-
   useEffect(() => {
-    setActiveId((prev) => prev || tabs[0]?.id || "");
+    tabsRef.current = tabs;
   }, [tabs]);
+  useEffect(() => {
+    activeRef.current = activeId;
+  }, [activeId]);
 
   // Load settings
   useEffect(() => {

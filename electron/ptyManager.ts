@@ -31,7 +31,6 @@ export const PWSH_OSC7_INIT =
 
 function lazyPty(): typeof Pty | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("node-pty") as typeof Pty;
   } catch (e) {
     console.error(
@@ -42,7 +41,7 @@ function lazyPty(): typeof Pty | null {
   }
 }
 
-export function resolveShell(_cwd?: string): { shell: string; args: string[] } {
+export function resolveShell(): { shell: string; args: string[] } {
   const platform = process.platform;
   if (platform === "win32") {
     const pwsh = `${process.env["SystemRoot"] ?? "C:\\Windows"}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`;
@@ -80,7 +79,7 @@ export function spawnPty(
   rows: number,
 ): PtyEntry {
   const mod = lazyPty();
-  const { shell, args } = resolveShell(cwd);
+  const { shell, args } = resolveShell();
   // Never pass an invalid cwd to node-pty: Windows reports it as
   // "Cannot create process, error code: 267" (ERROR_DIRECTORY).
   let home = cwd || os.homedir();

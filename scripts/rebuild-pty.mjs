@@ -51,7 +51,7 @@ function pyenvCandidates() {
   const found = [];
   for (const root of roots) {
     const versions = path.join(root, "versions");
-    let dirs = [];
+    let dirs;
     try {
       dirs = fs.readdirSync(versions);
     } catch {

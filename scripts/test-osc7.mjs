@@ -1,5 +1,6 @@
 // Validates: pwsh -NoExit -Command <OSC7 hook> emits OSC7 with CWD on first
 // prompt WITHOUT echoing the init code into the terminal.
+/* eslint-disable no-control-regex -- OSC7 sequences are control chars by design */
 import fs from "node:fs";
 import { createRequire } from "node:module";
 

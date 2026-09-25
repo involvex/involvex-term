@@ -7,7 +7,6 @@ const require = createRequire(import.meta.url);
 
 let si: typeof import("systeminformation") | null = null;
 try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   si = require("systeminformation") as typeof import("systeminformation");
 } catch {
   si = null;
@@ -17,7 +16,7 @@ export async function getSysStats(): Promise<SysStats> {
   const total = os.totalmem();
   const free = os.freemem();
   const used = total - free;
-  let cpuPercent = 0;
+  let cpuPercent: number;
   try {
     if (si) {
       const load = await si.currentLoad();
