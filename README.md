@@ -10,6 +10,12 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
   - Left: Git `⎇ branch ●count ↑ahead ↓behind ⚑stash` (dirty/staged/untracked)
   - Right: PC stats `CPU % | MEM used/total %`
 - Tabs like Windows Terminal: `Ctrl+Shift+T/W`, `Ctrl+Tab`, `Ctrl+1..9`, `Ctrl+Shift+D`
+- Windows Terminal style copy/paste: `Ctrl+C` copies only with selection
+  (plain `Ctrl+C` still interrupts), `Ctrl+V` pastes, right-click copies
+  selection or pastes
+- Remembers window size/position; minimize/close to system tray (configurable)
+- Custom app icon (`public/icon.png`/`.ico`, generated via
+  `bun scripts/generate-icon.mjs`)
 - Customizable via `~/.involvex-term/settings.json` + in-app Settings (`Ctrl+,`):
   theme, font, footer modules on/off, refresh interval, hotkeys
 - Git engine: OSC7 CWD tracking + `simple-git` + `chokidar` on `.git/HEAD,index,refs`

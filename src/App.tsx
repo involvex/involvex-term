@@ -39,6 +39,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     "zoom-reset": "Ctrl+0",
   },
   tabs: { confirmClose: false },
+  window: { width: 1200, height: 800, x: null, y: null, maximized: false },
+  tray: { enabled: true, minimizeToTray: true, closeToTray: true },
 };
 
 let tabSeq = 0;
@@ -235,6 +237,7 @@ export default function App() {
         onSelect={setActiveId}
         onClose={closeTab}
         onNew={() => addTab()}
+        onOpenSettings={() => setShowSettings(true)}
       />
       <div className="terminals">
         {tabs.map((t) => (

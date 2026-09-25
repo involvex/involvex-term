@@ -10,6 +10,7 @@ interface Props {
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
   onNew: () => void;
+  onOpenSettings: () => void;
 }
 
 export default function TabBar({
@@ -18,6 +19,7 @@ export default function TabBar({
   onSelect,
   onClose,
   onNew,
+  onOpenSettings,
 }: Props) {
   return (
     <div className="tabbar" role="tablist">
@@ -52,6 +54,16 @@ export default function TabBar({
         title="New tab (Ctrl+Shift+T)"
       >
         +
+      </button>
+      <span className="tabbar-spacer" />
+      <button
+        type="button"
+        className="tab-new"
+        onClick={onOpenSettings}
+        title="Settings (Ctrl+,)"
+        aria-label="Open settings"
+      >
+        ⚙
       </button>
     </div>
   );

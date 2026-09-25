@@ -38,11 +38,27 @@ const TabsSchema = z.object({
   confirmClose: z.boolean().default(false),
 });
 
+const WindowSchema = z.object({
+  width: z.number().min(400).max(7680).default(1200),
+  height: z.number().min(300).max(4320).default(800),
+  x: z.number().int().nullable().default(null),
+  y: z.number().int().nullable().default(null),
+  maximized: z.boolean().default(false),
+});
+
+const TraySchema = z.object({
+  enabled: z.boolean().default(true),
+  minimizeToTray: z.boolean().default(true),
+  closeToTray: z.boolean().default(true),
+});
+
 export const SettingsSchema = z.object({
   theme: ThemeSchema.default({}),
   footer: FooterSchema.default({}),
   hotkeys: HotkeysSchema.default({}),
   tabs: TabsSchema.default({}),
+  window: WindowSchema.default({}),
+  tray: TraySchema.default({}),
 });
 
 export type AppSettings = z.infer<typeof SettingsSchema>;

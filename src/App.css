@@ -92,6 +92,11 @@ body {
   border-radius: 6px;
   padding: 4px 10px;
   cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tabbar-spacer {
+  flex: 1;
 }
 
 .terminals {

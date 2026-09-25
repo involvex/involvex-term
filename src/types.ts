@@ -31,6 +31,14 @@ export interface AppSettings {
   };
   hotkeys: Record<string, string>;
   tabs: { confirmClose: boolean };
+  window: {
+    width: number;
+    height: number;
+    x: number | null;
+    y: number | null;
+    maximized: boolean;
+  };
+  tray: { enabled: boolean; minimizeToTray: boolean; closeToTray: boolean };
 }
 
 export interface TermApiShape {

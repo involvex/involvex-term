@@ -2,6 +2,7 @@
   "name": "involvex-term",
   "private": true,
   "version": "0.0.0",
+  "description": "Minimalist dark Git-aware terminal (Electron + xterm.js + node-pty)",
   "type": "module",
   "scripts": {
     "dev": "vite",

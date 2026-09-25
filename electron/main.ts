@@ -1,7 +1,9 @@
-import { app, BrowserWindow, clipboard, ipcMain } from "electron";
+import { app, BrowserWindow, clipboard, ipcMain, screen } from "electron";
+import type { BrowserWindowConstructorOptions, Event } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import os from "node:os";
+import fs from "node:fs";
 import chokidar, { type FSWatcher } from "chokidar";
 import { spawnPty, getPty, killPty, setCwd } from "./ptyManager.js";
 import { sniffCwd } from "./cwdTracker.js";
@@ -9,6 +11,51 @@ import { getGitStatus, invalidateGitCache } from "./gitEngine.js";
 import { getSysStats } from "./sysEngine.js";
 import { loadSettings, saveSettings, SETTINGS_FILE } from "./settingsStore.js";
 import { buildMenu } from "./hotkeys.js";
+import { destroyTray, setupTray } from "./tray.js";
+
+let isQuitting = false;
+
+function iconPath(): string {
+  const custom = path.join(process.env.VITE_PUBLIC, "icon.png");
+  try {
+    if (fs.existsSync(custom)) return custom;
+  } catch {
+    /* fall through */
+  }
+  return path.join(process.env.VITE_PUBLIC, "electron-vite.svg");
+}
+
+function persistWindowBounds(): void {
+  if (!win || win.isDestroyed()) return;
+  try {
+    const maximized = win.isMaximized();
+    const b = win.getBounds();
+    settings = saveSettings({
+      ...settings,
+      window: {
+        width: b.width,
+        height: b.height,
+        x: maximized ? settings.window.x : b.x,
+        y: maximized ? settings.window.y : b.y,
+        maximized,
+      },
+    });
+  } catch {
+    /* noop */
+  }
+}
+
+function onScreen(x: number | null, y: number | null): boolean {
+  if (x == null || y == null) return false;
+  try {
+    return screen.getAllDisplays().some((d) => {
+      const a = d.bounds;
+      return x >= a.x && x < a.x + a.width && y >= a.y && y < a.y + a.height;
+    });
+  } catch {
+    return false;
+  }
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -167,6 +214,7 @@ function registerIpc() {
     if (win) {
       win.webContents.send("settings:changed", settings);
       await buildMenu(win, settings).catch(() => undefined);
+      setupTray(win, iconPath(), settings, quitApp);
       startSysLoop();
     }
     return settings;
@@ -181,6 +229,7 @@ function watchSettingsFile() {
         settings = loadSettings();
         win?.webContents.send("settings:changed", settings);
         if (win) void buildMenu(win, settings).catch(() => undefined);
+        if (win) setupTray(win, iconPath(), settings, quitApp);
         startSysLoop();
       } catch {
         /* noop */
@@ -192,19 +241,68 @@ function watchSettingsFile() {
 }
 
 function createWindow() {
+  const w = settings.window;
+  const bounds: BrowserWindowConstructorOptions = {
+    width: w.width,
+    height: w.height,
+    show: false,
+  };
+  if (onScreen(w.x, w.y)) {
+    bounds.x = w.x ?? undefined;
+    bounds.y = w.y ?? undefined;
+  }
   win = new BrowserWindow({
+    ...bounds,
     title: "involvex-term",
-    icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+    icon: iconPath(),
     backgroundColor: settings.theme.bg || "#1e1e1e",
     webPreferences: { preload: path.join(__dirname, "preload.mjs") },
   });
+
+  if (w.maximized) win.maximize();
+  win.once("ready-to-show", () => win?.show());
+
+  let saveTimer: NodeJS.Timeout | null = null;
+  const scheduleSave = () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(persistWindowBounds, 500);
+  };
+  win.on("resize", scheduleSave);
+  win.on("move", scheduleSave);
+
+  win.on("minimize", () => {
+    if (settings.tray.enabled && settings.tray.minimizeToTray) win?.hide();
+  });
+  win.on("close", (e: Event) => {
+    if (!isQuitting && settings.tray.enabled && settings.tray.closeToTray) {
+      e.preventDefault();
+      persistWindowBounds();
+      win?.hide();
+    } else {
+      persistWindowBounds();
+    }
+  });
+  win.on("show", () => {
+    if (win) setupTray(win, iconPath(), settings, quitApp);
+  });
+  win.on("hide", () => {
+    if (win) setupTray(win, iconPath(), settings, quitApp);
+  });
+
   win.webContents.on("did-finish-load", () => {
     win?.webContents.send("main-process-message", new Date().toLocaleString());
   });
   if (VITE_DEV_SERVER_URL) win.loadURL(VITE_DEV_SERVER_URL);
   else win.loadFile(path.join(RENDERER_DIST, "index.html"));
   void buildMenu(win, settings).catch(() => undefined);
+  setupTray(win, iconPath(), settings, quitApp);
   startSysLoop();
+}
+
+function quitApp(): void {
+  isQuitting = true;
+  destroyTray();
+  app.quit();
 }
 
 app.on("window-all-closed", () => {

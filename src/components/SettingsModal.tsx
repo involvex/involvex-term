@@ -204,6 +204,47 @@ export default function SettingsModal({ settings, onChange, onClose }: Props) {
             Confirm before closing last tab
           </label>
         </section>
+
+        <section>
+          <h3>Window & Tray</h3>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.tray.enabled}
+              onChange={(e) =>
+                set({ tray: { ...settings.tray, enabled: e.target.checked } })
+              }
+            />{" "}
+            Enable system tray icon
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.tray.minimizeToTray}
+              onChange={(e) =>
+                set({
+                  tray: { ...settings.tray, minimizeToTray: e.target.checked },
+                })
+              }
+            />{" "}
+            Minimize to tray
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.tray.closeToTray}
+              onChange={(e) =>
+                set({
+                  tray: { ...settings.tray, closeToTray: e.target.checked },
+                })
+              }
+            />{" "}
+            Close button hides to tray (quit via tray menu)
+          </label>
+          <p className="footer-dim">
+            Window size & position restore automatically on launch.
+          </p>
+        </section>
       </div>
     </div>
   );
