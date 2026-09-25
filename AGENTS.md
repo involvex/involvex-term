@@ -16,7 +16,8 @@ bun scripts/generate-icon.mjs  # regenerate public/icon.png + icon.ico
 ```
 
 OpenCode: TabBar **OC** / `Ctrl+Shift+O` / palette writes `opencode` into the
-focused pane (requires `opencode` on PATH).
+focused pane; footer **OC** click continues with `opencode -s <id>` (requires
+`opencode` on PATH). Vertical split: `Shift+Alt+V`.
 
 Windows + PowerShell. No `rm -rf` (use `Remove-Item`), no `ls` (use `dir`/`Get-ChildItem`).
 

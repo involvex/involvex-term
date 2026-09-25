@@ -57,6 +57,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 		palette: 'Ctrl+Shift+P',
 		opencode: 'Ctrl+Shift+O',
 		'split-pane': 'Shift+Alt+D',
+		'split-pane-vertical': 'Shift+Alt+V',
 		'close-pane': 'Shift+Alt+C',
 		'zoom-in': 'Ctrl+=',
 		'zoom-out': 'Ctrl+-',
@@ -161,17 +162,29 @@ export default function App() {
 		}
 	}, [cwd, settings.footer.showOpencode, settings.footer.refreshMs])
 
-	/** Inject `opencode` into the focused pane of the active tab. */
-	const launchOpencode = useCallback(() => {
+	/** Inject an OpenCode CLI command into the focused pane. */
+	const writeOpencodeCmd = useCallback((cmd: string) => {
 		const api = termApi()
 		if (!api) return
 		const tab = tabsRef.current.find(t => t.id === activeRef.current)
 		const paneId = tab?.activePaneId
 		if (!paneId) return
-		// Interrupt any running foreground command, then start OpenCode.
 		api.ptyWrite(paneId, '\x03')
-		setTimeout(() => api.ptyWrite(paneId, 'opencode\r'), 50)
+		setTimeout(() => api.ptyWrite(paneId, `${cmd}\r`), 50)
 	}, [])
+
+	/** Fresh OpenCode TUI in the focused pane. */
+	const launchOpencode = useCallback(() => {
+		writeOpencodeCmd('opencode')
+	}, [writeOpencodeCmd])
+
+	/** Continue a session (by id) or the last session (`-c`). */
+	const continueOpencode = useCallback(
+		(sessionId?: string) => {
+			writeOpencodeCmd(sessionId ? `opencode -s ${sessionId}` : 'opencode -c')
+		},
+		[writeOpencodeCmd],
+	)
 
 	// Load settings (+ restore previous session on fresh launch)
 	useEffect(() => {
@@ -408,6 +421,7 @@ export default function App() {
 			else if (action === 'open-palette') setPaletteOpen(true)
 			else if (action === 'open-opencode') launchOpencode()
 			else if (action === 'split-pane') splitPane('horizontal')
+			else if (action === 'split-pane-vertical') splitPane('vertical')
 			else if (action === 'close-pane') closePane()
 		})
 		return off
@@ -465,6 +479,10 @@ export default function App() {
 				// Split active pane horizontally (stacked), like Windows Terminal.
 				e.preventDefault()
 				splitPane('horizontal')
+			} else if (e.altKey && e.shiftKey && !mod && key === 'v') {
+				// Split active pane vertically (side-by-side).
+				e.preventDefault()
+				splitPane('vertical')
 			} else if (e.altKey && e.shiftKey && !mod && key === 'c') {
 				e.preventDefault()
 				closePane()
@@ -585,6 +603,12 @@ export default function App() {
 			run: () => splitPane('horizontal'),
 		},
 		{
+			id: 'cmd:split-pane-vertical',
+			title: 'Split pane vertically',
+			hint: 'Shift+Alt+V',
+			run: () => splitPane('vertical'),
+		},
+		{
 			id: 'cmd:close-pane',
 			title: 'Close active pane',
 			hint: 'Shift+Alt+C',
@@ -601,6 +625,14 @@ export default function App() {
 			title: 'Open OpenCode',
 			hint: opencodeAvailable ? 'Ctrl+Shift+O' : 'not found on PATH',
 			run: () => launchOpencode(),
+		},
+		{
+			id: 'cmd:opencode-continue',
+			title: 'Continue OpenCode session',
+			hint: opencode?.latest
+				? shortOcHint(opencode.latest.title)
+				: 'opencode -c',
+			run: () => continueOpencode(opencode?.latest?.id),
 		},
 		{
 			id: 'cmd:toggle-git',
@@ -681,6 +713,7 @@ export default function App() {
 				opencode={settings.footer.showOpencode ? opencode : null}
 				settings={settings}
 				cwd={cwd}
+				onOpencodeContinue={continueOpencode}
 			/>
 			{showSettings && (
 				<SettingsModal
@@ -703,4 +736,9 @@ export default function App() {
 function shortTitle(cwd: string, branch: string): string {
 	const base = (cwd || '').split(/[/\\]/).filter(Boolean).pop() || 'shell'
 	return branch ? `${base} ⎇${branch}` : base
+}
+
+function shortOcHint(title: string, max = 36): string {
+	const t = title.trim() || '(untitled)'
+	return t.length > max ? `${t.slice(0, max - 1)}…` : t
 }

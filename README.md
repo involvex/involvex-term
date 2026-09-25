@@ -11,10 +11,12 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
 - Footer status bar: Git branch/dirty/ahead/behind/stash + CPU/MEM
 - Tabs like Windows Terminal: `Ctrl+Shift+T/W`, `Ctrl+Tab`, `Ctrl+1..9`,
   `Ctrl+Shift+D`
-- Split panes (binary tree, flat CSS grid) — `Shift+Alt+D` / `Shift+Alt+C`
+- Split panes (binary tree, flat CSS grid) — horizontal `Shift+Alt+D`,
+  vertical `Shift+Alt+V`, close `Shift+Alt+C`
 - Command palette (`Ctrl+Shift+P`) and find (`Ctrl+Shift+F`)
 - **OpenCode** button / `Ctrl+Shift+O` — launches
-  [OpenCode](https://opencode.ai) in the focused pane
+  [OpenCode](https://opencode.ai) in the focused pane; click the footer
+  `OC` widget to continue the matched session (`opencode -s <id>`)
 - Windows Terminal style copy/paste: `Ctrl+C` copies only with selection
 - Session restore, tray, optional quake dropdown (`Ctrl+\``)
 - Settings at `~/.involvex-term/settings.json` (`Ctrl+,`)
@@ -42,9 +44,11 @@ Install [OpenCode](https://opencode.ai) so `opencode` is on your PATH, then:
 
 - Click **OC** in the tab bar, or
 - Press `Ctrl+Shift+O`, or
-- Use the command palette / Terminal menu
+- Use the command palette / Terminal menu, or
+- Click the footer OpenCode status to continue that session
 
-involvex-term sends `opencode` + Enter to the focused pane (after a soft interrupt).
+involvex-term sends `opencode` (or `opencode -s <id>` / `opencode -c`) + Enter
+to the focused pane (after a soft interrupt).
 
 ## Native module note (node-pty)
 

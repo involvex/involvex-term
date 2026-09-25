@@ -36,6 +36,7 @@ const HotkeysSchema = z.record(z.string(), z.string()).default({
 	palette: 'Ctrl+Shift+P',
 	opencode: 'Ctrl+Shift+O',
 	'split-pane': 'Shift+Alt+D',
+	'split-pane-vertical': 'Shift+Alt+V',
 	'close-pane': 'Shift+Alt+C',
 	'zoom-in': 'Ctrl+=',
 	'zoom-out': 'Ctrl+-',

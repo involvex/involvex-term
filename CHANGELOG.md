@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.1] - Unreleased
+
+### Added
+
+- Click footer OpenCode status to continue that session (`opencode -s <id>`)
+- Vertical split panes (`Shift+Alt+V`), menu, and command palette entry
+
 ## [0.1.0] - 2026-09-25
 
 ### Added

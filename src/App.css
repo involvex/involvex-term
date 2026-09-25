@@ -182,6 +182,19 @@ body {
 	font-size: 11px;
 	letter-spacing: 0.04em;
 }
+.footer-oc-btn {
+	background: transparent;
+	border: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+	padding: 0;
+	text-align: left;
+}
+.footer-oc-btn:hover .footer-oc-title,
+.footer-oc-btn:hover .footer-oc-label {
+	text-decoration: underline;
+}
 .footer-oc-title {
 	opacity: 0.85;
 	max-width: 22vw;

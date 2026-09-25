@@ -52,6 +52,16 @@ export async function buildMenu(
 					click: () => win.webContents.send('tab:action', 'split-pane'),
 				},
 				{
+					id: 'pane:split-vertical',
+					label: 'Split Pane Vertically',
+					accelerator: accelFromSetting(
+						hk['split-pane-vertical'],
+						'Shift+Alt+V',
+					),
+					click: () =>
+						win.webContents.send('tab:action', 'split-pane-vertical'),
+				},
+				{
 					id: 'pane:close',
 					label: 'Close Pane',
 					accelerator: accelFromSetting(hk['close-pane'], 'Shift+Alt+C'),

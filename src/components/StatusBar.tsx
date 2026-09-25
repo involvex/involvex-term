@@ -54,7 +54,13 @@ export function GitWidget({status}: {status: GitStatus | null}) {
 	)
 }
 
-export function OpencodeWidget({status}: {status: OpencodeStatus | null}) {
+export function OpencodeWidget({
+	status,
+	onContinue,
+}: {
+	status: OpencodeStatus | null
+	onContinue?: (sessionId?: string) => void
+}) {
 	if (!status) {
 		return (
 			<span
@@ -77,15 +83,18 @@ export function OpencodeWidget({status}: {status: OpencodeStatus | null}) {
 	}
 	if (!status.latest) {
 		return (
-			<span
-				className="footer-item footer-dim"
-				title="No OpenCode sessions"
+			<button
+				type="button"
+				className="footer-item footer-dim footer-oc-btn"
+				title="No sessions — click to start OpenCode (opencode -c)"
+				onClick={() => onContinue?.()}
 			>
 				OC ·
-			</span>
+			</button>
 		)
 	}
 	const tip = [
+		'Click to continue this session',
 		`session: ${status.latest.id}`,
 		`title: ${status.latest.title}`,
 		`dir: ${status.latest.directory || '(none)'}`,
@@ -93,9 +102,11 @@ export function OpencodeWidget({status}: {status: OpencodeStatus | null}) {
 		`${status.sessionCount} recent session(s)`,
 	].join('\n')
 	return (
-		<span
-			className={`footer-item${status.projectMatch ? ' footer-oc-match' : ''}`}
+		<button
+			type="button"
+			className={`footer-item footer-oc-btn${status.projectMatch ? ' footer-oc-match' : ''}`}
 			title={tip}
+			onClick={() => onContinue?.(status.latest?.id)}
 		>
 			<span className="footer-oc-label">OC</span>
 			{status.sessionCount > 1 && (
@@ -106,7 +117,7 @@ export function OpencodeWidget({status}: {status: OpencodeStatus | null}) {
 				· {shortOcTitle(status.latest.title)}
 			</span>
 			{status.projectMatch && <span className="footer-oc-dot"> ●</span>}
-		</span>
+		</button>
 	)
 }
 
@@ -154,12 +165,14 @@ export default function StatusBar({
 	opencode,
 	settings,
 	cwd,
+	onOpencodeContinue,
 }: {
 	git: GitStatus | null
 	sys: SysStats | null
 	opencode: OpencodeStatus | null
 	settings: AppSettings
 	cwd: string
+	onOpencodeContinue?: (sessionId?: string) => void
 }) {
 	const order = footerOrder(settings)
 	return (
@@ -175,6 +188,7 @@ export default function StatusBar({
 						<OpencodeWidget
 							key="opencode"
 							status={opencode}
+							onContinue={onOpencodeContinue}
 						/>
 					) : m === 'sys' && settings.footer.showSys ? (
 						<SysWidget
