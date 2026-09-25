@@ -176,6 +176,26 @@ body {
 .footer-sync {
 	opacity: 0.9;
 }
+.footer-oc-label {
+	color: #4ec9b0;
+	font-weight: 600;
+	font-size: 11px;
+	letter-spacing: 0.04em;
+}
+.footer-oc-title {
+	opacity: 0.85;
+	max-width: 22vw;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	display: inline-block;
+	vertical-align: bottom;
+}
+.footer-oc-match .footer-oc-title {
+	opacity: 1;
+}
+.footer-oc-dot {
+	color: #4ec9b0;
+}
 .footer-sep {
 	opacity: 0.4;
 	margin: 0 6px;

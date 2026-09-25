@@ -20,7 +20,8 @@ const FooterSchema = z.object({
 	showSys: z.boolean().default(true),
 	showCpu: z.boolean().default(true),
 	showMem: z.boolean().default(true),
-	modulesOrder: z.array(z.string()).default(['git', 'sys']),
+	showOpencode: z.boolean().default(true),
+	modulesOrder: z.array(z.string()).default(['git', 'opencode', 'sys']),
 	refreshMs: z.number().min(500).max(10000).default(1500),
 })
 

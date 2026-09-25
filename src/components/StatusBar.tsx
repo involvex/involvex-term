@@ -1,10 +1,15 @@
-import type {AppSettings, GitStatus, SysStats} from '../types'
+import type {AppSettings, GitStatus, OpencodeStatus, SysStats} from '../types'
 
 function fmtUptime(sec: number): string {
 	const h = Math.floor(sec / 3600)
 	const m = Math.floor((sec % 3600) / 60)
 	if (h > 0) return `${h}h ${m}m`
 	return `${m}m`
+}
+
+function shortOcTitle(title: string, max = 28): string {
+	const t = title.trim() || '(untitled)'
+	return t.length > max ? `${t.slice(0, max - 1)}…` : t
 }
 
 export function GitWidget({status}: {status: GitStatus | null}) {
@@ -49,6 +54,62 @@ export function GitWidget({status}: {status: GitStatus | null}) {
 	)
 }
 
+export function OpencodeWidget({status}: {status: OpencodeStatus | null}) {
+	if (!status) {
+		return (
+			<span
+				className="footer-item footer-dim"
+				title="OpenCode status…"
+			>
+				OC …
+			</span>
+		)
+	}
+	if (!status.available) {
+		return (
+			<span
+				className="footer-item footer-dim"
+				title="OpenCode not found on PATH"
+			>
+				OC off
+			</span>
+		)
+	}
+	if (!status.latest) {
+		return (
+			<span
+				className="footer-item footer-dim"
+				title="No OpenCode sessions"
+			>
+				OC ·
+			</span>
+		)
+	}
+	const tip = [
+		`session: ${status.latest.id}`,
+		`title: ${status.latest.title}`,
+		`dir: ${status.latest.directory || '(none)'}`,
+		status.projectMatch ? 'matches current cwd' : 'other project',
+		`${status.sessionCount} recent session(s)`,
+	].join('\n')
+	return (
+		<span
+			className={`footer-item${status.projectMatch ? ' footer-oc-match' : ''}`}
+			title={tip}
+		>
+			<span className="footer-oc-label">OC</span>
+			{status.sessionCount > 1 && (
+				<span className="footer-dim"> {status.sessionCount}</span>
+			)}
+			<span className="footer-oc-title">
+				{' '}
+				· {shortOcTitle(status.latest.title)}
+			</span>
+			{status.projectMatch && <span className="footer-oc-dot"> ●</span>}
+		</span>
+	)
+}
+
 export function SysWidget({
 	stats,
 	settings,
@@ -76,20 +137,31 @@ export function SysWidget({
 	)
 }
 
+function footerOrder(settings: AppSettings): string[] {
+	const order = settings.footer.modulesOrder?.length
+		? [...settings.footer.modulesOrder]
+		: ['git', 'opencode', 'sys']
+	if (settings.footer.showOpencode && !order.includes('opencode')) {
+		const gi = order.indexOf('git')
+		order.splice(gi >= 0 ? gi + 1 : 0, 0, 'opencode')
+	}
+	return order
+}
+
 export default function StatusBar({
 	git,
 	sys,
+	opencode,
 	settings,
 	cwd,
 }: {
 	git: GitStatus | null
 	sys: SysStats | null
+	opencode: OpencodeStatus | null
 	settings: AppSettings
 	cwd: string
 }) {
-	const order = settings.footer.modulesOrder?.length
-		? settings.footer.modulesOrder
-		: ['git', 'sys']
+	const order = footerOrder(settings)
 	return (
 		<footer className="statusbar">
 			<div className="statusbar-left">
@@ -98,6 +170,11 @@ export default function StatusBar({
 						<GitWidget
 							key="git"
 							status={git}
+						/>
+					) : m === 'opencode' && settings.footer.showOpencode ? (
+						<OpencodeWidget
+							key="opencode"
+							status={opencode}
 						/>
 					) : m === 'sys' && settings.footer.showSys ? (
 						<SysWidget

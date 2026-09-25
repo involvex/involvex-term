@@ -200,6 +200,21 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 					<label>
 						<input
 							type="checkbox"
+							checked={settings.footer.showOpencode}
+							onChange={e =>
+								set({
+									footer: {
+										...settings.footer,
+										showOpencode: e.target.checked,
+									},
+								})
+							}
+						/>{' '}
+						Show OpenCode sessions
+					</label>
+					<label>
+						<input
+							type="checkbox"
 							checked={settings.footer.showCpu}
 							onChange={e =>
 								set({

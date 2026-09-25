@@ -19,6 +19,21 @@ export interface SysStats {
 	uptimeSec: number
 }
 
+export interface OpencodeSession {
+	id: string
+	title: string
+	directory: string
+	updated: number
+	created: number
+}
+
+export interface OpencodeStatus {
+	available: boolean
+	sessionCount: number
+	latest: OpencodeSession | null
+	projectMatch: boolean
+}
+
 export interface AppSettings {
 	theme: {bg: string; fg: string; fontFamily: string; fontSize: number}
 	footer: {
@@ -26,6 +41,7 @@ export interface AppSettings {
 		showSys: boolean
 		showCpu: boolean
 		showMem: boolean
+		showOpencode: boolean
 		modulesOrder: string[]
 		refreshMs: number
 	}
@@ -94,6 +110,12 @@ export interface TermApiShape {
 	onSettingsChanged: (cb: (s: AppSettings) => void) => () => void
 	onTabAction: (cb: (action: string) => void) => () => void
 	opencodeAvailable: () => Promise<boolean>
+	opencodeStatus: (cwd?: string) => Promise<OpencodeStatus>
+	dialogConfirm: (opts: {
+		message: string
+		detail?: string
+		title?: string
+	}) => Promise<boolean>
 }
 
 declare global {

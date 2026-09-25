@@ -1,15 +1,14 @@
 import chokidar, {type FSWatcher} from 'chokidar'
 import type {BrowserWindowConstructorOptions, Event} from 'electron'
-import {app, BrowserWindow, clipboard, ipcMain, screen} from 'electron'
-import {execFile} from 'node:child_process'
+import {app, BrowserWindow, clipboard, dialog, ipcMain, screen} from 'electron'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {fileURLToPath} from 'node:url'
-import {promisify} from 'node:util'
 import {sniffCwd} from './cwdTracker.js'
 import {getGitStatus, invalidateGitCache} from './gitEngine.js'
 import {buildMenu} from './hotkeys.js'
+import {getOpencodeStatus, opencodeAvailable} from './opencodeEngine.js'
 import {getPty, killPty, setCwd, spawnPty} from './ptyManager.js'
 import {
 	handleQuakeBlur,
@@ -237,19 +236,34 @@ function registerIpc() {
 
 	ipcMain.handle('sys:get', async () => getSysStats())
 
-	ipcMain.handle('opencode:available', async () => {
-		const execFileAsync = promisify(execFile)
-		try {
-			if (process.platform === 'win32') {
-				await execFileAsync('where.exe', ['opencode'])
-			} else {
-				await execFileAsync('which', ['opencode'])
-			}
-			return true
-		} catch {
-			return false
-		}
-	})
+	ipcMain.handle('opencode:available', () => opencodeAvailable())
+
+	ipcMain.handle('opencode:status', (_e, {cwd}: {cwd?: string} = {}) =>
+		getOpencodeStatus(cwd),
+	)
+
+	ipcMain.handle(
+		'dialog:confirm',
+		async (
+			_e,
+			opts: {message: string; detail?: string; title?: string} = {
+				message: 'Confirm?',
+			},
+		) => {
+			if (!win || win.isDestroyed()) return false
+			const {response} = await dialog.showMessageBox(win, {
+				type: 'question',
+				buttons: ['Close', 'Cancel'],
+				defaultId: 1,
+				cancelId: 1,
+				title: opts.title ?? 'involvex-term',
+				message: opts.message,
+				detail: opts.detail,
+				noLink: true,
+			})
+			return response === 0
+		},
+	)
 
 	ipcMain.handle('clipboard:write', (_e, {text}: {text: string}) => {
 		clipboard.writeText(text ?? '')

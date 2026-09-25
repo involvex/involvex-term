@@ -26,6 +26,7 @@ import {
 	termApi,
 	type AppSettings,
 	type GitStatus,
+	type OpencodeStatus,
 	type SysStats,
 } from './types'
 
@@ -41,7 +42,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 		showSys: true,
 		showCpu: true,
 		showMem: true,
-		modulesOrder: ['git', 'sys'],
+		showOpencode: true,
+		modulesOrder: ['git', 'opencode', 'sys'],
 		refreshMs: 1500,
 	},
 	hotkeys: {
@@ -97,6 +99,7 @@ export default function App() {
 	const [searchOpen, setSearchOpen] = useState(false)
 	const [paletteOpen, setPaletteOpen] = useState(false)
 	const [opencodeAvailable, setOpencodeAvailable] = useState(true)
+	const [opencode, setOpencode] = useState<OpencodeStatus | null>(null)
 	// Latest-value refs for use inside IPC callbacks (synced in effects,
 	// never written during render).
 	const tabsRef = useRef(tabs)
@@ -123,6 +126,40 @@ export default function App() {
 			.then(setOpencodeAvailable)
 			.catch(() => setOpencodeAvailable(false))
 	}, [])
+
+	// Poll OpenCode session status for the status bar.
+	useEffect(() => {
+		const api = termApi()
+		if (!api || !settings.footer.showOpencode) return
+		let cancelled = false
+		const tick = () => {
+			api
+				.opencodeStatus(cwd || undefined)
+				.then(s => {
+					if (!cancelled) {
+						setOpencode(s)
+						setOpencodeAvailable(s.available)
+					}
+				})
+				.catch(() => {
+					if (!cancelled)
+						setOpencode({
+							available: false,
+							sessionCount: 0,
+							latest: null,
+							projectMatch: false,
+						})
+				})
+		}
+		tick()
+		// CLI spawn is heavier than sysinfo — floor at 5s.
+		const ms = Math.max(5000, settings.footer.refreshMs || 1500)
+		const timer = setInterval(tick, ms)
+		return () => {
+			cancelled = true
+			clearInterval(timer)
+		}
+	}, [cwd, settings.footer.showOpencode, settings.footer.refreshMs])
 
 	/** Inject `opencode` into the focused pane of the active tab. */
 	const launchOpencode = useCallback(() => {
@@ -227,11 +264,19 @@ export default function App() {
 		}
 	}, [activeId, activePaneId])
 
-	const closeTab = useCallback((id: string) => {
+	const closeTab = useCallback(async (id: string) => {
 		if (settingsRef.current.tabs.confirmClose) {
 			const tab = tabsRef.current.find(t => t.id === id)
 			const label = tab?.title || 'this tab'
-			if (!window.confirm(`Close ${label}?`)) return
+			const api = termApi()
+			const ok = api
+				? await api.dialogConfirm({
+						message: `Close "${label}"?`,
+						detail: 'The terminal session in this tab will be terminated.',
+						title: 'Close tab',
+					})
+				: window.confirm(`Close ${label}?`)
+			if (!ok) return
 		}
 		setTabs(prev => {
 			const closing = prev.find(t => t.id === id)
@@ -633,6 +678,7 @@ export default function App() {
 			<StatusBar
 				git={git}
 				sys={sys}
+				opencode={settings.footer.showOpencode ? opencode : null}
 				settings={settings}
 				cwd={cwd}
 			/>
