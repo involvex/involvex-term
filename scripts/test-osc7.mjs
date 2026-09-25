@@ -27,7 +27,16 @@ p.onData((d) => {
   out += d;
 });
 
-setTimeout(() => {
+const deadline = Date.now() + 90000;
+setTimeout(poll, 2000);
+
+function poll() {
+  // Slow $PROFILEs (e.g. Exchange implicit remoting) delay the first prompt:
+  // keep waiting until OSC7 arrives or the deadline hits.
+  if (!out.includes("]7;file://") && Date.now() < deadline) {
+    setTimeout(poll, 3000);
+    return;
+  }
   const hasOsc7 = out.includes("]7;file://");
   const leaksInit = out.includes("__it_pb") || out.includes("EscapeDataString");
   // Extract emitted path: ESC ] 7 ; file://host PATH BEL
@@ -48,4 +57,4 @@ setTimeout(() => {
   console.log("CWD_VALID:" + fs.existsSync(decoded));
   p.kill();
   process.exit(hasOsc7 && !leaksInit ? 0 : 1);
-}, 12000);
+}

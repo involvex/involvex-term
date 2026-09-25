@@ -72,14 +72,16 @@ const QuakeSchema = z.object({
 });
 
 export const SettingsSchema = z.object({
-  theme: ThemeSchema.default({}),
-  footer: FooterSchema.default({}),
-  hotkeys: HotkeysSchema.default({}),
-  tabs: TabsSchema.default({}),
-  terminal: TerminalSchema.default({}),
-  window: WindowSchema.default({}),
-  tray: TraySchema.default({}),
-  quake: QuakeSchema.default({}),
+  theme: ThemeSchema.prefault({}),
+  footer: FooterSchema.prefault({}),
+  // Note: HotkeysSchema carries its own full default — do NOT wrap it in
+  // another .default({})/.prefault({}), or the inner defaults are bypassed.
+  hotkeys: HotkeysSchema,
+  tabs: TabsSchema.prefault({}),
+  terminal: TerminalSchema.prefault({}),
+  window: WindowSchema.prefault({}),
+  tray: TraySchema.prefault({}),
+  quake: QuakeSchema.prefault({}),
 });
 
 export type AppSettings = z.infer<typeof SettingsSchema>;
