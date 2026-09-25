@@ -1,4 +1,5 @@
 import {useEffect, useState} from 'react'
+import {THEME_PRESETS} from '../lib/themePresets'
 import type {AppSettings} from '../types'
 
 interface Props {
@@ -121,6 +122,41 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 
 				<section>
 					<h3>Theme</h3>
+					<label className="wide">
+						Preset{' '}
+						<select
+							value={
+								THEME_PRESETS.find(
+									p =>
+										p.bg === settings.theme.bg &&
+										p.fg === settings.theme.fg &&
+										p.fontFamily === settings.theme.fontFamily,
+								)?.id ?? ''
+							}
+							onChange={e => {
+								const preset = THEME_PRESETS.find(p => p.id === e.target.value)
+								if (!preset) return
+								set({
+									theme: {
+										...settings.theme,
+										bg: preset.bg,
+										fg: preset.fg,
+										fontFamily: preset.fontFamily,
+									},
+								})
+							}}
+						>
+							<option value="">Custom</option>
+							{THEME_PRESETS.map(p => (
+								<option
+									key={p.id}
+									value={p.id}
+								>
+									{p.name}
+								</option>
+							))}
+						</select>
+					</label>
 					<label>
 						Background{' '}
 						<input
@@ -313,6 +349,29 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 				<section>
 					<h3>Terminal</h3>
 					<label className="wide">
+						Default profile{' '}
+						<select
+							value={settings.terminal.defaultProfileId}
+							onChange={e =>
+								set({
+									terminal: {
+										...settings.terminal,
+										defaultProfileId: e.target.value,
+									},
+								})
+							}
+						>
+							{settings.terminal.profiles.map(p => (
+								<option
+									key={p.id}
+									value={p.id}
+								>
+									{p.name}
+								</option>
+							))}
+						</select>
+					</label>
+					<label className="wide">
 						Start directory{' '}
 						<input
 							type="text"
@@ -325,8 +384,25 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 							}
 						/>
 					</label>
+					<label>
+						<input
+							type="checkbox"
+							checked={settings.terminal.completionBell}
+							onChange={e =>
+								set({
+									terminal: {
+										...settings.terminal,
+										completionBell: e.target.checked,
+									},
+								})
+							}
+						/>{' '}
+						Background pane completion toast
+					</label>
 					<p className="footer-dim">
-						New tabs open here. Invalid paths fall back to the home folder.
+						New tabs use the default profile. Use ▾ next to + (or the command
+						palette) for another shell. Custom profiles live in settings.json
+						under <code>terminal.profiles</code>.
 					</p>
 				</section>
 

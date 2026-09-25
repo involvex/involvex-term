@@ -20,8 +20,10 @@ interface Props extends Theme {
 	/** False when another tab is showing (whole layout hidden). */
 	tabActive: boolean
 	activePaneId: string
+	completionBell?: boolean
 	onFocusPane: (paneId: string) => void
 	onResizeSplit: (splitId: string, ratio: number) => void
+	onBackgroundIdle?: (paneId: string) => void
 }
 
 interface Drag {
@@ -45,8 +47,10 @@ export default function PaneLayout({
 	fontSize,
 	bg,
 	fg,
+	completionBell,
 	onFocusPane,
 	onResizeSplit,
+	onBackgroundIdle,
 }: Props) {
 	const leaves = useMemo(() => collectLeaves(root), [root])
 	const areas = useMemo(() => layoutPanes(root), [root])
@@ -114,7 +118,10 @@ export default function PaneLayout({
 							bg={bg}
 							fg={fg}
 							initialCwd={leaf.cwd}
+							profileId={leaf.profileId}
+							completionBell={completionBell}
 							onFocusPane={onFocusPane}
+							onBackgroundIdle={onBackgroundIdle}
 						/>
 					</div>
 				)

@@ -19,7 +19,10 @@ interface Props {
 	bg: string
 	fg: string
 	initialCwd?: string
+	profileId?: string
+	completionBell?: boolean
 	onFocusPane: (paneId: string) => void
+	onBackgroundIdle?: (paneId: string) => void
 }
 
 export default function TerminalView({
@@ -31,11 +34,23 @@ export default function TerminalView({
 	bg,
 	fg,
 	initialCwd,
+	profileId,
+	completionBell = true,
 	onFocusPane,
+	onBackgroundIdle,
 }: Props) {
 	const containerRef = useRef<HTMLDivElement>(null)
 	const termRef = useRef<Terminal | null>(null)
 	const fitRef = useRef<FitAddon | null>(null)
+	const focusedRef = useRef(focused)
+	const tabActiveRef = useRef(tabActive)
+	const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const hadBgOutput = useRef(false)
+
+	useEffect(() => {
+		focusedRef.current = focused
+		tabActiveRef.current = tabActive
+	}, [focused, tabActive])
 
 	useEffect(() => {
 		const el = containerRef.current
@@ -155,6 +170,7 @@ export default function TerminalView({
 					cwd: initialCwd,
 					cols: dims.cols,
 					rows: dims.rows,
+					profileId,
 				})
 				if (initialCwd) api.ptySeedCwd(paneId, initialCwd)
 			} catch (e) {
@@ -162,7 +178,32 @@ export default function TerminalView({
 				term.writeln('If node-pty is missing, run: bun run rebuild')
 				return
 			}
-			offData = api.onPtyData(paneId, data => term.write(data))
+			offData = api.onPtyData(paneId, data => {
+				term.write(data)
+				if (!completionBell || !onBackgroundIdle) return
+				const bgPane = !tabActiveRef.current || !focusedRef.current
+				if (!bgPane) {
+					hadBgOutput.current = false
+					if (idleTimer.current) clearTimeout(idleTimer.current)
+					return
+				}
+				if (data.includes('\x07')) {
+					onBackgroundIdle(paneId)
+					return
+				}
+				if (data.trim().length === 0) return
+				hadBgOutput.current = true
+				if (idleTimer.current) clearTimeout(idleTimer.current)
+				idleTimer.current = setTimeout(() => {
+					if (
+						hadBgOutput.current &&
+						(!tabActiveRef.current || !focusedRef.current)
+					) {
+						hadBgOutput.current = false
+						onBackgroundIdle(paneId)
+					}
+				}, 1200)
+			})
 			offExit = api.onPtyExit(paneId, () =>
 				term.writeln('\r\n\x1b[90m[process exited]\x1b[0m'),
 			)
@@ -171,7 +212,7 @@ export default function TerminalView({
 		void spawn()
 
 		const ro = new ResizeObserver(() => {
-			if (!tabActive) return
+			if (!tabActiveRef.current) return
 			try {
 				fit.fit()
 				api?.ptyResize(paneId, term.cols, term.rows)
@@ -184,6 +225,7 @@ export default function TerminalView({
 		return () => {
 			disposed = true
 			void disposed
+			if (idleTimer.current) clearTimeout(idleTimer.current)
 			ro.disconnect()
 			el.removeEventListener('contextmenu', onContextMenu)
 			el.removeEventListener('mousedown', onMouseDown)

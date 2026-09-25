@@ -117,6 +117,84 @@ body {
 	flex: 1;
 }
 
+.tab-new-wrap {
+	position: relative;
+	display: flex;
+	align-items: stretch;
+	flex-shrink: 0;
+}
+
+.tab-new-menu {
+	padding: 4px 6px;
+	border-left: none;
+	border-radius: 0 6px 6px 0;
+}
+
+.tab-new-wrap > .tab-new:first-child {
+	border-radius: 6px 0 0 6px;
+}
+
+.tab-profile-menu {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	z-index: 40;
+	min-width: 180px;
+	margin-top: 4px;
+	padding: 4px;
+	background: #252526;
+	border: 1px solid #3c3c3c;
+	border-radius: 6px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.tab-profile-item {
+	display: block;
+	width: 100%;
+	text-align: left;
+	background: transparent;
+	border: none;
+	color: #cccccc;
+	padding: 6px 10px;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 12px;
+}
+
+.tab-profile-item:hover {
+	background: #3c3c3c;
+}
+
+.tab-profile-default {
+	color: #4ec9b0;
+}
+
+.tab-rename {
+	width: 100px;
+	max-width: 140px;
+	background: #1e1e1e;
+	border: 1px solid #4ec9b0;
+	color: #cccccc;
+	font: inherit;
+	padding: 2px 4px;
+	border-radius: 3px;
+}
+
+.completion-toast {
+	position: fixed;
+	right: 16px;
+	bottom: 40px;
+	z-index: 50;
+	padding: 10px 14px;
+	background: #252526;
+	border: 1px solid #4ec9b0;
+	border-radius: 6px;
+	color: #cccccc;
+	font-size: 12px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+	pointer-events: none;
+}
+
 .terminals {
 	flex: 1;
 	min-height: 0;
@@ -420,6 +498,14 @@ body {
 	width: 100%;
 }
 .modal input[type='text'] {
+	background: #1e1e1e;
+	border: 1px solid #3c3c3c;
+	color: #cccccc;
+	border-radius: 4px;
+	padding: 2px 6px;
+	min-width: 180px;
+}
+.modal select {
 	background: #1e1e1e;
 	border: 1px solid #3c3c3c;
 	color: #cccccc;

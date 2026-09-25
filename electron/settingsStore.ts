@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {z} from 'zod'
+import {defaultProfileId, defaultProfiles} from './shellProfiles.js'
 import type {SessionState} from './types.js'
 
 export const SETTINGS_DIR = path.join(os.homedir(), '.involvex-term')
@@ -48,9 +49,22 @@ const TabsSchema = z.object({
 	restoreSession: z.boolean().default(true),
 })
 
+const ProfileSchema = z.object({
+	id: z.string().min(1),
+	name: z.string().min(1),
+	kind: z.enum(['pwsh', 'powershell', 'cmd', 'wsl', 'custom']),
+	command: z.string().optional(),
+	args: z.array(z.string()).optional(),
+})
+
 const TerminalSchema = z.object({
 	/** Default cwd for new tabs. Empty = home folder / inherited cwd. */
 	startDir: z.string().default(''),
+	/** Default shell profile id. */
+	defaultProfileId: z.string().default(defaultProfileId()),
+	profiles: z.array(ProfileSchema).default(defaultProfiles()),
+	/** Toast when a background pane goes idle after output. */
+	completionBell: z.boolean().default(true),
 })
 
 const WindowSchema = z.object({
@@ -159,10 +173,15 @@ export function loadSession(): SessionState | null {
 			tabs?: unknown
 		}
 		if (!raw || !Array.isArray(raw.tabs)) return null
-		const tabs = raw.tabs.filter(isValidSessionTab).map(t => ({
-			title: typeof t.title === 'string' ? t.title : 'shell',
-			root: t.root,
-		}))
+		const tabs = raw.tabs.filter(isValidSessionTab).map(t => {
+			const rec = t as {title?: unknown; customTitle?: unknown; root: unknown}
+			return {
+				title: typeof rec.title === 'string' ? rec.title : 'shell',
+				customTitle:
+					typeof rec.customTitle === 'string' ? rec.customTitle : undefined,
+				root: rec.root,
+			}
+		})
 		if (tabs.length === 0) return null
 		return {version: 1, tabs}
 	} catch {
@@ -175,10 +194,19 @@ export function saveSession(next: SessionState): void {
 		if (!fs.existsSync(SETTINGS_DIR))
 			fs.mkdirSync(SETTINGS_DIR, {recursive: true})
 		const tabs = Array.isArray(next?.tabs)
-			? next.tabs.filter(isValidSessionTab).map(t => ({
-					title: typeof t.title === 'string' ? t.title : 'shell',
-					root: t.root,
-				}))
+			? next.tabs.filter(isValidSessionTab).map(t => {
+					const rec = t as {
+						title?: unknown
+						customTitle?: unknown
+						root: unknown
+					}
+					return {
+						title: typeof rec.title === 'string' ? rec.title : 'shell',
+						customTitle:
+							typeof rec.customTitle === 'string' ? rec.customTitle : undefined,
+						root: rec.root,
+					}
+				})
 			: []
 		fs.writeFileSync(SESSION_FILE, JSON.stringify({version: 1, tabs}))
 	} catch {

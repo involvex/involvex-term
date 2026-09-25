@@ -34,6 +34,14 @@ export interface OpencodeStatus {
 	projectMatch: boolean
 }
 
+export interface ShellProfile {
+	id: string
+	name: string
+	kind: 'pwsh' | 'powershell' | 'cmd' | 'wsl' | 'custom'
+	command?: string
+	args?: string[]
+}
+
 export interface AppSettings {
 	theme: {bg: string; fg: string; fontFamily: string; fontSize: number}
 	footer: {
@@ -47,7 +55,12 @@ export interface AppSettings {
 	}
 	hotkeys: Record<string, string>
 	tabs: {confirmClose: boolean; restoreSession: boolean}
-	terminal: {startDir: string}
+	terminal: {
+		startDir: string
+		defaultProfileId: string
+		profiles: ShellProfile[]
+		completionBell: boolean
+	}
 	window: {
 		width: number
 		height: number
@@ -66,6 +79,8 @@ export interface AppSettings {
 
 export interface SessionTab {
 	title: string
+	/** User-pinned title; when set, auto git titles are skipped. */
+	customTitle?: string
 	/** Pane tree JSON (validated/normalized on load). */
 	root: unknown
 }
@@ -81,6 +96,7 @@ export interface TermApiShape {
 		cwd?: string
 		cols: number
 		rows: number
+		profileId?: string
 	}) => Promise<{id: string; cwd: string; shell: string}>
 	ptyWrite: (id: string, data: string) => void
 	ptyResize: (id: string, cols: number, rows: number) => void

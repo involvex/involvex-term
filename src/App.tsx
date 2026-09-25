@@ -64,7 +64,17 @@ const DEFAULT_SETTINGS: AppSettings = {
 		'zoom-reset': 'Ctrl+0',
 	},
 	tabs: {confirmClose: false, restoreSession: true},
-	terminal: {startDir: ''},
+	terminal: {
+		startDir: '',
+		defaultProfileId: 'pwsh',
+		profiles: [
+			{id: 'pwsh', name: 'PowerShell 7', kind: 'pwsh'},
+			{id: 'powershell', name: 'Windows PowerShell', kind: 'powershell'},
+			{id: 'cmd', name: 'Command Prompt', kind: 'cmd'},
+			{id: 'wsl', name: 'WSL', kind: 'wsl'},
+		],
+		completionBell: true,
+	},
 	window: {width: 1200, height: 800, x: null, y: null, maximized: false},
 	tray: {enabled: true, minimizeToTray: true, closeToTray: true},
 	quake: {
@@ -76,10 +86,10 @@ const DEFAULT_SETTINGS: AppSettings = {
 }
 
 let tabSeq = 0
-function newTab(cwd?: string): TabInfo {
+function newTab(cwd?: string, profileId?: string): TabInfo {
 	tabSeq += 1
 	const paneId = newPaneId()
-	const leaf: PaneLeaf = {kind: 'leaf', paneId, cwd}
+	const leaf: PaneLeaf = {kind: 'leaf', paneId, cwd, profileId}
 	return {
 		id: `tab-${Date.now()}-${tabSeq}`,
 		title: `Tab ${tabSeq}`,
@@ -101,6 +111,7 @@ export default function App() {
 	const [paletteOpen, setPaletteOpen] = useState(false)
 	const [opencodeAvailable, setOpencodeAvailable] = useState(true)
 	const [opencode, setOpencode] = useState<OpencodeStatus | null>(null)
+	const [toast, setToast] = useState<string | null>(null)
 	// Latest-value refs for use inside IPC callbacks (synced in effects,
 	// never written during render).
 	const tabsRef = useRef(tabs)
@@ -208,6 +219,7 @@ export default function App() {
 						restored.push({
 							id: `tab-restored-${Date.now()}-${i}`,
 							title: st.title || `Tab ${tabSeq}`,
+							customTitle: st.customTitle,
 							cwd: undefined,
 							root,
 							activePaneId: firstLeaf(root).paneId,
@@ -250,18 +262,14 @@ export default function App() {
 			setGit(st as GitStatus)
 			setCwd((st as GitStatus).cwd || '')
 			setTabs(prev =>
-				prev.map(t =>
-					t.id === activeId
-						? {
-								...t,
-								cwd: (st as GitStatus).cwd,
-								title: shortTitle(
-									(st as GitStatus).cwd,
-									(st as GitStatus).branch,
-								),
-							}
-						: t,
-				),
+				prev.map(t => {
+					if (t.id !== activeId || t.customTitle) return t
+					return {
+						...t,
+						cwd: (st as GitStatus).cwd,
+						title: shortTitle((st as GitStatus).cwd, (st as GitStatus).branch),
+					}
+				}),
 			)
 		})
 		const off2 = api.onGitChanged(msg => {
@@ -302,7 +310,10 @@ export default function App() {
 				// Keep at least one tab: fresh tab with a single pane
 				const startDir =
 					settingsRef.current.terminal.startDir.trim() || undefined
-				const nt = newTab(startDir)
+				const nt = newTab(
+					startDir,
+					settingsRef.current.terminal.defaultProfileId,
+				)
 				setActiveId(nt.id)
 				return [nt]
 			}
@@ -317,14 +328,49 @@ export default function App() {
 	}, [])
 
 	const addTab = useCallback(
-		(cwdToUse?: string) => {
+		(cwdToUse?: string, profileId?: string) => {
 			const startDir = settingsRef.current.terminal.startDir.trim()
-			const nt = newTab(cwdToUse ?? (startDir || git?.cwd || cwd || undefined))
+			const pid = profileId || settingsRef.current.terminal.defaultProfileId
+			const nt = newTab(
+				cwdToUse ?? (startDir || git?.cwd || cwd || undefined),
+				pid,
+			)
 			setTabs(prev => [...prev, nt])
 			setActiveId(nt.id)
 		},
 		[git?.cwd, cwd],
 	)
+
+	const renameTab = useCallback((id: string, title: string) => {
+		setTabs(prev =>
+			prev.map(t => (t.id === id ? {...t, title, customTitle: title} : t)),
+		)
+	}, [])
+
+	const reorderTabs = useCallback((fromIndex: number, toIndex: number) => {
+		setTabs(prev => {
+			if (
+				fromIndex < 0 ||
+				toIndex < 0 ||
+				fromIndex >= prev.length ||
+				toIndex >= prev.length
+			)
+				return prev
+			const next = [...prev]
+			const [moved] = next.splice(fromIndex, 1)
+			if (!moved) return prev
+			next.splice(toIndex, 0, moved)
+			return next
+		})
+	}, [])
+
+	const showCompletionToast = useCallback((paneId: string) => {
+		if (!settingsRef.current.terminal.completionBell) return
+		const tab = tabsRef.current.find(t => findLeaf(t.root, paneId))
+		const label = tab?.title || 'Background pane'
+		setToast(`${label} finished`)
+		window.setTimeout(() => setToast(null), 2800)
+	}, [])
 
 	// Focus a pane within its tab.
 	const focusPane = useCallback((tabId: string, paneId: string) => {
@@ -339,11 +385,15 @@ export default function App() {
 			const tabId = activeRef.current
 			const tab = tabsRef.current.find(t => t.id === tabId)
 			if (!tab || !findLeaf(tab.root, tab.activePaneId)) return
+			const activeLeaf = findLeaf(tab.root, tab.activePaneId)
 			const paneId = newPaneId()
 			const newLeaf: PaneLeaf = {
 				kind: 'leaf',
 				paneId,
 				cwd: git?.cwd || cwd || undefined,
+				profileId:
+					activeLeaf?.profileId ||
+					settingsRef.current.terminal.defaultProfileId,
 			}
 			setTabs(prev =>
 				prev.map(t =>
@@ -409,8 +459,11 @@ export default function App() {
 			const idx = tabsNow.findIndex(t => t.id === active)
 			if (action === 'new-tab') addTab()
 			else if (action === 'close-tab') closeTab(active)
-			else if (action === 'duplicate-tab') addTab(git?.cwd || cwd || undefined)
-			else if (action === 'next-tab' && tabsNow.length > 1)
+			else if (action === 'duplicate-tab') {
+				const tab = tabsRef.current.find(t => t.id === active)
+				const leaf = tab ? findLeaf(tab.root, tab.activePaneId) : null
+				addTab(git?.cwd || cwd || undefined, leaf?.profileId)
+			} else if (action === 'next-tab' && tabsNow.length > 1)
 				selectTab(tabsNow[(idx + 1) % tabsNow.length]?.id || active)
 			else if (action === 'prev-tab' && tabsNow.length > 1)
 				selectTab(
@@ -533,7 +586,8 @@ export default function App() {
 			await api.sessionSave({
 				version: 1,
 				tabs: tabsNow.map(t => ({
-					title: t.title,
+					title: t.customTitle || t.title,
+					customTitle: t.customTitle,
 					root: mapLeafCwd(t.root, cwds),
 				})),
 			})
@@ -559,7 +613,11 @@ export default function App() {
 			try {
 				api.sessionSaveSync({
 					version: 1,
-					tabs: tabsRef.current.map(t => ({title: t.title, root: t.root})),
+					tabs: tabsRef.current.map(t => ({
+						title: t.customTitle || t.title,
+						customTitle: t.customTitle,
+						root: t.root,
+					})),
 				})
 			} catch {
 				/* noop */
@@ -634,6 +692,12 @@ export default function App() {
 				: 'opencode -c',
 			run: () => continueOpencode(opencode?.latest?.id),
 		},
+		...settings.terminal.profiles.map(p => ({
+			id: `cmd:new-profile-${p.id}`,
+			title: `New tab: ${p.name}`,
+			hint: p.id === settings.terminal.defaultProfileId ? 'default' : p.kind,
+			run: () => addTab(undefined, p.id),
+		})),
 		{
 			id: 'cmd:toggle-git',
 			title: settings.footer.showGit ? 'Hide Git status' : 'Show Git status',
@@ -668,9 +732,13 @@ export default function App() {
 			<TabBar
 				tabs={tabs}
 				activeId={activeTab?.id || ''}
+				profiles={settings.terminal.profiles}
+				defaultProfileId={settings.terminal.defaultProfileId}
 				onSelect={selectTab}
 				onClose={closeTab}
-				onNew={() => addTab()}
+				onNew={profileId => addTab(undefined, profileId)}
+				onRename={renameTab}
+				onReorder={reorderTabs}
 				onOpenOpencode={launchOpencode}
 				opencodeAvailable={opencodeAvailable}
 				onOpenSettings={() => setShowSettings(true)}
@@ -694,13 +762,16 @@ export default function App() {
 						fontSize={settings.theme.fontSize}
 						bg={settings.theme.bg}
 						fg={settings.theme.fg}
+						completionBell={settings.terminal.completionBell}
 						onFocusPane={paneId => focusPane(t.id, paneId)}
 						onResizeSplit={(splitId, ratio) =>
 							resizeSplit(t.id, splitId, ratio)
 						}
+						onBackgroundIdle={showCompletionToast}
 					/>
 				))}
 			</div>
+			{toast && <div className="completion-toast">{toast}</div>}
 			{!isElectron() && (
 				<div className="web-warning">
 					Web preview — PTY/Git/Sys need Electron. Run{' '}

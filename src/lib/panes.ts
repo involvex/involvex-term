@@ -10,6 +10,8 @@ export interface PaneLeaf {
 	paneId: string
 	/** Starting cwd for the pane's shell. */
 	cwd?: string
+	/** Shell profile id from settings. */
+	profileId?: string
 }
 
 export interface PaneSplit {
@@ -68,7 +70,11 @@ export function normalizeSessionRoot(raw: unknown): PaneNode | null {
 		if (!id || seen.has(id)) id = newPaneId()
 		seen.add(id)
 		const cwd = typeof l['cwd'] === 'string' ? l['cwd'] : undefined
-		return {kind: 'leaf', paneId: id, cwd}
+		const profileId =
+			typeof l['profileId'] === 'string' && l['profileId']
+				? l['profileId']
+				: undefined
+		return {kind: 'leaf', paneId: id, cwd, profileId}
 	}
 	const walk = (n: unknown): PaneNode | null => {
 		if (!isRecord(n)) return null

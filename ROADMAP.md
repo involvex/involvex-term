@@ -13,15 +13,17 @@ Track progress by moving items into CHANGELOG when shipped.
 - OpenCode launch, PATH detect, footer status, click-to-continue
 - CI (lint / tsc / format) + GitHub Releases (Windows NSIS, Linux AppImage)
 - Settings file (`~/.involvex-term/settings.json`), native confirm-on-close
+- Shell / profile picker, tab rename + drag-reorder, theme presets,
+  background-pane completion toast (v0.2)
 
 ## v0.2 — Daily driver polish
 
-Highest-ROI next slice for everyday use:
+Shipped in tree (see CHANGELOG 0.2.0 unreleased):
 
-1. **Shell / profile picker** — new tab as pwsh, Windows PowerShell, cmd, WSL, or custom command (beyond `INVOLVEX_SHELL`)
-2. **Tab rename + drag-reorder** — titles today are cwd/branch only
-3. **Theme presets** — keep custom colors; add a few named presets (e.g. VS Code Dark+, One Dark)
-4. **Background-pane completion bell** — subtle toast / flash when a non-focused pane goes idle after a long command
+1. ~~Shell / profile picker~~
+2. ~~Tab rename + drag-reorder~~
+3. ~~Theme presets~~
+4. ~~Background-pane completion bell~~
 
 ## v0.3 — Windows Terminal parity core
 

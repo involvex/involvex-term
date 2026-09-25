@@ -6,6 +6,7 @@ export interface TermApi {
 		cwd?: string
 		cols: number
 		rows: number
+		profileId?: string
 	}) => Promise<{id: string; cwd: string; shell: string}>
 	ptyWrite: (id: string, data: string) => void
 	ptyResize: (id: string, cols: number, rows: number) => void

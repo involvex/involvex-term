@@ -169,9 +169,20 @@ function registerIpc() {
 				cwd,
 				cols,
 				rows,
-			}: {id: string; cwd?: string; cols: number; rows: number},
+				profileId,
+			}: {
+				id: string
+				cwd?: string
+				cols: number
+				rows: number
+				profileId?: string
+			},
 		) => {
-			const entry = spawnPty(id, cwd || os.homedir(), cols, rows)
+			const entry = spawnPty(id, cwd || os.homedir(), cols, rows, {
+				profileId,
+				profiles: settings.terminal.profiles as never,
+				defaultProfileId: settings.terminal.defaultProfileId,
+			})
 			entry.pty.onData((data: string) => {
 				const cleaned = sniffCwd(id, data, (tabId, newCwd) => {
 					setCwd(tabId, newCwd)

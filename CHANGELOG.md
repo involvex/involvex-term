@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.0] - Unreleased
+
+### Added
+
+- Shell / profile picker (pwsh, Windows PowerShell, cmd, WSL) via + ▾ and palette
+- Tab rename (double-click) and drag-reorder
+- Theme presets (involvex, VS Code Dark+, One Dark, Dracula, Solarized Dark)
+- Background-pane completion toast (BEL or idle after output)
+
 ## [0.1.1] - Unreleased
 
 ### Added
