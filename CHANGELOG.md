@@ -11,6 +11,8 @@ All notable changes to this project are documented in this file.
 - Export / import settings JSON from Settings
 - Clear buffer (`Ctrl+Shift+K`), mark prompt (`Ctrl+Shift+M`), jump marks
   (`Ctrl+Shift+Up/Down`)
+- Context-aware terminal right-click menu (open URL/path, reveal in Explorer,
+  copy/paste; Shift+right-click keeps quick copy/paste)
 - Release workflow uploads `latest.yml` / blockmaps for auto-update
 
 ## [0.3.0] - 2026-09-25

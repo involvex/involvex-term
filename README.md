@@ -21,7 +21,8 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
 - **OpenCode** button / `Ctrl+Shift+O` — launches
   [OpenCode](https://opencode.ai) in the focused pane; click the footer
   `OC` widget to continue the matched session (`opencode -s <id>`)
-- Windows Terminal style copy/paste: `Ctrl+C` copies only with selection
+- Windows Terminal style copy/paste: `Ctrl+C` copies only with selection;
+  right-click shows a context menu (URL / path / copy / paste)
 - Session restore, tray, optional quake dropdown (`Ctrl+\``)
 - Settings at `~/.involvex-term/settings.json` (`Ctrl+,`)
 - Ctrl+click URLs and local paths; scrollback / scrollbar / font fallback

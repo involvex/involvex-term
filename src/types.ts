@@ -172,6 +172,7 @@ export interface TermApiShape {
 	}) => Promise<boolean>
 	openExternal: (url: string) => Promise<void>
 	openPath: (filePath: string) => Promise<string>
+	showItemInFolder: (filePath: string) => Promise<void>
 	settingsExport: () => Promise<{ok: boolean; path?: string; error?: string}>
 	settingsImport: () => Promise<{
 		ok: boolean

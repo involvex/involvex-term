@@ -3,15 +3,25 @@ import {SearchAddon} from '@xterm/addon-search'
 import {WebLinksAddon} from '@xterm/addon-web-links'
 import {Terminal} from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
-import {useEffect, useRef} from 'react'
+import {useEffect, useRef, useState} from 'react'
 import {registerSearch, unregisterSearch} from '../lib/searchRegistry'
 import {
 	createMarkController,
 	registerTermActions,
 	unregisterTermActions,
 } from '../lib/termActions'
+import {
+	copyText,
+	openHit,
+	resolveContextHit,
+	revealHit,
+} from '../lib/termContext'
 import {createPathLinkProvider, webLinkHandler} from '../lib/termLinks'
 import {termApi} from '../types'
+import TermContextMenu, {
+	type ContextMenuItem,
+	type TermContextMenuState,
+} from './TermContextMenu'
 
 interface Props {
 	/** Unique pty id for this pane. */
@@ -31,6 +41,12 @@ interface Props {
 	scrollbar?: boolean
 	onFocusPane: (paneId: string) => void
 	onBackgroundIdle?: (paneId: string) => void
+}
+
+function truncateHint(s: string, max = 42): string {
+	const t = s.trim()
+	if (t.length <= max) return t
+	return `${t.slice(0, max - 1)}…`
 }
 
 export default function TerminalView({
@@ -56,6 +72,12 @@ export default function TerminalView({
 	const tabActiveRef = useRef(tabActive)
 	const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const hadBgOutput = useRef(false)
+	const [ctxMenu, setCtxMenu] = useState<TermContextMenuState | null>(null)
+	const [menuTabActive, setMenuTabActive] = useState(tabActive)
+	if (menuTabActive !== tabActive) {
+		setMenuTabActive(tabActive)
+		if (!tabActive && ctxMenu) setCtxMenu(null)
+	}
 
 	useEffect(() => {
 		focusedRef.current = focused
@@ -159,15 +181,129 @@ export default function TerminalView({
 			return true
 		})
 
-		// Right-click: copy selection if any, else paste (like Windows Terminal).
 		const onContextMenu = (e: MouseEvent) => {
 			e.preventDefault()
-			if (term.hasSelection()) copySelection()
-			else pasteClipboard()
-		}
-		const onMouseDown = () => {
+			e.stopPropagation()
 			term.focus()
 			onFocusPane(paneId)
+
+			// Shift+right-click keeps the old WT quick copy/paste.
+			if (e.shiftKey) {
+				if (term.hasSelection()) copySelection()
+				else pasteClipboard()
+				return
+			}
+
+			const hit = resolveContextHit(term, e)
+			const hasSelection = term.hasSelection()
+			const items: ContextMenuItem[] = []
+
+			if (hit?.kind === 'url') {
+				items.push({
+					id: 'open-url',
+					label: 'Open link in browser',
+					hint: truncateHint(hit.text),
+					run: () => void openHit(hit),
+				})
+				items.push({
+					id: 'copy-url',
+					label: 'Copy link',
+					run: () => void copyText(hit.text),
+				})
+				items.push({id: 'sep-url', label: '', separator: true})
+			} else if (hit?.kind === 'email') {
+				items.push({
+					id: 'open-mail',
+					label: 'Send email…',
+					hint: truncateHint(hit.text.replace(/^mailto:/i, '')),
+					run: () => void openHit(hit),
+				})
+				items.push({
+					id: 'copy-mail',
+					label: 'Copy address',
+					run: () => void copyText(hit.text.replace(/^mailto:/i, '')),
+				})
+				items.push({id: 'sep-mail', label: '', separator: true})
+			} else if (hit?.kind === 'path') {
+				items.push({
+					id: 'open-path',
+					label: 'Open',
+					hint: truncateHint(hit.text),
+					run: () => void openHit(hit),
+				})
+				items.push({
+					id: 'reveal-path',
+					label: 'Reveal in Explorer',
+					run: () => void revealHit(hit),
+				})
+				items.push({
+					id: 'copy-path',
+					label: 'Copy path',
+					run: () => void copyText(hit.text),
+				})
+				items.push({id: 'sep-path', label: '', separator: true})
+			} else if (hit?.kind === 'text' && hit.text.length > 0 && !hasSelection) {
+				items.push({
+					id: 'copy-word',
+					label: 'Copy',
+					hint: truncateHint(hit.text),
+					run: () => void copyText(hit.text),
+				})
+				items.push({id: 'sep-word', label: '', separator: true})
+			}
+
+			items.push({
+				id: 'copy',
+				label: 'Copy',
+				hint: 'Ctrl+Shift+C',
+				disabled: !hasSelection,
+				run: () => {
+					copySelection()
+				},
+			})
+			items.push({
+				id: 'paste',
+				label: 'Paste',
+				hint: 'Ctrl+Shift+V',
+				run: () => pasteClipboard(),
+			})
+			items.push({id: 'sep-edit', label: '', separator: true})
+			items.push({
+				id: 'select-all',
+				label: 'Select all',
+				run: () => {
+					term.selectAll()
+					term.focus()
+				},
+			})
+			items.push({
+				id: 'clear',
+				label: 'Clear buffer',
+				hint: 'Ctrl+Shift+K',
+				run: () => {
+					term.clear()
+					term.focus()
+				},
+			})
+			items.push({
+				id: 'mark',
+				label: 'Mark prompt',
+				hint: 'Ctrl+Shift+M',
+				run: () => marks.addMark(),
+			})
+
+			setCtxMenu({
+				x: e.clientX,
+				y: e.clientY,
+				hit,
+				hasSelection,
+				items,
+			})
+		}
+		const onMouseDown = (e: MouseEvent) => {
+			term.focus()
+			onFocusPane(paneId)
+			if (e.button === 0) setCtxMenu(null)
 		}
 		el.addEventListener('contextmenu', onContextMenu)
 		el.addEventListener('mousedown', onMouseDown)
@@ -181,7 +317,7 @@ export default function TerminalView({
 				term.writeln(
 					'\x1b[33mNot running in Electron — PTY unavailable.\x1b[0m',
 				)
-				term.writeln('Run with: bun run dev:electron (vite + electron).')
+				term.writeln('Run with: bun run dev:electron (vite + Electron).')
 				return
 			}
 			try {
@@ -195,8 +331,8 @@ export default function TerminalView({
 					profileId,
 				})
 				if (initialCwd) api.ptySeedCwd(paneId, initialCwd)
-			} catch (e) {
-				term.writeln(`\x1b[31mPTY spawn failed: ${String(e)}\x1b[0m`)
+			} catch (err) {
+				term.writeln(`\x1b[31mPTY spawn failed: ${String(err)}\x1b[0m`)
 				term.writeln('If node-pty is missing, run: bun run rebuild')
 				return
 			}
@@ -296,7 +432,6 @@ export default function TerminalView({
 	}, [bg, fg, fontFamily, fontSize, scrollback, paneId])
 
 	// Refit + focus when this becomes the focused pane of the active tab.
-	// (The PaneLayout wrapper handles the focused outline.)
 	useEffect(() => {
 		if (!focused || !tabActive) return
 		requestAnimationFrame(() => {
@@ -312,15 +447,26 @@ export default function TerminalView({
 	}, [focused, tabActive, paneId])
 
 	return (
-		<div
-			ref={containerRef}
-			className={scrollbar ? undefined : 'term-no-scrollbar'}
-			style={{
-				display: tabActive ? 'block' : 'none',
-				width: '100%',
-				height: '100%',
-				background: bg,
-			}}
-		/>
+		<>
+			<div
+				ref={containerRef}
+				className={scrollbar ? undefined : 'term-no-scrollbar'}
+				style={{
+					display: tabActive ? 'block' : 'none',
+					width: '100%',
+					height: '100%',
+					background: bg,
+				}}
+			/>
+			{ctxMenu && tabActive ? (
+				<TermContextMenu
+					menu={ctxMenu}
+					onClose={() => {
+						setCtxMenu(null)
+						termRef.current?.focus()
+					}}
+				/>
+			) : null}
+		</>
 	)
 }

@@ -310,6 +310,11 @@ function registerIpc() {
 		if (!target) return 'empty path'
 		return shell.openPath(target)
 	})
+	ipcMain.handle('shell:showItemInFolder', (_e, {path: p}: {path: string}) => {
+		const target = String(p ?? '').trim()
+		if (!target) return
+		shell.showItemInFolder(target)
+	})
 
 	ipcMain.handle('settings:export', async () => {
 		if (!win || win.isDestroyed()) return {ok: false, error: 'no window'}

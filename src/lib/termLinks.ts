@@ -2,11 +2,11 @@ import type {ILink, ILinkProvider, Terminal} from '@xterm/xterm'
 import {termApi} from '../types'
 
 /** Strip trailing punctuation commonly glued to paths/URLs in output. */
-function trimTrail(s: string): string {
+export function trimTrail(s: string): string {
 	return s.replace(/[.,;:!?)]+$/g, '')
 }
 
-async function openTarget(raw: string): Promise<void> {
+export async function openTarget(raw: string): Promise<void> {
 	const target = trimTrail(raw.trim())
 	if (!target) return
 	const api = termApi()

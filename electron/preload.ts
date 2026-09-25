@@ -55,6 +55,7 @@ export interface TermApi {
 	}) => Promise<boolean>
 	openExternal: (url: string) => Promise<void>
 	openPath: (filePath: string) => Promise<string>
+	showItemInFolder: (filePath: string) => Promise<void>
 	settingsExport: () => Promise<{ok: boolean; path?: string; error?: string}>
 	settingsImport: () => Promise<{
 		ok: boolean
@@ -104,6 +105,8 @@ const api: TermApi = {
 	dialogConfirm: opts => ipcRenderer.invoke('dialog:confirm', opts),
 	openExternal: url => ipcRenderer.invoke('shell:openExternal', {url}),
 	openPath: filePath => ipcRenderer.invoke('shell:openPath', {path: filePath}),
+	showItemInFolder: filePath =>
+		ipcRenderer.invoke('shell:showItemInFolder', {path: filePath}),
 	settingsExport: () => ipcRenderer.invoke('settings:export'),
 	settingsImport: () => ipcRenderer.invoke('settings:import'),
 	updateCheck: () => ipcRenderer.invoke('update:check'),
