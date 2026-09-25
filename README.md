@@ -38,25 +38,25 @@ bun run build          # tsc + vite + electron-builder
 
 ## Native module note (node-pty)
 
-`node-pty` needs an Electron ABI rebuild (`bun run rebuild`).
-Two gotchas are already handled in this repo:
+`bun run rebuild` / `bun run build` handle the Electron ABI rebuild
+automatically via `scripts/rebuild-pty.mjs`, which picks a working Python
+itself (`$PYTHON` → `.npmrc` pin → pyenv-win ≤ 3.11 → PATH probe).
+
+Background (why the wrapper exists):
 
 1. **Python version**: the pinned `node-gyp@9` (via `electron-rebuild@3`)
-   imports `distutils`, which was removed in Python 3.12 — so the build
-   needs Python ≤ 3.11. (`pip install distutils` cannot fix this.)
-   One-time setup on Windows + pyenv-win:
-   ```powershell
-   [Environment]::SetEnvironmentVariable('PYTHON', 'C:\Users\lukas\.pyenv\pyenv-win\versions\3.10.11\python.exe', 'User')
-   # restart the shell afterwards so the variable propagates to child processes
-   ```
-   `.npmrc` pins the same path as a fallback for npm-based flows.
-   (Upgrading to node-gyp 10+ was tried — it supports new Pythons but is
-   silently incompatible with `electron-rebuild@3`, so v9 stays.)
+   imports `distutils`, removed in Python 3.12 — so the build needs
+   CPython ≤ 3.11. (`pip install distutils` cannot fix this.)
+   (node-gyp 10+ supports new Pythons but is silently incompatible with
+   `electron-rebuild@3`, so v9 stays.)
 2. **MSB8040 (Spectre libs)**: node-pty's gyp files request
-   Spectre-mitigated libs which most VS installs lack. `scripts/patch-node-pty.mjs`
-   (runs automatically in `postinstall`) strips that flag from
-   `binding.gyp` + `deps/winpty/src/winpty.gyp`, restoring the previous
-   effective behavior for local dev builds.
+   Spectre-mitigated libs which most VS installs lack.
+   `scripts/patch-node-pty.mjs` (runs automatically in `postinstall` and
+   before every rebuild) strips that flag from `binding.gyp` +
+   `deps/winpty/src/winpty.gyp`.
+3. **electron-builder rebuild**: disabled via `"npmRebuild": false` — the
+   `build` script rebuilds explicitly through the wrapper instead, so
+   packaging never depends on ambient shell env.
 
 Troubleshooting:
 - `pty.vcxproj` / MSB3202 errors: delete `node_modules/node-pty/build` and

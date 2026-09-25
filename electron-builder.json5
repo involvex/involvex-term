@@ -3,6 +3,7 @@
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "dev.involvex.term",
   "asar": true,
+  "npmRebuild": false,
   "productName": "involvex-term",
   "directories": {
     "output": "release/${version}"

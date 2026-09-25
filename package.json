@@ -7,13 +7,13 @@
   "scripts": {
     "dev": "vite",
     "dev:electron": "vite",
-    "build": "tsc && vite build && electron-builder",
+    "build": "tsc && vite build && bun scripts/rebuild-pty.mjs && electron-builder",
     "build:electron": "tsc --project tsconfig.node.json && vite build",
     "dist": "bun run build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "rebuild": "electron-rebuild -f -w node-pty",
-    "postinstall": "bun scripts/patch-node-pty.mjs && electron-builder install-app-deps"
+    "rebuild": "bun scripts/rebuild-pty.mjs",
+    "postinstall": "bun scripts/patch-node-pty.mjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
