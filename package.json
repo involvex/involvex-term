@@ -16,6 +16,7 @@
 	"type": "module",
 	"main": "dist-electron/main.js",
 	"scripts": {
+		"prebuild": "bun run format && bun run lint --fix && bun run typecheck",
 		"build": "tsc && vite build && bun scripts/rebuild-pty.mjs && electron-builder",
 		"build:electron": "tsc --project tsconfig.node.json && vite build",
 		"dev": "vite",
@@ -25,7 +26,8 @@
 		"postinstall": "bun scripts/patch-node-pty.mjs",
 		"lint": "eslint . --report-unused-disable-directives --max-warnings 0",
 		"preview": "vite preview",
-		"rebuild": "bun scripts/rebuild-pty.mjs --force"
+		"rebuild": "bun scripts/rebuild-pty.mjs --force",
+		"typecheck": "tsc --noEmit"
 	},
 	"prettier": "@involvex/prettier-config",
 	"dependencies": {
