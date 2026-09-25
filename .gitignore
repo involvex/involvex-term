@@ -28,3 +28,4 @@ build
 *.njsproj
 *.sln
 *.sw?
+.cline
