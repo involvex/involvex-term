@@ -1,6 +1,6 @@
 import {useEffect, useState} from 'react'
 import {THEME_PRESETS} from '../lib/themePresets'
-import type {AppSettings} from '../types'
+import {termApi, type AppSettings, type CommandSnippet} from '../types'
 
 interface Props {
 	settings: AppSettings
@@ -24,6 +24,11 @@ const HOTKEY_ACTIONS: Array<{id: string; label: string}> = [
 	{id: 'zoom-in', label: 'Zoom in'},
 	{id: 'zoom-out', label: 'Zoom out'},
 	{id: 'zoom-reset', label: 'Zoom reset'},
+	{id: 'clear-buffer', label: 'Clear buffer'},
+	{id: 'mark-prompt', label: 'Mark prompt'},
+	{id: 'prev-mark', label: 'Previous mark'},
+	{id: 'next-mark', label: 'Next mark'},
+	{id: 'check-updates', label: 'Check for updates'},
 ]
 
 function formatPressed(e: KeyboardEvent): string | null {
@@ -499,6 +504,98 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 				</section>
 
 				<section>
+					<h3>Command snippets</h3>
+					<p className="footer-dim">
+						Appear in the command palette as “Run: …”. Written into the focused
+						pane.
+					</p>
+					{(settings.terminal.snippets ?? []).map((snip, idx) => (
+						<div
+							key={snip.id}
+							className="snippet-row"
+						>
+							<label>
+								Name{' '}
+								<input
+									type="text"
+									value={snip.name}
+									onChange={e => {
+										const snippets = [...settings.terminal.snippets]
+										snippets[idx] = {...snip, name: e.target.value}
+										set({
+											terminal: {...settings.terminal, snippets},
+										})
+									}}
+								/>
+							</label>
+							<label className="wide">
+								Command{' '}
+								<input
+									type="text"
+									value={snip.command}
+									onChange={e => {
+										const snippets = [...settings.terminal.snippets]
+										snippets[idx] = {...snip, command: e.target.value}
+										set({
+											terminal: {...settings.terminal, snippets},
+										})
+									}}
+								/>
+							</label>
+							<label>
+								<input
+									type="checkbox"
+									checked={snip.sendEnter !== false}
+									onChange={e => {
+										const snippets = [...settings.terminal.snippets]
+										snippets[idx] = {
+											...snip,
+											sendEnter: e.target.checked,
+										}
+										set({
+											terminal: {...settings.terminal, snippets},
+										})
+									}}
+								/>{' '}
+								Enter
+							</label>
+							<button
+								type="button"
+								className="settings-btn"
+								onClick={() => {
+									const snippets = settings.terminal.snippets.filter(
+										(_, i) => i !== idx,
+									)
+									set({terminal: {...settings.terminal, snippets}})
+								}}
+							>
+								Remove
+							</button>
+						</div>
+					))}
+					<button
+						type="button"
+						className="settings-btn"
+						onClick={() => {
+							const snip: CommandSnippet = {
+								id: `snip-${Date.now()}`,
+								name: 'New snippet',
+								command: '',
+								sendEnter: true,
+							}
+							set({
+								terminal: {
+									...settings.terminal,
+									snippets: [...(settings.terminal.snippets ?? []), snip],
+								},
+							})
+						}}
+					>
+						Add snippet
+					</button>
+				</section>
+
+				<section>
 					<h3>Window & Tray</h3>
 					<label>
 						<input
@@ -512,6 +609,92 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 						/>{' '}
 						Windows 11 mica backdrop (title bar)
 					</label>
+					<label>
+						<input
+							type="checkbox"
+							checked={settings.window.checkUpdatesOnStartup !== false}
+							onChange={e =>
+								set({
+									window: {
+										...settings.window,
+										checkUpdatesOnStartup: e.target.checked,
+									},
+								})
+							}
+						/>{' '}
+						Check for updates on startup (packaged installs)
+					</label>
+					<div className="settings-btn-row">
+						<button
+							type="button"
+							className="settings-btn"
+							onClick={() => {
+								void termApi()
+									?.settingsExport()
+									.then(r => {
+										if (!r.ok && r.error !== 'canceled')
+											window.alert(r.error || 'Export failed')
+									})
+							}}
+						>
+							Export settings…
+						</button>
+						<button
+							type="button"
+							className="settings-btn"
+							onClick={() => {
+								void termApi()
+									?.settingsImport()
+									.then(r => {
+										if (!r.ok) {
+											if (r.error !== 'canceled')
+												window.alert(r.error || 'Import failed')
+											return
+										}
+										if (r.settings) onChange(r.settings as AppSettings)
+									})
+							}}
+						>
+							Import settings…
+						</button>
+						<button
+							type="button"
+							className="settings-btn"
+							onClick={() => {
+								void termApi()
+									?.updateCheck()
+									.then(async s => {
+										const st = s as {
+											state: string
+											version?: string
+											message?: string
+											currentVersion: string
+										}
+										if (st.state === 'available') {
+											const ok = await termApi()?.dialogConfirm({
+												title: 'Update available',
+												message: `Download version ${st.version}?`,
+												detail: `Current: ${st.currentVersion}`,
+												buttons: ['Download', 'Later'],
+											})
+											if (ok) {
+												const d = await termApi()?.updateDownload()
+												if (
+													d &&
+													(d as {state: string}).state === 'downloaded'
+												) {
+													await termApi()?.updateInstall()
+												}
+											}
+										} else if (st.message) {
+											window.alert(st.message)
+										}
+									})
+							}}
+						>
+							Check for updates…
+						</button>
+					</div>
 					<label>
 						<input
 							type="checkbox"

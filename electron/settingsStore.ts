@@ -48,6 +48,11 @@ const HotkeysSchema = z.record(z.string(), z.string()).default({
 	'zoom-in': 'Ctrl+=',
 	'zoom-out': 'Ctrl+-',
 	'zoom-reset': 'Ctrl+0',
+	'clear-buffer': 'Ctrl+Shift+K',
+	'mark-prompt': 'Ctrl+Shift+M',
+	'prev-mark': 'Ctrl+Shift+Up',
+	'next-mark': 'Ctrl+Shift+Down',
+	'check-updates': 'Ctrl+Shift+U',
 })
 
 const TabsSchema = z.object({
@@ -63,6 +68,37 @@ const ProfileSchema = z.object({
 	args: z.array(z.string()).optional(),
 })
 
+const SnippetSchema = z.object({
+	id: z.string().min(1),
+	name: z.string().min(1),
+	command: z.string().min(1),
+	/** Append Enter after writing the command. */
+	sendEnter: z.boolean().default(true),
+})
+
+function defaultSnippets() {
+	return [
+		{
+			id: 'git-status',
+			name: 'Git status',
+			command: 'git status',
+			sendEnter: true,
+		},
+		{
+			id: 'bun-build',
+			name: 'Bun build',
+			command: 'bun run build',
+			sendEnter: true,
+		},
+		{
+			id: 'opencode-continue',
+			name: 'OpenCode continue',
+			command: 'opencode -c',
+			sendEnter: true,
+		},
+	]
+}
+
 const TerminalSchema = z.object({
 	/** Default cwd for new tabs. Empty = home folder / inherited cwd. */
 	startDir: z.string().default(''),
@@ -75,6 +111,8 @@ const TerminalSchema = z.object({
 	scrollback: z.number().min(200).max(50000).default(5000),
 	/** Show the terminal viewport scrollbar. */
 	scrollbar: z.boolean().default(true),
+	/** Quick-run commands for the palette. */
+	snippets: z.array(SnippetSchema).default(defaultSnippets()),
 })
 
 const StartupSchema = z.object({
@@ -95,6 +133,8 @@ const WindowSchema = z.object({
 	maximized: z.boolean().default(false),
 	/** Windows 11 mica / acrylic backdrop. */
 	acrylic: z.boolean().default(false),
+	/** Quiet check for updates a few seconds after launch. */
+	checkUpdatesOnStartup: z.boolean().default(true),
 })
 
 const TraySchema = z.object({
@@ -177,6 +217,14 @@ export function saveSettings(next: AppSettings): AppSettings {
 		fs.mkdirSync(SETTINGS_DIR, {recursive: true})
 	fs.writeFileSync(SETTINGS_FILE, JSON.stringify(parsed, null, 2))
 	return parsed
+}
+
+/** Merge unknown JSON onto defaults and validate (for import). */
+export function parseImportedSettings(raw: unknown): AppSettings {
+	const base = defaultSettings() as unknown as Record<string, unknown>
+	const over =
+		raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+	return SettingsSchema.parse(deepMergeDefaults(base, over))
 }
 
 function isValidSessionTab(t: unknown): t is {title: unknown; root: unknown} {

@@ -42,6 +42,28 @@ export interface ShellProfile {
 	args?: string[]
 }
 
+export interface CommandSnippet {
+	id: string
+	name: string
+	command: string
+	sendEnter: boolean
+}
+
+export interface UpdateStatus {
+	state:
+		| 'idle'
+		| 'checking'
+		| 'available'
+		| 'not-available'
+		| 'downloading'
+		| 'downloaded'
+		| 'error'
+	version?: string
+	currentVersion: string
+	message?: string
+	percent?: number
+}
+
 export interface AppSettings {
 	theme: {
 		bg: string
@@ -68,6 +90,7 @@ export interface AppSettings {
 		completionBell: boolean
 		scrollback: number
 		scrollbar: boolean
+		snippets: CommandSnippet[]
 	}
 	startup: {
 		mode: 'session' | 'new'
@@ -80,6 +103,7 @@ export interface AppSettings {
 		y: number | null
 		maximized: boolean
 		acrylic: boolean
+		checkUpdatesOnStartup: boolean
 	}
 	tray: {enabled: boolean; minimizeToTray: boolean; closeToTray: boolean}
 	quake: {
@@ -144,9 +168,21 @@ export interface TermApiShape {
 		message: string
 		detail?: string
 		title?: string
+		buttons?: [string, string]
 	}) => Promise<boolean>
 	openExternal: (url: string) => Promise<void>
 	openPath: (filePath: string) => Promise<string>
+	settingsExport: () => Promise<{ok: boolean; path?: string; error?: string}>
+	settingsImport: () => Promise<{
+		ok: boolean
+		settings?: AppSettings
+		error?: string
+	}>
+	updateCheck: () => Promise<UpdateStatus>
+	updateDownload: () => Promise<UpdateStatus>
+	updateInstall: () => Promise<void>
+	updateStatus: () => Promise<UpdateStatus>
+	onUpdateStatus: (cb: (s: UpdateStatus) => void) => () => void
 }
 
 declare global {

@@ -51,9 +51,21 @@ export interface TermApi {
 		message: string
 		detail?: string
 		title?: string
+		buttons?: [string, string]
 	}) => Promise<boolean>
 	openExternal: (url: string) => Promise<void>
 	openPath: (filePath: string) => Promise<string>
+	settingsExport: () => Promise<{ok: boolean; path?: string; error?: string}>
+	settingsImport: () => Promise<{
+		ok: boolean
+		settings?: unknown
+		error?: string
+	}>
+	updateCheck: () => Promise<unknown>
+	updateDownload: () => Promise<unknown>
+	updateInstall: () => Promise<void>
+	updateStatus: () => Promise<unknown>
+	onUpdateStatus: (cb: (s: unknown) => void) => () => void
 }
 
 function sub(channel: string, cb: (...a: never[]) => void): () => void {
@@ -92,6 +104,13 @@ const api: TermApi = {
 	dialogConfirm: opts => ipcRenderer.invoke('dialog:confirm', opts),
 	openExternal: url => ipcRenderer.invoke('shell:openExternal', {url}),
 	openPath: filePath => ipcRenderer.invoke('shell:openPath', {path: filePath}),
+	settingsExport: () => ipcRenderer.invoke('settings:export'),
+	settingsImport: () => ipcRenderer.invoke('settings:import'),
+	updateCheck: () => ipcRenderer.invoke('update:check'),
+	updateDownload: () => ipcRenderer.invoke('update:download'),
+	updateInstall: () => ipcRenderer.invoke('update:install'),
+	updateStatus: () => ipcRenderer.invoke('update:status'),
+	onUpdateStatus: cb => sub('update:status', cb as never),
 }
 
 contextBridge.exposeInMainWorld('termApi', api)

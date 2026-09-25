@@ -5,6 +5,11 @@ import {Terminal} from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import {useEffect, useRef} from 'react'
 import {registerSearch, unregisterSearch} from '../lib/searchRegistry'
+import {
+	createMarkController,
+	registerTermActions,
+	unregisterTermActions,
+} from '../lib/termActions'
 import {createPathLinkProvider, webLinkHandler} from '../lib/termLinks'
 import {termApi} from '../types'
 
@@ -81,6 +86,16 @@ export default function TerminalView({
 		const search = new SearchAddon()
 		term.loadAddon(search)
 		registerSearch(paneId, search)
+		const marks = createMarkController(term)
+		registerTermActions(paneId, {
+			clearBuffer: () => {
+				term.clear()
+				term.focus()
+			},
+			addMark: () => marks.addMark(),
+			jumpPrevMark: () => marks.jumpPrev(),
+			jumpNextMark: () => marks.jumpNext(),
+		})
 		term.open(el)
 		termRef.current = term
 		fitRef.current = fit
@@ -239,6 +254,8 @@ export default function TerminalView({
 			offData?.()
 			offExit?.()
 			unregisterSearch(paneId)
+			unregisterTermActions(paneId)
+			marks.dispose()
 			term.dispose()
 			termRef.current = null
 		}

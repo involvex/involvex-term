@@ -78,6 +78,43 @@ export async function buildMenu(
 				},
 				{type: 'separator'},
 				{
+					id: 'tab:clear-buffer',
+					label: 'Clear Buffer',
+					accelerator: accelFromSetting(
+						hk['clear-buffer'],
+						'CommandOrControl+Shift+K',
+					),
+					click: () => win.webContents.send('tab:action', 'clear-buffer'),
+				},
+				{
+					id: 'tab:mark-prompt',
+					label: 'Mark Prompt',
+					accelerator: accelFromSetting(
+						hk['mark-prompt'],
+						'CommandOrControl+Shift+M',
+					),
+					click: () => win.webContents.send('tab:action', 'mark-prompt'),
+				},
+				{
+					id: 'tab:prev-mark',
+					label: 'Previous Mark',
+					accelerator: accelFromSetting(
+						hk['prev-mark'],
+						'CommandOrControl+Shift+Up',
+					),
+					click: () => win.webContents.send('tab:action', 'prev-mark'),
+				},
+				{
+					id: 'tab:next-mark',
+					label: 'Next Mark',
+					accelerator: accelFromSetting(
+						hk['next-mark'],
+						'CommandOrControl+Shift+Down',
+					),
+					click: () => win.webContents.send('tab:action', 'next-mark'),
+				},
+				{type: 'separator'},
+				{
 					id: 'tab:settings',
 					label: 'Settings',
 					accelerator: accelFromSetting(hk['settings'], 'CommandOrControl+,'),
@@ -100,6 +137,15 @@ export async function buildMenu(
 						'CommandOrControl+Shift+O',
 					),
 					click: () => win.webContents.send('tab:action', 'open-opencode'),
+				},
+				{
+					id: 'tab:check-updates',
+					label: 'Check for Updates...',
+					accelerator: accelFromSetting(
+						hk['check-updates'],
+						'CommandOrControl+Shift+U',
+					),
+					click: () => win.webContents.send('tab:action', 'check-updates'),
 				},
 				{type: 'separator'},
 				{role: 'quit'},

@@ -51,7 +51,10 @@ jobs:
         if: matrix.platform == 'win'
         uses: softprops/action-gh-release@v2
         with:
-          files: release/**/involvex-term-Windows-*-Setup.exe
+          files: |
+            release/**/involvex-term-Windows-*-Setup.exe
+            release/**/involvex-term-Windows-*-Setup.exe.blockmap
+            release/**/latest.yml
           draft: false
           generate_release_notes: true
           body_path: CHANGELOG.md
@@ -62,7 +65,9 @@ jobs:
         if: matrix.platform == 'linux'
         uses: softprops/action-gh-release@v2
         with:
-          files: release/**/involvex-term-Linux-*.AppImage
+          files: |
+            release/**/involvex-term-Linux-*.AppImage
+            release/**/latest-linux.yml
           draft: false
           generate_release_notes: true
         env:

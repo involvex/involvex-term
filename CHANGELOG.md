@@ -2,7 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.3.0] - Unreleased
+## [0.4.0] - Unreleased
+
+### Added
+
+- In-app update check via `electron-updater` (GitHub Releases; packaged installs)
+- Command snippets in Settings + “Run: …” entries in the command palette
+- Export / import settings JSON from Settings
+- Clear buffer (`Ctrl+Shift+K`), mark prompt (`Ctrl+Shift+M`), jump marks
+  (`Ctrl+Shift+Up/Down`)
+- Release workflow uploads `latest.yml` / blockmaps for auto-update
+
+## [0.3.0] - 2026-09-25
 
 ### Added
 

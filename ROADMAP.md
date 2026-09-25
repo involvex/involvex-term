@@ -36,10 +36,10 @@ Shipped in tree (see CHANGELOG 0.2.0 unreleased):
 
 ## v0.4 — Power user
 
-- In-app update check (`electron-updater` → GitHub Releases)
-- Command snippets / quick-run entries in the palette
-- Export / import settings
-- Marked prompts / clear-buffer actions
+1. ~~In-app update check (`electron-updater` → GitHub Releases)~~
+2. ~~Command snippets / quick-run entries in the palette~~
+3. ~~Export / import settings~~
+4. ~~Marked prompts / clear-buffer actions~~
 
 ## v0.5+ — Beyond Windows Terminal
 

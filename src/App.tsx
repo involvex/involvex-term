@@ -21,6 +21,7 @@ import {
 	type PaneLeaf,
 	type SplitDir,
 } from './lib/panes'
+import {getTermActions} from './lib/termActions'
 import {
 	isElectron,
 	termApi,
@@ -28,6 +29,7 @@ import {
 	type GitStatus,
 	type OpencodeStatus,
 	type SysStats,
+	type UpdateStatus,
 } from './types'
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -64,6 +66,11 @@ const DEFAULT_SETTINGS: AppSettings = {
 		'zoom-in': 'Ctrl+=',
 		'zoom-out': 'Ctrl+-',
 		'zoom-reset': 'Ctrl+0',
+		'clear-buffer': 'Ctrl+Shift+K',
+		'mark-prompt': 'Ctrl+Shift+M',
+		'prev-mark': 'Ctrl+Shift+Up',
+		'next-mark': 'Ctrl+Shift+Down',
+		'check-updates': 'Ctrl+Shift+U',
 	},
 	tabs: {confirmClose: false, restoreSession: true},
 	terminal: {
@@ -78,6 +85,26 @@ const DEFAULT_SETTINGS: AppSettings = {
 		completionBell: true,
 		scrollback: 5000,
 		scrollbar: true,
+		snippets: [
+			{
+				id: 'git-status',
+				name: 'Git status',
+				command: 'git status',
+				sendEnter: true,
+			},
+			{
+				id: 'bun-build',
+				name: 'Bun build',
+				command: 'bun run build',
+				sendEnter: true,
+			},
+			{
+				id: 'opencode-continue',
+				name: 'OpenCode continue',
+				command: 'opencode -c',
+				sendEnter: true,
+			},
+		],
 	},
 	startup: {mode: 'session', profileId: ''},
 	window: {
@@ -87,6 +114,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 		y: null,
 		maximized: false,
 		acrylic: false,
+		checkUpdatesOnStartup: true,
 	},
 	tray: {enabled: true, minimizeToTray: true, closeToTray: true},
 	quake: {
@@ -217,6 +245,64 @@ export default function App() {
 		[writeOpencodeCmd],
 	)
 
+	const runSnippet = useCallback((command: string, sendEnter: boolean) => {
+		const api = termApi()
+		if (!api) return
+		const tab = tabsRef.current.find(t => t.id === activeRef.current)
+		const paneId = tab?.activePaneId
+		if (!paneId) return
+		api.ptyWrite(paneId, sendEnter ? `${command}\r` : command)
+	}, [])
+
+	const activePaneActions = useCallback(() => {
+		const tab = tabsRef.current.find(t => t.id === activeRef.current)
+		if (!tab?.activePaneId) return undefined
+		return getTermActions(tab.activePaneId)
+	}, [])
+
+	const showUpdateToast = useCallback((s: UpdateStatus) => {
+		if (s.message) {
+			setToast(s.message)
+			window.setTimeout(() => setToast(null), 4000)
+		}
+	}, [])
+
+	const checkUpdates = useCallback(async () => {
+		const api = termApi()
+		if (!api) return
+		setToast('Checking for updates…')
+		try {
+			const s = (await api.updateCheck()) as UpdateStatus
+			showUpdateToast(s)
+			if (s.state === 'available') {
+				const ok = await api.dialogConfirm({
+					title: 'Update available',
+					message: `Version ${s.version} is available. Download now?`,
+					detail: `Current: ${s.currentVersion}`,
+					buttons: ['Download', 'Later'],
+				})
+				if (ok) {
+					const d = (await api.updateDownload()) as UpdateStatus
+					showUpdateToast(d)
+					if (d.state === 'downloaded') await api.updateInstall()
+				}
+			}
+		} catch (e) {
+			setToast(e instanceof Error ? e.message : String(e))
+		}
+	}, [showUpdateToast])
+
+	useEffect(() => {
+		const api = termApi()
+		if (!api) return
+		const off = api.onUpdateStatus(s => {
+			const st = s as UpdateStatus
+			if (st.state === 'downloaded') showUpdateToast(st)
+			else if (st.state === 'available' && st.message) setToast(st.message)
+		})
+		return off
+	}, [showUpdateToast])
+
 	// Load settings (+ restore previous session on fresh launch)
 	useEffect(() => {
 		const api = termApi()
@@ -335,6 +421,7 @@ export default function App() {
 						message: `Close "${label}"?`,
 						detail: 'The terminal session in this tab will be terminated.',
 						title: 'Close tab',
+						buttons: ['Close', 'Cancel'],
 					})
 				: window.confirm(`Close ${label}?`)
 			if (!ok) return
@@ -516,6 +603,11 @@ export default function App() {
 			else if (action === 'split-pane') splitPane('horizontal')
 			else if (action === 'split-pane-vertical') splitPane('vertical')
 			else if (action === 'close-pane') closePane()
+			else if (action === 'clear-buffer') activePaneActions()?.clearBuffer()
+			else if (action === 'mark-prompt') activePaneActions()?.addMark()
+			else if (action === 'prev-mark') activePaneActions()?.jumpPrevMark()
+			else if (action === 'next-mark') activePaneActions()?.jumpNextMark()
+			else if (action === 'check-updates') void checkUpdates()
 		})
 		return off
 	}, [
@@ -525,6 +617,8 @@ export default function App() {
 		splitPane,
 		closePane,
 		launchOpencode,
+		activePaneActions,
+		checkUpdates,
 		git?.cwd,
 		cwd,
 	])
@@ -579,6 +673,21 @@ export default function App() {
 			} else if (e.altKey && e.shiftKey && !mod && key === 'c') {
 				e.preventDefault()
 				closePane()
+			} else if (mod && e.shiftKey && key === 'k') {
+				e.preventDefault()
+				activePaneActions()?.clearBuffer()
+			} else if (mod && e.shiftKey && key === 'm') {
+				e.preventDefault()
+				activePaneActions()?.addMark()
+			} else if (mod && e.shiftKey && e.key === 'ArrowUp') {
+				e.preventDefault()
+				activePaneActions()?.jumpPrevMark()
+			} else if (mod && e.shiftKey && e.key === 'ArrowDown') {
+				e.preventDefault()
+				activePaneActions()?.jumpNextMark()
+			} else if (mod && e.shiftKey && key === 'u') {
+				e.preventDefault()
+				void checkUpdates()
 			} else if (mod && key === ',') {
 				e.preventDefault()
 				setShowSettings(true)
@@ -601,6 +710,8 @@ export default function App() {
 		splitPane,
 		closePane,
 		launchOpencode,
+		activePaneActions,
+		checkUpdates,
 		git?.cwd,
 		cwd,
 	])
@@ -732,6 +843,42 @@ export default function App() {
 				: 'opencode -c',
 			run: () => continueOpencode(opencode?.latest?.id),
 		},
+		{
+			id: 'cmd:clear-buffer',
+			title: 'Clear buffer',
+			hint: 'Ctrl+Shift+K',
+			run: () => activePaneActions()?.clearBuffer(),
+		},
+		{
+			id: 'cmd:mark-prompt',
+			title: 'Mark prompt',
+			hint: 'Ctrl+Shift+M',
+			run: () => activePaneActions()?.addMark(),
+		},
+		{
+			id: 'cmd:prev-mark',
+			title: 'Jump to previous mark',
+			hint: 'Ctrl+Shift+Up',
+			run: () => activePaneActions()?.jumpPrevMark(),
+		},
+		{
+			id: 'cmd:next-mark',
+			title: 'Jump to next mark',
+			hint: 'Ctrl+Shift+Down',
+			run: () => activePaneActions()?.jumpNextMark(),
+		},
+		{
+			id: 'cmd:check-updates',
+			title: 'Check for updates…',
+			hint: 'Ctrl+Shift+U',
+			run: () => void checkUpdates(),
+		},
+		...settings.terminal.snippets.map(s => ({
+			id: `cmd:snippet-${s.id}`,
+			title: `Run: ${s.name}`,
+			hint: s.command,
+			run: () => runSnippet(s.command, s.sendEnter !== false),
+		})),
 		...settings.terminal.profiles.map(p => ({
 			id: `cmd:new-profile-${p.id}`,
 			title: `New tab: ${p.name}`,

@@ -21,6 +21,7 @@ export default defineConfig({
 								'chokidar',
 								'systeminformation',
 								'electron',
+								'electron-updater',
 							],
 						},
 					},

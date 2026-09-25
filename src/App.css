@@ -220,6 +220,37 @@ body {
 	height: 0;
 }
 
+.snippet-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+	margin-bottom: 8px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid #2d2d2d;
+}
+
+.settings-btn-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 8px 0 12px;
+}
+
+.settings-btn {
+	background: #2d2d2d;
+	color: #cccccc;
+	border: 1px solid #3c3c3c;
+	padding: 4px 10px;
+	cursor: pointer;
+	font: inherit;
+	font-size: 12px;
+}
+
+.settings-btn:hover {
+	background: #3c3c3c;
+}
+
 .statusbar {
 	display: flex;
 	justify-content: space-between;

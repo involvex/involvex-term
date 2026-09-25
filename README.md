@@ -26,6 +26,9 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
 - Settings at `~/.involvex-term/settings.json` (`Ctrl+,`)
 - Ctrl+click URLs and local paths; scrollback / scrollbar / font fallback
 - Optional Windows 11 mica title-bar backdrop
+- Command snippets in the palette; clear buffer / prompt marks
+- In-app update check (packaged NSIS/AppImage via GitHub Releases)
+- Export / import settings from Settings
 
 ## Quickstart (Bun, PowerShell)
 

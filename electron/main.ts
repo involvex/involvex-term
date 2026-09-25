@@ -27,12 +27,21 @@ import {
 import {
 	loadSession,
 	loadSettings,
+	parseImportedSettings,
 	saveSession,
 	saveSettings,
 	SETTINGS_FILE,
 } from './settingsStore.js'
 import {getSysStats} from './sysEngine.js'
 import {destroyTray, setupTray} from './tray.js'
+import {
+	bindUpdaterWindow,
+	checkForUpdates,
+	downloadUpdate,
+	getUpdateStatus,
+	installUpdate,
+	scheduleStartupUpdateCheck,
+} from './updater.js'
 
 let isQuitting = false
 
@@ -266,15 +275,21 @@ function registerIpc() {
 		'dialog:confirm',
 		async (
 			_e,
-			opts: {message: string; detail?: string; title?: string} = {
+			opts: {
+				message: string
+				detail?: string
+				title?: string
+				buttons?: [string, string]
+			} = {
 				message: 'Confirm?',
 			},
 		) => {
 			if (!win || win.isDestroyed()) return false
+			const buttons = opts.buttons ?? ['OK', 'Cancel']
 			const {response} = await dialog.showMessageBox(win, {
 				type: 'question',
-				buttons: ['Close', 'Cancel'],
-				defaultId: 1,
+				buttons,
+				defaultId: opts.buttons ? 0 : 1,
 				cancelId: 1,
 				title: opts.title ?? 'involvex-term',
 				message: opts.message,
@@ -295,6 +310,50 @@ function registerIpc() {
 		if (!target) return 'empty path'
 		return shell.openPath(target)
 	})
+
+	ipcMain.handle('settings:export', async () => {
+		if (!win || win.isDestroyed()) return {ok: false, error: 'no window'}
+		const {canceled, filePath} = await dialog.showSaveDialog(win, {
+			title: 'Export settings',
+			defaultPath: 'involvex-term-settings.json',
+			filters: [{name: 'JSON', extensions: ['json']}],
+		})
+		if (canceled || !filePath) return {ok: false, error: 'canceled'}
+		try {
+			fs.writeFileSync(filePath, JSON.stringify(settings, null, 2), 'utf8')
+			return {ok: true, path: filePath}
+		} catch (e) {
+			return {ok: false, error: e instanceof Error ? e.message : String(e)}
+		}
+	})
+
+	ipcMain.handle('settings:import', async () => {
+		if (!win || win.isDestroyed()) return {ok: false, error: 'no window'}
+		const {canceled, filePaths} = await dialog.showOpenDialog(win, {
+			title: 'Import settings',
+			filters: [{name: 'JSON', extensions: ['json']}],
+			properties: ['openFile'],
+		})
+		if (canceled || !filePaths[0]) return {ok: false, error: 'canceled'}
+		try {
+			const raw = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'))
+			settings = saveSettings(parseImportedSettings(raw))
+			win.webContents.send('settings:changed', settings)
+			await buildMenu(win, settings).catch(() => undefined)
+			setupTray(win, iconPath(), settings, quitApp)
+			registerQuake(win, () => settings)
+			applyWindowMaterial(win, settings)
+			startSysLoop()
+			return {ok: true, settings}
+		} catch (e) {
+			return {ok: false, error: e instanceof Error ? e.message : String(e)}
+		}
+	})
+
+	ipcMain.handle('update:check', () => checkForUpdates())
+	ipcMain.handle('update:download', () => downloadUpdate())
+	ipcMain.handle('update:install', () => installUpdate())
+	ipcMain.handle('update:status', () => getUpdateStatus())
 
 	ipcMain.handle('clipboard:write', (_e, {text}: {text: string}) => {
 		clipboard.writeText(text ?? '')
@@ -410,7 +469,9 @@ function createWindow() {
 	void buildMenu(win, settings).catch(() => undefined)
 	setupTray(win, iconPath(), settings, quitApp)
 	registerQuake(win, () => settings)
+	bindUpdaterWindow(win)
 	startSysLoop()
+	if (settings.window.checkUpdatesOnStartup) scheduleStartupUpdateCheck()
 }
 
 function quitApp(): void {
