@@ -59,6 +59,7 @@ Background (why the wrapper exists):
    packaging never depends on ambient shell env.
 
 Troubleshooting:
+
 - `pty.vcxproj` / MSB3202 errors: delete `node_modules/node-pty/build` and
   rebuild — stale half-generated build dirs cause it.
 - "Electron failed to install correctly": bun's electron postinstall sometimes
@@ -73,10 +74,26 @@ Stored at `~/.involvex-term/settings.json` (auto-created, zod-validated):
 
 ```json
 {
-  "theme": { "bg": "#1e1e1e", "fg": "#cccccc", "fontFamily": "...", "fontSize": 14 },
-  "footer": { "showGit": true, "showSys": true, "showCpu": true, "showMem": true, "modulesOrder": ["git", "sys"], "refreshMs": 1500 },
-  "hotkeys": { "new-tab": "Ctrl+Shift+T", "close-tab": "Ctrl+Shift+W", "...": "..." },
-  "tabs": { "confirmClose": false }
+	"theme": {
+		"bg": "#1e1e1e",
+		"fg": "#cccccc",
+		"fontFamily": "...",
+		"fontSize": 14
+	},
+	"footer": {
+		"showGit": true,
+		"showSys": true,
+		"showCpu": true,
+		"showMem": true,
+		"modulesOrder": ["git", "sys"],
+		"refreshMs": 1500
+	},
+	"hotkeys": {
+		"new-tab": "Ctrl+Shift+T",
+		"close-tab": "Ctrl+Shift+W",
+		"...": "..."
+	},
+	"tabs": {"confirmClose": false}
 }
 ```
 
