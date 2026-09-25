@@ -82,6 +82,15 @@ export async function buildMenu(
 					),
 					click: () => win.webContents.send('tab:action', 'open-palette'),
 				},
+				{
+					id: 'tab:opencode',
+					label: 'Open OpenCode',
+					accelerator: accelFromSetting(
+						hk['opencode'],
+						'CommandOrControl+Shift+O',
+					),
+					click: () => win.webContents.send('tab:action', 'open-opencode'),
+				},
 				{type: 'separator'},
 				{role: 'quit'},
 			],

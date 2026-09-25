@@ -95,6 +95,24 @@ body {
 	flex-shrink: 0;
 }
 
+.tab-new:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+.tab-opencode {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	border-style: solid;
+	border-color: #4ec9b0;
+	color: #4ec9b0;
+}
+
+.tab-opencode:hover:not(:disabled) {
+	background: #1a3a34;
+}
+
 .tabbar-spacer {
 	flex: 1;
 }

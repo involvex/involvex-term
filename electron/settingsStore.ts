@@ -33,6 +33,7 @@ const HotkeysSchema = z.record(z.string(), z.string()).default({
 	settings: 'Ctrl+,',
 	find: 'Ctrl+Shift+F',
 	palette: 'Ctrl+Shift+P',
+	opencode: 'Ctrl+Shift+O',
 	'split-pane': 'Shift+Alt+D',
 	'close-pane': 'Shift+Alt+C',
 	'zoom-in': 'Ctrl+=',

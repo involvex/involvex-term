@@ -33,6 +33,7 @@ export interface TermApi {
 	settingsSet: (next: unknown) => Promise<unknown>
 	onSettingsChanged: (cb: (s: unknown) => void) => () => void
 	onTabAction: (cb: (action: string) => void) => () => void
+	opencodeAvailable: () => Promise<boolean>
 }
 
 function sub(channel: string, cb: (...a: never[]) => void): () => void {
@@ -66,6 +67,7 @@ const api: TermApi = {
 	settingsSet: next => ipcRenderer.invoke('settings:set', next),
 	onSettingsChanged: cb => sub('settings:changed', cb as never),
 	onTabAction: cb => sub('tab:action', cb as never),
+	opencodeAvailable: () => ipcRenderer.invoke('opencode:available'),
 }
 
 contextBridge.exposeInMainWorld('termApi', api)

@@ -93,6 +93,7 @@ export interface TermApiShape {
 	settingsSet: (next: AppSettings) => Promise<AppSettings>
 	onSettingsChanged: (cb: (s: AppSettings) => void) => () => void
 	onTabAction: (cb: (action: string) => void) => () => void
+	opencodeAvailable: () => Promise<boolean>
 }
 
 declare global {

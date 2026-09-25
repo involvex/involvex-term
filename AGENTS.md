@@ -15,6 +15,9 @@ bun scripts/test-osc7.mjs # OSC7/CWD end-to-end test (run under Electron)
 bun scripts/generate-icon.mjs  # regenerate public/icon.png + icon.ico
 ```
 
+OpenCode: TabBar **OC** / `Ctrl+Shift+O` / palette writes `opencode` into the
+focused pane (requires `opencode` on PATH).
+
 Windows + PowerShell. No `rm -rf` (use `Remove-Item`), no `ls` (use `dir`/`Get-ChildItem`).
 
 ## Native build gotchas (node-pty)

@@ -53,6 +53,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 		settings: 'Ctrl+,',
 		find: 'Ctrl+Shift+F',
 		palette: 'Ctrl+Shift+P',
+		opencode: 'Ctrl+Shift+O',
 		'split-pane': 'Shift+Alt+D',
 		'close-pane': 'Shift+Alt+C',
 		'zoom-in': 'Ctrl+=',
@@ -95,6 +96,7 @@ export default function App() {
 	const [cwd, setCwd] = useState('')
 	const [searchOpen, setSearchOpen] = useState(false)
 	const [paletteOpen, setPaletteOpen] = useState(false)
+	const [opencodeAvailable, setOpencodeAvailable] = useState(true)
 	// Latest-value refs for use inside IPC callbacks (synced in effects,
 	// never written during render).
 	const tabsRef = useRef(tabs)
@@ -111,6 +113,28 @@ export default function App() {
 	}, [settings])
 
 	const activeTab = tabs.find(t => t.id === activeId) || tabs[0]
+
+	// Detect OpenCode CLI on PATH (main process).
+	useEffect(() => {
+		const api = termApi()
+		if (!api) return
+		api
+			.opencodeAvailable()
+			.then(setOpencodeAvailable)
+			.catch(() => setOpencodeAvailable(false))
+	}, [])
+
+	/** Inject `opencode` into the focused pane of the active tab. */
+	const launchOpencode = useCallback(() => {
+		const api = termApi()
+		if (!api) return
+		const tab = tabsRef.current.find(t => t.id === activeRef.current)
+		const paneId = tab?.activePaneId
+		if (!paneId) return
+		// Interrupt any running foreground command, then start OpenCode.
+		api.ptyWrite(paneId, '\x03')
+		setTimeout(() => api.ptyWrite(paneId, 'opencode\r'), 50)
+	}, [])
 
 	// Load settings (+ restore previous session on fresh launch)
 	useEffect(() => {
@@ -204,6 +228,11 @@ export default function App() {
 	}, [activeId, activePaneId])
 
 	const closeTab = useCallback((id: string) => {
+		if (settingsRef.current.tabs.confirmClose) {
+			const tab = tabsRef.current.find(t => t.id === id)
+			const label = tab?.title || 'this tab'
+			if (!window.confirm(`Close ${label}?`)) return
+		}
 		setTabs(prev => {
 			const closing = prev.find(t => t.id === id)
 			if (closing) {
@@ -332,11 +361,21 @@ export default function App() {
 			else if (action === 'open-settings') setShowSettings(true)
 			else if (action === 'open-search') setSearchOpen(true)
 			else if (action === 'open-palette') setPaletteOpen(true)
+			else if (action === 'open-opencode') launchOpencode()
 			else if (action === 'split-pane') splitPane('horizontal')
 			else if (action === 'close-pane') closePane()
 		})
 		return off
-	}, [addTab, closeTab, selectTab, splitPane, closePane, git?.cwd, cwd])
+	}, [
+		addTab,
+		closeTab,
+		selectTab,
+		splitPane,
+		closePane,
+		launchOpencode,
+		git?.cwd,
+		cwd,
+	])
 
 	// Keyboard shortcuts in renderer (works in dev + packaged)
 	useEffect(() => {
@@ -359,6 +398,9 @@ export default function App() {
 			} else if (mod && e.shiftKey && key === 'p') {
 				e.preventDefault()
 				setPaletteOpen(true)
+			} else if (mod && e.shiftKey && key === 'o') {
+				e.preventDefault()
+				launchOpencode()
 			} else if (mod && e.shiftKey && key === 'w') {
 				e.preventDefault()
 				if (activeRef.current) closeTab(activeRef.current)
@@ -396,7 +438,16 @@ export default function App() {
 		}
 		window.addEventListener('keydown', onKey)
 		return () => window.removeEventListener('keydown', onKey)
-	}, [addTab, closeTab, selectTab, splitPane, closePane, git?.cwd, cwd])
+	}, [
+		addTab,
+		closeTab,
+		selectTab,
+		splitPane,
+		closePane,
+		launchOpencode,
+		git?.cwd,
+		cwd,
+	])
 
 	const saveSettings = useCallback((next: AppSettings) => {
 		setSettings(next)
@@ -501,6 +552,12 @@ export default function App() {
 			run: () => setShowSettings(true),
 		},
 		{
+			id: 'cmd:opencode',
+			title: 'Open OpenCode',
+			hint: opencodeAvailable ? 'Ctrl+Shift+O' : 'not found on PATH',
+			run: () => launchOpencode(),
+		},
+		{
 			id: 'cmd:toggle-git',
 			title: settings.footer.showGit ? 'Hide Git status' : 'Show Git status',
 			run: () =>
@@ -537,6 +594,8 @@ export default function App() {
 				onSelect={selectTab}
 				onClose={closeTab}
 				onNew={() => addTab()}
+				onOpenOpencode={launchOpencode}
+				opencodeAvailable={opencodeAvailable}
 				onOpenSettings={() => setShowSettings(true)}
 			/>
 			<div className="terminals">

@@ -16,6 +16,7 @@ const HOTKEY_ACTIONS: Array<{id: string; label: string}> = [
 	{id: 'settings', label: 'Open settings'},
 	{id: 'find', label: 'Find in terminal'},
 	{id: 'palette', label: 'Command palette'},
+	{id: 'opencode', label: 'Open OpenCode'},
 	{id: 'split-pane', label: 'Split pane (horizontal)'},
 	{id: 'close-pane', label: 'Close pane'},
 	{id: 'zoom-in', label: 'Zoom in'},

@@ -15,6 +15,8 @@ interface Props {
 	onSelect: (id: string) => void
 	onClose: (id: string) => void
 	onNew: () => void
+	onOpenOpencode: () => void
+	opencodeAvailable: boolean
 	onOpenSettings: () => void
 }
 
@@ -24,6 +26,8 @@ export default function TabBar({
 	onSelect,
 	onClose,
 	onNew,
+	onOpenOpencode,
+	opencodeAvailable,
 	onOpenSettings,
 }: Props) {
 	return (
@@ -64,6 +68,20 @@ export default function TabBar({
 				+
 			</button>
 			<span className="tabbar-spacer" />
+			<button
+				type="button"
+				className="tab-new tab-opencode"
+				onClick={onOpenOpencode}
+				disabled={!opencodeAvailable}
+				title={
+					opencodeAvailable
+						? 'Open OpenCode (Ctrl+Shift+O)'
+						: 'OpenCode not found on PATH'
+				}
+				aria-label="Open OpenCode"
+			>
+				OC
+			</button>
 			<button
 				type="button"
 				className="tab-new"

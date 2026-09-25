@@ -1,8 +1,17 @@
 {
 	"name": "involvex-term",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"private": true,
 	"description": "Minimalist dark Git-aware terminal (Electron + xterm.js + node-pty)",
+	"homepage": "https://github.com/involvex/involvex-term#readme",
+	"bugs": {
+		"url": "https://github.com/involvex/involvex-term/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/involvex/involvex-term.git"
+	},
+	"license": "MIT",
 	"author": "involvex",
 	"type": "module",
 	"main": "dist-electron/main.js",
@@ -11,8 +20,8 @@
 		"build:electron": "tsc --project tsconfig.node.json && vite build",
 		"dev": "vite",
 		"dev:electron": "vite",
-		"dist": "bun run build",
 		"format": "prettier . --write",
+		"format:check": "prettier . --check",
 		"postinstall": "bun scripts/patch-node-pty.mjs",
 		"lint": "eslint . --report-unused-disable-directives --max-warnings 0",
 		"preview": "vite preview",
