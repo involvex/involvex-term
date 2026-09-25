@@ -12,8 +12,14 @@ export const SESSION_FILE = path.join(SETTINGS_DIR, 'session.json')
 const ThemeSchema = z.object({
 	bg: z.string().default('#1e1e1e'),
 	fg: z.string().default('#cccccc'),
-	fontFamily: z.string().default("'Cascadia Code', Consolas, monospace"),
+	fontFamily: z
+		.string()
+		.default("'Cascadia Code', 'CaskaydiaCove Nerd Font', Consolas, monospace"),
 	fontSize: z.number().min(8).max(32).default(14),
+	/** Extra fonts appended after fontFamily (Nerd Font fallbacks, etc.). */
+	fontFallback: z
+		.string()
+		.default("'JetBrainsMono Nerd Font', 'FiraCode Nerd Font', monospace"),
 })
 
 const FooterSchema = z.object({
@@ -65,6 +71,20 @@ const TerminalSchema = z.object({
 	profiles: z.array(ProfileSchema).default(defaultProfiles()),
 	/** Toast when a background pane goes idle after output. */
 	completionBell: z.boolean().default(true),
+	/** xterm scrollback lines. */
+	scrollback: z.number().min(200).max(50000).default(5000),
+	/** Show the terminal viewport scrollbar. */
+	scrollbar: z.boolean().default(true),
+})
+
+const StartupSchema = z.object({
+	/**
+	 * session = restore previous tabs when tabs.restoreSession is true
+	 * new = always open a fresh tab (profile + startDir)
+	 */
+	mode: z.enum(['session', 'new']).default('session'),
+	/** Profile for fresh launch; empty = terminal.defaultProfileId */
+	profileId: z.string().default(''),
 })
 
 const WindowSchema = z.object({
@@ -73,6 +93,8 @@ const WindowSchema = z.object({
 	x: z.number().int().nullable().default(null),
 	y: z.number().int().nullable().default(null),
 	maximized: z.boolean().default(false),
+	/** Windows 11 mica / acrylic backdrop. */
+	acrylic: z.boolean().default(false),
 })
 
 const TraySchema = z.object({
@@ -96,6 +118,7 @@ export const SettingsSchema = z.object({
 	hotkeys: HotkeysSchema,
 	tabs: TabsSchema.prefault({}),
 	terminal: TerminalSchema.prefault({}),
+	startup: StartupSchema.prefault({}),
 	window: WindowSchema.prefault({}),
 	tray: TraySchema.prefault({}),
 	quake: QuakeSchema.prefault({}),

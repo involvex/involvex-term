@@ -5,6 +5,7 @@ import {Terminal} from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import {useEffect, useRef} from 'react'
 import {registerSearch, unregisterSearch} from '../lib/searchRegistry'
+import {createPathLinkProvider, webLinkHandler} from '../lib/termLinks'
 import {termApi} from '../types'
 
 interface Props {
@@ -21,6 +22,8 @@ interface Props {
 	initialCwd?: string
 	profileId?: string
 	completionBell?: boolean
+	scrollback?: number
+	scrollbar?: boolean
 	onFocusPane: (paneId: string) => void
 	onBackgroundIdle?: (paneId: string) => void
 }
@@ -36,6 +39,8 @@ export default function TerminalView({
 	initialCwd,
 	profileId,
 	completionBell = true,
+	scrollback = 5000,
+	scrollbar = true,
 	onFocusPane,
 	onBackgroundIdle,
 }: Props) {
@@ -65,12 +70,14 @@ export default function TerminalView({
 			},
 			fontFamily,
 			fontSize,
+			scrollback,
 			cursorBlink: true,
 			allowTransparency: false,
 		})
 		const fit = new FitAddon()
 		term.loadAddon(fit)
-		term.loadAddon(new WebLinksAddon())
+		term.loadAddon(new WebLinksAddon(webLinkHandler))
+		term.registerLinkProvider(createPathLinkProvider(term))
 		const search = new SearchAddon()
 		term.loadAddon(search)
 		registerSearch(paneId, search)
@@ -249,7 +256,7 @@ export default function TerminalView({
 		return () => window.removeEventListener('involvex:focus-term', onFocusReq)
 	}, [paneId])
 
-	// Apply theme/font live
+	// Apply theme/font/scrollback live
 	useEffect(() => {
 		const t = termRef.current
 		if (t) {
@@ -261,6 +268,7 @@ export default function TerminalView({
 			}
 			t.options.fontFamily = fontFamily
 			t.options.fontSize = fontSize
+			t.options.scrollback = scrollback
 			try {
 				fitRef.current?.fit()
 				termApi()?.ptyResize(paneId, t.cols, t.rows)
@@ -268,7 +276,7 @@ export default function TerminalView({
 				/* noop */
 			}
 		}
-	}, [bg, fg, fontFamily, fontSize, paneId])
+	}, [bg, fg, fontFamily, fontSize, scrollback, paneId])
 
 	// Refit + focus when this becomes the focused pane of the active tab.
 	// (The PaneLayout wrapper handles the focused outline.)
@@ -289,6 +297,7 @@ export default function TerminalView({
 	return (
 		<div
 			ref={containerRef}
+			className={scrollbar ? undefined : 'term-no-scrollbar'}
 			style={{
 				display: tabActive ? 'block' : 'none',
 				width: '100%',

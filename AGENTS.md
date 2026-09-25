@@ -9,7 +9,9 @@ Dark theme `#1e1e1e / #cccccc`. Settings live at `~/.involvex-term/settings.json
 bun install               # postinstall only applies the node-pty Spectre patch
 bun run dev:electron      # dev (vite + Electron)
 bun run rebuild           # FORCE full node-pty rebuild (slow, rarely needed)
-bun run build             # tsc + vite + node-pty rebuild + electron-builder (outputs release/)
+bun run build             # tsc + vite + node-pty rebuild + electron-builder + link-latest
+bun run link:latest       # release/latest → current win-unpacked (junction)
+bun run link:desktop      # Desktop Involvex-Term.lnk → release/latest/involvex-term.exe
 bunx tsc --noEmit         # ground truth for types (opencode LSP reports false electron errors)
 bun scripts/test-osc7.mjs # OSC7/CWD end-to-end test (run under Electron)
 bun scripts/generate-icon.mjs  # regenerate public/icon.png + icon.ico

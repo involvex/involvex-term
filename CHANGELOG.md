@@ -2,7 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.2.0] - Unreleased
+## [0.3.0] - Unreleased
+
+### Added
+
+- Startup mode: restore session or open a fresh tab with profile + start dir
+- Font fallback list (Nerd Font chain after primary family)
+- Scrollback size and scrollbar visibility settings
+- Ctrl+click local paths (`D:\…`, UNC, `/home/…`, `file://`) and http(s) links
+- Optional Windows 11 mica backdrop (`window.acrylic`)
+- `release/latest` junction after build; `bun run link:desktop` for a stable Desktop shortcut
+
+## [0.2.0] - 2026-09-25
 
 ### Added
 

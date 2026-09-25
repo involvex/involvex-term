@@ -21,6 +21,8 @@ interface Props extends Theme {
 	tabActive: boolean
 	activePaneId: string
 	completionBell?: boolean
+	scrollback?: number
+	scrollbar?: boolean
 	onFocusPane: (paneId: string) => void
 	onResizeSplit: (splitId: string, ratio: number) => void
 	onBackgroundIdle?: (paneId: string) => void
@@ -48,6 +50,8 @@ export default function PaneLayout({
 	bg,
 	fg,
 	completionBell,
+	scrollback,
+	scrollbar,
 	onFocusPane,
 	onResizeSplit,
 	onBackgroundIdle,
@@ -120,6 +124,8 @@ export default function PaneLayout({
 							initialCwd={leaf.cwd}
 							profileId={leaf.profileId}
 							completionBell={completionBell}
+							scrollback={scrollback}
+							scrollbar={scrollbar}
 							onFocusPane={onFocusPane}
 							onBackgroundIdle={onBackgroundIdle}
 						/>

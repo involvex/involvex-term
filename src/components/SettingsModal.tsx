@@ -206,6 +206,64 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 							}
 						/>
 					</label>
+					<label className="wide">
+						Font fallback{' '}
+						<input
+							type="text"
+							value={settings.theme.fontFallback}
+							onChange={e =>
+								set({
+									theme: {...settings.theme, fontFallback: e.target.value},
+								})
+							}
+						/>
+					</label>
+				</section>
+
+				<section>
+					<h3>Startup</h3>
+					<label className="wide">
+						On launch{' '}
+						<select
+							value={settings.startup.mode}
+							onChange={e =>
+								set({
+									startup: {
+										...settings.startup,
+										mode: e.target.value as 'session' | 'new',
+									},
+								})
+							}
+						>
+							<option value="session">Restore previous session</option>
+							<option value="new">New tab (profile + start dir)</option>
+						</select>
+					</label>
+					<label className="wide">
+						Startup profile{' '}
+						<select
+							value={settings.startup.profileId}
+							onChange={e =>
+								set({
+									startup: {...settings.startup, profileId: e.target.value},
+								})
+							}
+						>
+							<option value="">Default profile</option>
+							{settings.terminal.profiles.map(p => (
+								<option
+									key={p.id}
+									value={p.id}
+								>
+									{p.name}
+								</option>
+							))}
+						</select>
+					</label>
+					<p className="footer-dim">
+						“Restore previous session” still needs Tabs → Restore enabled.
+						Startup profile applies when opening a fresh tab on launch.
+					</p>
 				</section>
 
 				<section>
@@ -399,15 +457,61 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 						/>{' '}
 						Background pane completion toast
 					</label>
+					<label>
+						Scrollback lines{' '}
+						<input
+							type="number"
+							min={200}
+							max={50000}
+							step={100}
+							value={settings.terminal.scrollback}
+							onChange={e =>
+								set({
+									terminal: {
+										...settings.terminal,
+										scrollback: Number(e.target.value),
+									},
+								})
+							}
+						/>
+					</label>
+					<label>
+						<input
+							type="checkbox"
+							checked={settings.terminal.scrollbar}
+							onChange={e =>
+								set({
+									terminal: {
+										...settings.terminal,
+										scrollbar: e.target.checked,
+									},
+								})
+							}
+						/>{' '}
+						Show scrollbar
+					</label>
 					<p className="footer-dim">
 						New tabs use the default profile. Use ▾ next to + (or the command
 						palette) for another shell. Custom profiles live in settings.json
-						under <code>terminal.profiles</code>.
+						under <code>terminal.profiles</code>. Ctrl+click URLs and local
+						paths to open them.
 					</p>
 				</section>
 
 				<section>
 					<h3>Window & Tray</h3>
+					<label>
+						<input
+							type="checkbox"
+							checked={settings.window.acrylic}
+							onChange={e =>
+								set({
+									window: {...settings.window, acrylic: e.target.checked},
+								})
+							}
+						/>{' '}
+						Windows 11 mica backdrop (title bar)
+					</label>
 					<label>
 						<input
 							type="checkbox"

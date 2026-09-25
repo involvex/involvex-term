@@ -34,8 +34,10 @@ const DEFAULT_SETTINGS: AppSettings = {
 	theme: {
 		bg: '#1e1e1e',
 		fg: '#cccccc',
-		fontFamily: "'Cascadia Code', Consolas, monospace",
+		fontFamily:
+			"'Cascadia Code', 'CaskaydiaCove Nerd Font', Consolas, monospace",
 		fontSize: 14,
+		fontFallback: "'JetBrainsMono Nerd Font', 'FiraCode Nerd Font', monospace",
 	},
 	footer: {
 		showGit: true,
@@ -74,8 +76,18 @@ const DEFAULT_SETTINGS: AppSettings = {
 			{id: 'wsl', name: 'WSL', kind: 'wsl'},
 		],
 		completionBell: true,
+		scrollback: 5000,
+		scrollbar: true,
 	},
-	window: {width: 1200, height: 800, x: null, y: null, maximized: false},
+	startup: {mode: 'session', profileId: ''},
+	window: {
+		width: 1200,
+		height: 800,
+		x: null,
+		y: null,
+		maximized: false,
+		acrylic: false,
+	},
 	tray: {enabled: true, minimizeToTray: true, closeToTray: true},
 	quake: {
 		enabled: false,
@@ -83,6 +95,14 @@ const DEFAULT_SETTINGS: AppSettings = {
 		heightPercent: 50,
 		hideOnFocusLoss: true,
 	},
+}
+
+function effectiveFontFamily(theme: AppSettings['theme']): string {
+	const primary = theme.fontFamily?.trim() || ''
+	const fallback = theme.fontFallback?.trim() || ''
+	if (!fallback) return primary
+	if (!primary) return fallback
+	return `${primary}, ${fallback}`
 }
 
 let tabSeq = 0
@@ -206,11 +226,29 @@ export default function App() {
 			.then(async s => {
 				const merged = {...DEFAULT_SETTINGS, ...(s as AppSettings)}
 				setSettings(merged)
-				if (!merged.tabs.restoreSession) return
+
+				const openFresh = () => {
+					const profileId =
+						merged.startup.profileId || merged.terminal.defaultProfileId
+					const start = merged.terminal.startDir.trim() || undefined
+					const t = newTab(start, profileId)
+					setTabs([t])
+					setActiveId(t.id)
+				}
+
+				const wantSession =
+					merged.startup.mode === 'session' && merged.tabs.restoreSession
+				if (!wantSession) {
+					openFresh()
+					return
+				}
 				try {
 					const session = await api.sessionGet()
 					const saved = session?.tabs ?? []
-					if (saved.length === 0) return
+					if (saved.length === 0) {
+						openFresh()
+						return
+					}
 					const restored: TabInfo[] = []
 					for (const [i, st] of saved.entries()) {
 						const root = normalizeSessionRoot(st.root)
@@ -228,9 +266,11 @@ export default function App() {
 					if (restored.length > 0) {
 						setTabs(restored)
 						setActiveId(restored[0].id)
+					} else {
+						openFresh()
 					}
 				} catch {
-					/* fall back to the default tab */
+					openFresh()
 				}
 			})
 			.catch(() => undefined)
@@ -758,11 +798,13 @@ export default function App() {
 						root={t.root}
 						tabActive={t.id === activeTab?.id}
 						activePaneId={t.activePaneId}
-						fontFamily={settings.theme.fontFamily}
+						fontFamily={effectiveFontFamily(settings.theme)}
 						fontSize={settings.theme.fontSize}
 						bg={settings.theme.bg}
 						fg={settings.theme.fg}
 						completionBell={settings.terminal.completionBell}
+						scrollback={settings.terminal.scrollback}
+						scrollbar={settings.terminal.scrollbar}
 						onFocusPane={paneId => focusPane(t.id, paneId)}
 						onResizeSplit={(splitId, ratio) =>
 							resizeSplit(t.id, splitId, ratio)

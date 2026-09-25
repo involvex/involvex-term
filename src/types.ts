@@ -43,7 +43,13 @@ export interface ShellProfile {
 }
 
 export interface AppSettings {
-	theme: {bg: string; fg: string; fontFamily: string; fontSize: number}
+	theme: {
+		bg: string
+		fg: string
+		fontFamily: string
+		fontSize: number
+		fontFallback: string
+	}
 	footer: {
 		showGit: boolean
 		showSys: boolean
@@ -60,6 +66,12 @@ export interface AppSettings {
 		defaultProfileId: string
 		profiles: ShellProfile[]
 		completionBell: boolean
+		scrollback: number
+		scrollbar: boolean
+	}
+	startup: {
+		mode: 'session' | 'new'
+		profileId: string
 	}
 	window: {
 		width: number
@@ -67,6 +79,7 @@ export interface AppSettings {
 		x: number | null
 		y: number | null
 		maximized: boolean
+		acrylic: boolean
 	}
 	tray: {enabled: boolean; minimizeToTray: boolean; closeToTray: boolean}
 	quake: {
@@ -132,6 +145,8 @@ export interface TermApiShape {
 		detail?: string
 		title?: string
 	}) => Promise<boolean>
+	openExternal: (url: string) => Promise<void>
+	openPath: (filePath: string) => Promise<string>
 }
 
 declare global {

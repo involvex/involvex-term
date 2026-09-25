@@ -52,6 +52,8 @@ export interface TermApi {
 		detail?: string
 		title?: string
 	}) => Promise<boolean>
+	openExternal: (url: string) => Promise<void>
+	openPath: (filePath: string) => Promise<string>
 }
 
 function sub(channel: string, cb: (...a: never[]) => void): () => void {
@@ -88,6 +90,8 @@ const api: TermApi = {
 	opencodeAvailable: () => ipcRenderer.invoke('opencode:available'),
 	opencodeStatus: cwd => ipcRenderer.invoke('opencode:status', {cwd}),
 	dialogConfirm: opts => ipcRenderer.invoke('dialog:confirm', opts),
+	openExternal: url => ipcRenderer.invoke('shell:openExternal', {url}),
+	openPath: filePath => ipcRenderer.invoke('shell:openPath', {path: filePath}),
 }
 
 contextBridge.exposeInMainWorld('termApi', api)

@@ -27,11 +27,12 @@ Shipped in tree (see CHANGELOG 0.2.0 unreleased):
 
 ## v0.3 — Windows Terminal parity core
 
-- Startup actions (open a specific profile / directory on launch)
-- Cascadia / Nerd Font defaults + font fallback list
-- Scrollbar visibility and scrollback size settings
-- Stronger URL / path Ctrl+click (extend web-links)
-- Optional acrylic / mica backdrop on Windows 11
+1. ~~Startup actions (profile + start dir on launch)~~
+2. ~~Cascadia / Nerd Font defaults + font fallback list~~
+3. ~~Scrollbar visibility and scrollback size settings~~
+4. ~~URL / path Ctrl+click (web-links + local paths)~~
+5. ~~Optional mica backdrop on Windows 11~~
+6. ~~Stable `release/latest` junction + desktop shortcut~~
 
 ## v0.4 — Power user
 

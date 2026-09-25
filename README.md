@@ -24,6 +24,8 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
 - Windows Terminal style copy/paste: `Ctrl+C` copies only with selection
 - Session restore, tray, optional quake dropdown (`Ctrl+\``)
 - Settings at `~/.involvex-term/settings.json` (`Ctrl+,`)
+- Ctrl+click URLs and local paths; scrollback / scrollbar / font fallback
+- Optional Windows 11 mica title-bar backdrop
 
 ## Quickstart (Bun, PowerShell)
 
@@ -32,6 +34,8 @@ bun install               # postinstall only applies the node-pty Spectre patch
 bun run dev:electron      # dev (vite + Electron)
 bun run rebuild           # FORCE full node-pty rebuild (slow, rarely needed)
 bun run build             # tsc + vite + node-pty rebuild + electron-builder
+                          # also refreshes release/latest → current win-unpacked
+bun run link:desktop      # Desktop shortcut → release/latest/involvex-term.exe
 ```
 
 Checks:
@@ -66,6 +70,20 @@ Troubleshooting:
 
 See [AGENTS.md](AGENTS.md) for full native-build notes.
 
+## Desktop shortcut (version-proof)
+
+`bun run build` refreshes `release/latest` → `release/<version>/win-unpacked`
+(Windows junction). Point your Desktop `.lnk` at the junction once:
+
+```powershell
+bun run link:desktop
+# → %USERPROFILE%\Desktop\Involvex-Term.lnk
+#    Target: D:\repos\involvex\involvex-term\release\latest\involvex-term.exe
+```
+
+Re-run `bun run link:latest` (or just `build`) after each release — the
+shortcut keeps working without editing the `.lnk`.
+
 ## Settings
 
 Stored at `~/.involvex-term/settings.json` (zod-validated, watched live):
@@ -76,19 +94,16 @@ Stored at `~/.involvex-term/settings.json` (zod-validated, watched live):
 		"bg": "#1e1e1e",
 		"fg": "#cccccc",
 		"fontFamily": "...",
-		"fontSize": 14
+		"fontSize": 14,
+		"fontFallback": "..."
 	},
-	"footer": {
-		"showGit": true,
-		"showSys": true,
-		"modulesOrder": ["git", "sys"],
-		"refreshMs": 1500
+	"startup": {"mode": "session", "profileId": ""},
+	"terminal": {
+		"scrollback": 5000,
+		"scrollbar": true,
+		"completionBell": true
 	},
-	"hotkeys": {
-		"new-tab": "Ctrl+Shift+T",
-		"opencode": "Ctrl+Shift+O",
-		"...": "..."
-	},
+	"window": {"acrylic": false},
 	"tabs": {"confirmClose": false, "restoreSession": true}
 }
 ```
@@ -110,7 +125,7 @@ src/
   App.tsx
   components/      TabBar, PaneLayout, TerminalView, StatusBar, …
   lib/             panes, searchRegistry, focusTerm
-scripts/           rebuild-pty, patch-node-pty, generate-icon, test-osc7
+scripts/           rebuild-pty, patch-node-pty, link-latest, generate-icon, test-osc7
 .github/workflows/ ci.yml, release.yml
 ```
 

@@ -1,6 +1,14 @@
 import chokidar, {type FSWatcher} from 'chokidar'
 import type {BrowserWindowConstructorOptions, Event} from 'electron'
-import {app, BrowserWindow, clipboard, dialog, ipcMain, screen} from 'electron'
+import {
+	app,
+	BrowserWindow,
+	clipboard,
+	dialog,
+	ipcMain,
+	screen,
+	shell,
+} from 'electron'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -49,6 +57,7 @@ function persistWindowBounds(): void {
 		settings = saveSettings({
 			...settings,
 			window: {
+				...settings.window,
 				width: b.width,
 				height: b.height,
 				x: maximized ? settings.window.x : b.x,
@@ -276,6 +285,17 @@ function registerIpc() {
 		},
 	)
 
+	ipcMain.handle('shell:openExternal', async (_e, {url}: {url: string}) => {
+		const u = String(url ?? '').trim()
+		if (!/^https?:\/\//i.test(u) && !/^mailto:/i.test(u)) return
+		await shell.openExternal(u)
+	})
+	ipcMain.handle('shell:openPath', async (_e, {path: p}: {path: string}) => {
+		const target = String(p ?? '').trim()
+		if (!target) return 'empty path'
+		return shell.openPath(target)
+	})
+
 	ipcMain.handle('clipboard:write', (_e, {text}: {text: string}) => {
 		clipboard.writeText(text ?? '')
 	})
@@ -285,6 +305,7 @@ function registerIpc() {
 	ipcMain.handle('settings:set', async (_e, next: typeof settings) => {
 		settings = saveSettings(next)
 		if (win) {
+			applyWindowMaterial(win, settings)
 			win.webContents.send('settings:changed', settings)
 			await buildMenu(win, settings).catch(() => undefined)
 			setupTray(win, iconPath(), settings, quitApp)
@@ -293,6 +314,16 @@ function registerIpc() {
 		}
 		return settings
 	})
+}
+
+/** Windows 11 mica/acrylic on the frame (title bar). Needs restart for some hosts. */
+function applyWindowMaterial(browser: BrowserWindow, s: typeof settings): void {
+	if (process.platform !== 'win32') return
+	try {
+		browser.setBackgroundMaterial(s.window.acrylic ? 'mica' : 'none')
+	} catch {
+		/* unsupported OS build */
+	}
 }
 
 function watchSettingsFile() {
@@ -331,8 +362,12 @@ function createWindow() {
 		title: 'involvex-term',
 		icon: iconPath(),
 		backgroundColor: settings.theme.bg || '#1e1e1e',
+		...(process.platform === 'win32' && w.acrylic
+			? {backgroundMaterial: 'mica' as const}
+			: {}),
 		webPreferences: {preload: path.join(__dirname, 'preload.mjs')},
 	})
+	applyWindowMaterial(win, settings)
 
 	if (w.maximized) win.maximize()
 	win.once('ready-to-show', () => win?.show())
