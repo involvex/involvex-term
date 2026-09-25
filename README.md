@@ -110,6 +110,11 @@ scripts/           rebuild-pty, patch-node-pty, generate-icon, test-osc7
 .github/workflows/ ci.yml, release.yml
 ```
 
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for Windows Terminal–class parity phases and
+beyond (Git + OpenCode differentiators).
+
 ## License
 
 [MIT](LICENSE)
