@@ -39,6 +39,12 @@ export interface AppSettings {
     maximized: boolean;
   };
   tray: { enabled: boolean; minimizeToTray: boolean; closeToTray: boolean };
+  quake: {
+    enabled: boolean;
+    hotkey: string;
+    heightPercent: number;
+    hideOnFocusLoss: boolean;
+  };
 }
 
 export interface TermApiShape {

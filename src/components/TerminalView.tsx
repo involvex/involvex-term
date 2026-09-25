@@ -2,8 +2,10 @@ import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { SearchAddon } from "@xterm/addon-search";
 import "@xterm/xterm/css/xterm.css";
 import { termApi } from "../types";
+import { registerSearch, unregisterSearch } from "../lib/searchRegistry";
 
 interface Props {
   tabId: string;
@@ -47,6 +49,9 @@ export default function TerminalView({
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.loadAddon(new WebLinksAddon());
+    const search = new SearchAddon();
+    term.loadAddon(search);
+    registerSearch(tabId, search);
     term.open(el);
     termRef.current = term;
     fitRef.current = fit;
@@ -174,10 +179,22 @@ export default function TerminalView({
       el.removeEventListener("mousedown", onMouseDown);
       offData?.();
       offExit?.();
+      unregisterSearch(tabId);
       term.dispose();
       termRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabId]);
+
+  // Focus requests from overlays (search bar, palette) closing.
+  useEffect(() => {
+    const onFocusReq = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === tabId) {
+        termRef.current?.focus();
+      }
+    };
+    window.addEventListener("involvex:focus-term", onFocusReq);
+    return () => window.removeEventListener("involvex:focus-term", onFocusReq);
   }, [tabId]);
 
   // Apply theme/font live

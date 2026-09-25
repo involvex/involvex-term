@@ -61,6 +61,15 @@ export async function buildMenu(
           accelerator: accelFromSetting(hk["settings"], "CommandOrControl+,"),
           click: () => win.webContents.send("tab:action", "open-settings"),
         },
+        {
+          id: "tab:palette",
+          label: "Command Palette...",
+          accelerator: accelFromSetting(
+            hk["palette"],
+            "CommandOrControl+Shift+P",
+          ),
+          click: () => win.webContents.send("tab:action", "open-palette"),
+        },
         { type: "separator" },
         { role: "quit" },
       ],
@@ -82,6 +91,13 @@ export async function buildMenu(
             "CommandOrControl+Shift+Tab",
           ),
           click: () => win.webContents.send("tab:action", "prev-tab"),
+        },
+        { type: "separator" },
+        {
+          id: "tab:search",
+          label: "Find in Terminal...",
+          accelerator: accelFromSetting(hk["find"], "CommandOrControl+Shift+F"),
+          click: () => win.webContents.send("tab:action", "open-search"),
         },
         { type: "separator" },
         {

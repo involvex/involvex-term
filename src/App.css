@@ -170,6 +170,92 @@ body {
   font-size: 12px;
 }
 
+.searchbar {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #3c3c3c;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.searchbar input[type="text"] {
+  background: #1e1e1e;
+  border: 1px solid #3c3c3c;
+  color: #cccccc;
+  border-radius: 4px;
+  padding: 2px 6px;
+  width: 200px;
+  font-size: 12px;
+}
+
+.searchbar button {
+  background: transparent;
+  border: 1px solid transparent;
+  color: inherit;
+  border-radius: 4px;
+  padding: 1px 7px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.searchbar button:hover {
+  background: #3c3c3c;
+}
+
+.search-toggle-on {
+  border-color: #4ec9b0 !important;
+  color: #4ec9b0 !important;
+}
+
+.search-count {
+  min-width: 44px;
+  text-align: right;
+}
+
+.modal.palette {
+  width: min(560px, 92vw);
+  padding: 8px;
+}
+
+.modal.palette input[type="text"] {
+  width: 100%;
+  background: #1e1e1e;
+  border: 1px solid #3c3c3c;
+  color: #cccccc;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.palette-list {
+  margin-top: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.palette-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.palette-item.selected {
+  background: #094771;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

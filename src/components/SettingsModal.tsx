@@ -13,6 +13,8 @@ const HOTKEY_ACTIONS: Array<{ id: string; label: string }> = [
   { id: "prev-tab", label: "Previous tab" },
   { id: "duplicate-tab", label: "Duplicate tab" },
   { id: "settings", label: "Open settings" },
+  { id: "find", label: "Find in terminal" },
+  { id: "palette", label: "Command palette" },
   { id: "zoom-in", label: "Zoom in" },
   { id: "zoom-out", label: "Zoom out" },
   { id: "zoom-reset", label: "Zoom reset" },
@@ -244,6 +246,66 @@ export default function SettingsModal({ settings, onChange, onClose }: Props) {
           <p className="footer-dim">
             Window size & position restore automatically on launch.
           </p>
+        </section>
+
+        <section>
+          <h3>Quake dropdown (global hotkey)</h3>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.quake.enabled}
+              onChange={(e) =>
+                set({
+                  quake: { ...settings.quake, enabled: e.target.checked },
+                })
+              }
+            />{" "}
+            Enable (summons the terminal from any app)
+          </label>
+          <label className="wide">
+            Hotkey
+            <input
+              type="text"
+              value={settings.quake.hotkey}
+              onChange={(e) =>
+                set({
+                  quake: { ...settings.quake, hotkey: e.target.value },
+                })
+              }
+            />
+          </label>
+          <label>
+            Height (%)
+            <input
+              type="number"
+              min={20}
+              max={90}
+              value={settings.quake.heightPercent}
+              onChange={(e) =>
+                set({
+                  quake: {
+                    ...settings.quake,
+                    heightPercent: Number(e.target.value),
+                  },
+                })
+              }
+            />
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.quake.hideOnFocusLoss}
+              onChange={(e) =>
+                set({
+                  quake: {
+                    ...settings.quake,
+                    hideOnFocusLoss: e.target.checked,
+                  },
+                })
+              }
+            />{" "}
+            Hide when focus is lost
+          </label>
         </section>
       </div>
     </div>

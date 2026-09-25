@@ -29,6 +29,8 @@ const HotkeysSchema = z.record(z.string(), z.string()).default({
   "prev-tab": "Ctrl+Shift+Tab",
   "duplicate-tab": "Ctrl+Shift+D",
   settings: "Ctrl+,",
+  find: "Ctrl+Shift+F",
+  palette: "Ctrl+Shift+P",
   "zoom-in": "Ctrl+=",
   "zoom-out": "Ctrl+-",
   "zoom-reset": "Ctrl+0",
@@ -52,6 +54,13 @@ const TraySchema = z.object({
   closeToTray: z.boolean().default(true),
 });
 
+const QuakeSchema = z.object({
+  enabled: z.boolean().default(false),
+  hotkey: z.string().default("Ctrl+`"),
+  heightPercent: z.number().min(20).max(90).default(50),
+  hideOnFocusLoss: z.boolean().default(true),
+});
+
 export const SettingsSchema = z.object({
   theme: ThemeSchema.default({}),
   footer: FooterSchema.default({}),
@@ -59,12 +68,38 @@ export const SettingsSchema = z.object({
   tabs: TabsSchema.default({}),
   window: WindowSchema.default({}),
   tray: TraySchema.default({}),
+  quake: QuakeSchema.default({}),
 });
 
 export type AppSettings = z.infer<typeof SettingsSchema>;
 
 export function defaultSettings(): AppSettings {
   return SettingsSchema.parse({});
+}
+
+function deepMergeDefaults(
+  base: Record<string, unknown>,
+  over: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base };
+  for (const [k, v] of Object.entries(over ?? {})) {
+    const b = base[k];
+    if (
+      v &&
+      typeof v === "object" &&
+      !Array.isArray(v) &&
+      b &&
+      typeof b === "object" &&
+      !Array.isArray(b)
+    ) {
+      // Shallow-merge one nesting level (theme/footer/hotkeys/…), so new
+      // default keys (e.g. a new hotkey) reach existing settings files.
+      out[k] = { ...(b as object), ...(v as object) };
+    } else if (v !== undefined) {
+      out[k] = v;
+    }
+  }
+  return out;
 }
 
 export function loadSettings(): AppSettings {
@@ -77,7 +112,7 @@ export function loadSettings(): AppSettings {
       return d;
     }
     const raw = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf-8"));
-    return SettingsSchema.parse({ ...defaultSettings(), ...raw });
+    return SettingsSchema.parse(deepMergeDefaults(defaultSettings(), raw));
   } catch {
     return defaultSettings();
   }

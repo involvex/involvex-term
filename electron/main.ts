@@ -12,6 +12,12 @@ import { getSysStats } from "./sysEngine.js";
 import { loadSettings, saveSettings, SETTINGS_FILE } from "./settingsStore.js";
 import { buildMenu } from "./hotkeys.js";
 import { destroyTray, setupTray } from "./tray.js";
+import {
+  handleQuakeBlur,
+  isQuakeActive,
+  registerQuake,
+  unregisterQuake,
+} from "./quake.js";
 
 let isQuitting = false;
 
@@ -27,6 +33,9 @@ function iconPath(): string {
 
 function persistWindowBounds(): void {
   if (!win || win.isDestroyed()) return;
+  // Quake dropdown geometry is transient — never persist it as the
+  // normal window bounds.
+  if (isQuakeActive()) return;
   try {
     const maximized = win.isMaximized();
     const b = win.getBounds();
@@ -215,6 +224,7 @@ function registerIpc() {
       win.webContents.send("settings:changed", settings);
       await buildMenu(win, settings).catch(() => undefined);
       setupTray(win, iconPath(), settings, quitApp);
+      registerQuake(win, () => settings);
       startSysLoop();
     }
     return settings;
@@ -230,6 +240,7 @@ function watchSettingsFile() {
         win?.webContents.send("settings:changed", settings);
         if (win) void buildMenu(win, settings).catch(() => undefined);
         if (win) setupTray(win, iconPath(), settings, quitApp);
+        if (win) registerQuake(win, () => settings);
         startSysLoop();
       } catch {
         /* noop */
@@ -288,6 +299,9 @@ function createWindow() {
   win.on("hide", () => {
     if (win) setupTray(win, iconPath(), settings, quitApp);
   });
+  win.on("blur", () => {
+    if (win) handleQuakeBlur(win, () => settings);
+  });
 
   win.webContents.on("did-finish-load", () => {
     win?.webContents.send("main-process-message", new Date().toLocaleString());
@@ -296,14 +310,20 @@ function createWindow() {
   else win.loadFile(path.join(RENDERER_DIST, "index.html"));
   void buildMenu(win, settings).catch(() => undefined);
   setupTray(win, iconPath(), settings, quitApp);
+  registerQuake(win, () => settings);
   startSysLoop();
 }
 
 function quitApp(): void {
   isQuitting = true;
   destroyTray();
+  unregisterQuake();
   app.quit();
 }
+
+app.on("will-quit", () => {
+  unregisterQuake();
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

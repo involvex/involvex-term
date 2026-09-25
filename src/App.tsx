@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import TerminalView from "./components/TerminalView";
+import SearchBar from "./components/SearchBar";
+import CommandPalette from "./components/CommandPalette";
+import type { PaletteCommand } from "./commands";
 import TabBar, { type TabInfo } from "./components/TabBar";
 import StatusBar from "./components/StatusBar";
 import SettingsModal from "./components/SettingsModal";
@@ -34,6 +37,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     "prev-tab": "Ctrl+Shift+Tab",
     "duplicate-tab": "Ctrl+Shift+D",
     settings: "Ctrl+,",
+    find: "Ctrl+Shift+F",
+    palette: "Ctrl+Shift+P",
     "zoom-in": "Ctrl+=",
     "zoom-out": "Ctrl+-",
     "zoom-reset": "Ctrl+0",
@@ -41,6 +46,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   tabs: { confirmClose: false },
   window: { width: 1200, height: 800, x: null, y: null, maximized: false },
   tray: { enabled: true, minimizeToTray: true, closeToTray: true },
+  quake: {
+    enabled: false,
+    hotkey: "Ctrl+`",
+    heightPercent: 50,
+    hideOnFocusLoss: true,
+  },
 };
 
 let tabSeq = 0;
@@ -57,6 +68,8 @@ export default function App() {
   const [git, setGit] = useState<GitStatus | null>(null);
   const [sys, setSys] = useState<SysStats | null>(null);
   const [cwd, setCwd] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   // Latest-value refs for use inside IPC callbacks (synced in effects,
   // never written during render).
   const tabsRef = useRef(tabs);
@@ -157,6 +170,12 @@ export default function App() {
     [git?.cwd, cwd],
   );
 
+  // Switch tab (also dismisses the find bar).
+  const selectTab = useCallback((id: string) => {
+    setActiveId(id);
+    setSearchOpen(false);
+  }, []);
+
   // Menu / hotkey actions from main
   useEffect(() => {
     const api = termApi();
@@ -169,24 +188,39 @@ export default function App() {
       else if (action === "close-tab") closeTab(active);
       else if (action === "duplicate-tab") addTab(git?.cwd || cwd || undefined);
       else if (action === "next-tab" && tabsNow.length > 1)
-        setActiveId(tabsNow[(idx + 1) % tabsNow.length]?.id || active);
+        selectTab(tabsNow[(idx + 1) % tabsNow.length]?.id || active);
       else if (action === "prev-tab" && tabsNow.length > 1)
-        setActiveId(
+        selectTab(
           tabsNow[(idx - 1 + tabsNow.length) % tabsNow.length]?.id || active,
         );
       else if (action === "open-settings") setShowSettings(true);
+      else if (action === "open-search") setSearchOpen(true);
+      else if (action === "open-palette") setPaletteOpen(true);
     });
     return off;
-  }, [addTab, closeTab, git?.cwd, cwd]);
+  }, [addTab, closeTab, selectTab, git?.cwd, cwd]);
 
   // Keyboard shortcuts in renderer (works in dev + packaged)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Never hijack keys typed into inputs (settings fields, find bar…).
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+      )
+        return;
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
       if (mod && e.shiftKey && key === "t") {
         e.preventDefault();
         addTab();
+      } else if (mod && e.shiftKey && key === "f") {
+        e.preventDefault();
+        setSearchOpen(true);
+      } else if (mod && e.shiftKey && key === "p") {
+        e.preventDefault();
+        setPaletteOpen(true);
       } else if (mod && e.shiftKey && key === "w") {
         e.preventDefault();
         if (activeRef.current) closeTab(activeRef.current);
@@ -198,7 +232,7 @@ export default function App() {
           ? (i - 1 + ts.length) % ts.length
           : (i + 1) % ts.length;
         const nt = ts[n];
-        if (nt) setActiveId(nt.id);
+        if (nt) selectTab(nt.id);
       } else if (mod && e.shiftKey && key === "d") {
         e.preventDefault();
         addTab(git?.cwd || cwd || undefined);
@@ -208,16 +242,16 @@ export default function App() {
       } else if (mod && /^[1-9]$/.test(key)) {
         const i = Number(key) - 1;
         const t = tabsRef.current[Math.min(i, tabsRef.current.length - 1)];
-        if (t && (key !== "9" || i < 8)) setActiveId(t.id);
+        if (t && (key !== "9" || i < 8)) selectTab(t.id);
         else if (key === "9") {
           const last = tabsRef.current[tabsRef.current.length - 1];
-          if (last) setActiveId(last.id);
+          if (last) selectTab(last.id);
         }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [addTab, closeTab, git?.cwd, cwd]);
+  }, [addTab, closeTab, selectTab, git?.cwd, cwd]);
 
   const saveSettings = useCallback((next: AppSettings) => {
     setSettings(next);
@@ -228,6 +262,65 @@ export default function App() {
 
   const activeTab = tabs.find((t) => t.id === activeId) || tabs[0];
 
+  const paletteCommands: PaletteCommand[] = [
+    {
+      id: "cmd:new-tab",
+      title: "New tab",
+      hint: "Ctrl+Shift+T",
+      run: () => addTab(),
+    },
+    {
+      id: "cmd:close-tab",
+      title: "Close active tab",
+      hint: "Ctrl+Shift+W",
+      run: () => {
+        if (activeRef.current) closeTab(activeRef.current);
+      },
+    },
+    {
+      id: "cmd:duplicate-tab",
+      title: "Duplicate active tab",
+      hint: "Ctrl+Shift+D",
+      run: () => addTab(git?.cwd || cwd || undefined),
+    },
+    {
+      id: "cmd:find",
+      title: "Find in terminal…",
+      hint: "Ctrl+Shift+F",
+      run: () => setSearchOpen(true),
+    },
+    {
+      id: "cmd:settings",
+      title: "Open settings",
+      hint: "Ctrl+,",
+      run: () => setShowSettings(true),
+    },
+    {
+      id: "cmd:toggle-git",
+      title: settings.footer.showGit ? "Hide Git status" : "Show Git status",
+      run: () =>
+        saveSettings({
+          ...settings,
+          footer: { ...settings.footer, showGit: !settings.footer.showGit },
+        }),
+    },
+    {
+      id: "cmd:toggle-sys",
+      title: settings.footer.showSys ? "Hide PC stats" : "Show PC stats",
+      run: () =>
+        saveSettings({
+          ...settings,
+          footer: { ...settings.footer, showSys: !settings.footer.showSys },
+        }),
+    },
+    ...tabs.map((t, i) => ({
+      id: `cmd:goto-${t.id}`,
+      title: `Go to tab ${i + 1}: ${t.title}`,
+      hint: t.cwd,
+      run: () => selectTab(t.id),
+    })),
+  ];
+
   return (
     <div
       className="app"
@@ -236,12 +329,20 @@ export default function App() {
       <TabBar
         tabs={tabs}
         activeId={activeTab?.id || ""}
-        onSelect={setActiveId}
+        onSelect={selectTab}
         onClose={closeTab}
         onNew={() => addTab()}
         onOpenSettings={() => setShowSettings(true)}
       />
       <div className="terminals">
+        {searchOpen && activeTab && (
+          <SearchBar
+            tabId={activeTab.id}
+            bg={settings.theme.bg}
+            fg={settings.theme.fg}
+            onClose={() => setSearchOpen(false)}
+          />
+        )}
         {tabs.map((t) => (
           <TerminalView
             key={t.id}
@@ -267,6 +368,13 @@ export default function App() {
           settings={settings}
           onChange={saveSettings}
           onClose={() => setShowSettings(false)}
+        />
+      )}
+      {paletteOpen && activeTab && (
+        <CommandPalette
+          tabId={activeTab.id}
+          commands={paletteCommands}
+          onClose={() => setPaletteOpen(false)}
         />
       )}
     </div>
