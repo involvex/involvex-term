@@ -31,6 +31,8 @@ const HotkeysSchema = z.record(z.string(), z.string()).default({
   settings: "Ctrl+,",
   find: "Ctrl+Shift+F",
   palette: "Ctrl+Shift+P",
+  "split-pane": "Shift+Alt+D",
+  "close-pane": "Shift+Alt+C",
   "zoom-in": "Ctrl+=",
   "zoom-out": "Ctrl+-",
   "zoom-reset": "Ctrl+0",
@@ -38,6 +40,11 @@ const HotkeysSchema = z.record(z.string(), z.string()).default({
 
 const TabsSchema = z.object({
   confirmClose: z.boolean().default(false),
+});
+
+const TerminalSchema = z.object({
+  /** Default cwd for new tabs. Empty = home folder / inherited cwd. */
+  startDir: z.string().default(""),
 });
 
 const WindowSchema = z.object({
@@ -66,6 +73,7 @@ export const SettingsSchema = z.object({
   footer: FooterSchema.default({}),
   hotkeys: HotkeysSchema.default({}),
   tabs: TabsSchema.default({}),
+  terminal: TerminalSchema.default({}),
   window: WindowSchema.default({}),
   tray: TraySchema.default({}),
   quake: QuakeSchema.default({}),

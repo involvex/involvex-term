@@ -46,6 +46,18 @@ export async function buildMenu(
           click: () => win.webContents.send("tab:action", "duplicate-tab"),
         },
         {
+          id: "pane:split",
+          label: "Split Pane Horizontally",
+          accelerator: accelFromSetting(hk["split-pane"], "Shift+Alt+D"),
+          click: () => win.webContents.send("tab:action", "split-pane"),
+        },
+        {
+          id: "pane:close",
+          label: "Close Pane",
+          accelerator: accelFromSetting(hk["close-pane"], "Shift+Alt+C"),
+          click: () => win.webContents.send("tab:action", "close-pane"),
+        },
+        {
           id: "tab:close",
           label: "Close Tab",
           accelerator: accelFromSetting(

@@ -1,7 +1,12 @@
+import type { PaneNode } from "../lib/panes";
+
 export interface TabInfo {
   id: string;
   title: string;
   cwd?: string;
+  /** Split-pane tree; single leaf = classic full-terminal tab. */
+  root: PaneNode;
+  activePaneId: string;
 }
 
 interface Props {

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { AppSettings } from "../types";
 
 interface Props {
@@ -15,10 +16,78 @@ const HOTKEY_ACTIONS: Array<{ id: string; label: string }> = [
   { id: "settings", label: "Open settings" },
   { id: "find", label: "Find in terminal" },
   { id: "palette", label: "Command palette" },
+  { id: "split-pane", label: "Split pane (horizontal)" },
+  { id: "close-pane", label: "Close pane" },
   { id: "zoom-in", label: "Zoom in" },
   { id: "zoom-out", label: "Zoom out" },
   { id: "zoom-reset", label: "Zoom reset" },
 ];
+
+function formatPressed(e: KeyboardEvent): string | null {
+  if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return null;
+  const parts: string[] = [];
+  if (e.ctrlKey) parts.push("Ctrl");
+  if (e.altKey) parts.push("Alt");
+  if (e.shiftKey) parts.push("Shift");
+  if (e.metaKey) parts.push("Meta");
+  let k = e.key;
+  if (k === " ") k = "Space";
+  else if (k.length === 1) k = k.toUpperCase();
+  else k = k[0].toUpperCase() + k.slice(1);
+  parts.push(k);
+  return parts.join("+");
+}
+
+/** Text input + "Record" button that captures the next pressed combo. */
+export function HotkeyInput({
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  ariaLabel: string;
+}) {
+  const [recording, setRecording] = useState(false);
+
+  useEffect(() => {
+    if (!recording) return;
+    const handler = (e: KeyboardEvent) => {
+      // Capture phase + stop: App's window shortcuts and xterm must not fire.
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") {
+        setRecording(false);
+        return;
+      }
+      const combo = formatPressed(e);
+      if (!combo) return; // modifier-only, keep waiting
+      onChange(combo);
+      setRecording(false);
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [recording, onChange]);
+
+  return (
+    <span className="hotkey-row">
+      <input
+        type="text"
+        value={value}
+        aria-label={ariaLabel}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <button
+        type="button"
+        className={recording ? "recording" : ""}
+        onClick={() => setRecording((r) => !r)}
+        title="Record a key combination (Esc cancels)"
+      >
+        {recording ? "Press keys…" : "Record"}
+      </button>
+    </span>
+  );
+}
 
 export default function SettingsModal({ settings, onChange, onClose }: Props) {
   const set = (patch: Partial<AppSettings>) =>
@@ -178,12 +247,12 @@ export default function SettingsModal({ settings, onChange, onClose }: Props) {
           {HOTKEY_ACTIONS.map((a) => (
             <label key={a.id} className="wide">
               {a.label}
-              <input
-                type="text"
+              <HotkeyInput
                 value={settings.hotkeys[a.id] ?? ""}
-                onChange={(e) =>
+                ariaLabel={a.label}
+                onChange={(v) =>
                   set({
-                    hotkeys: { ...settings.hotkeys, [a.id]: e.target.value },
+                    hotkeys: { ...settings.hotkeys, [a.id]: v },
                   })
                 }
               />
@@ -205,6 +274,26 @@ export default function SettingsModal({ settings, onChange, onClose }: Props) {
             />{" "}
             Confirm before closing last tab
           </label>
+        </section>
+
+        <section>
+          <h3>Terminal</h3>
+          <label className="wide">
+            Start directory{" "}
+            <input
+              type="text"
+              placeholder="e.g. D:/repos (empty = home folder)"
+              value={settings.terminal.startDir}
+              onChange={(e) =>
+                set({
+                  terminal: { ...settings.terminal, startDir: e.target.value },
+                })
+              }
+            />
+          </label>
+          <p className="footer-dim">
+            New tabs open here. Invalid paths fall back to the home folder.
+          </p>
         </section>
 
         <section>
@@ -264,12 +353,12 @@ export default function SettingsModal({ settings, onChange, onClose }: Props) {
           </label>
           <label className="wide">
             Hotkey
-            <input
-              type="text"
+            <HotkeyInput
               value={settings.quake.hotkey}
-              onChange={(e) =>
+              ariaLabel="Quake hotkey"
+              onChange={(v) =>
                 set({
-                  quake: { ...settings.quake, hotkey: e.target.value },
+                  quake: { ...settings.quake, hotkey: v },
                 })
               }
             />

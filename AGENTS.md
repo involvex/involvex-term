@@ -33,8 +33,9 @@ Windows + PowerShell. No `rm -rf` (use `Remove-Item`), no `ls` (use `dir`/`Get-C
 
 ```
 Renderer (React, src/)              Main (electron/)
-  TabBar / TerminalView (xterm)  →  ptyManager.ts (node-pty, 1 pty per tabId)
-  StatusBar (GitWidget/SysWidget)←  gitEngine.ts (simple-git) + sysEngine.ts
+  TabBar / PaneLayout (grid)     →  ptyManager.ts (node-pty, 1 pty per paneId)
+  TerminalView (xterm, per pane) ←  gitEngine.ts (simple-git) + sysEngine.ts
+  StatusBar (GitWidget/SysWidget)   pty:data channels keyed by pane id
   SettingsModal + useSettings    ↔  settingsStore.ts (zod, watched file)
   Tab hotkeys (Ctrl+Shift+T…)    ←  hotkeys.ts (Menu accelerators) + tab:action
   Tray (Show/NewTab/Settings)    ←  tray.ts
@@ -57,6 +58,9 @@ Renderer (React, src/)              Main (electron/)
   opencode LSP diagnostics about `electron` module declarations.
 - Copy/paste semantics (Windows Terminal style): Ctrl+C copies only with a
   selection, otherwise passes ^C through; right-click copies selection or pastes.
+- Split panes: binary tree per tab (`src/lib/panes.ts`), rendered FLAT on a
+  CSS grid with stable pane-id keys — never nest TerminalViews, or closing
+  one pane remounts (and resets) the survivors.
 - Settings schema changes must stay backward compatible (zod defaults) —
   mirror them in `src/types.ts` AppSettings + `src/App.tsx` DEFAULT_SETTINGS.
 - Don't commit `dist/`, `dist-electron/`, `release/`, `build/`, `.npmrc`

@@ -31,6 +31,7 @@ export interface AppSettings {
   };
   hotkeys: Record<string, string>;
   tabs: { confirmClose: boolean };
+  terminal: { startDir: string };
   window: {
     width: number;
     height: number;

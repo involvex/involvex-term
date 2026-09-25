@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import TerminalView from "./components/TerminalView";
+import PaneLayout from "./components/PaneLayout";
 import SearchBar from "./components/SearchBar";
 import CommandPalette from "./components/CommandPalette";
 import type { PaletteCommand } from "./commands";
+import {
+  collectLeaves,
+  countLeaves,
+  findLeaf,
+  firstLeaf,
+  removeLeaf,
+  splitLeaf,
+  type PaneLeaf,
+  type SplitDir,
+} from "./lib/panes";
 import TabBar, { type TabInfo } from "./components/TabBar";
 import StatusBar from "./components/StatusBar";
 import SettingsModal from "./components/SettingsModal";
@@ -39,11 +49,14 @@ const DEFAULT_SETTINGS: AppSettings = {
     settings: "Ctrl+,",
     find: "Ctrl+Shift+F",
     palette: "Ctrl+Shift+P",
+    "split-pane": "Shift+Alt+D",
+    "close-pane": "Shift+Alt+C",
     "zoom-in": "Ctrl+=",
     "zoom-out": "Ctrl+-",
     "zoom-reset": "Ctrl+0",
   },
   tabs: { confirmClose: false },
+  terminal: { startDir: "" },
   window: { width: 1200, height: 800, x: null, y: null, maximized: false },
   tray: { enabled: true, minimizeToTray: true, closeToTray: true },
   quake: {
@@ -55,9 +68,22 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 let tabSeq = 0;
+let paneSeq = 0;
+function newPaneId(): string {
+  paneSeq += 1;
+  return `pane-${Date.now()}-${paneSeq}`;
+}
 function newTab(cwd?: string): TabInfo {
   tabSeq += 1;
-  return { id: `tab-${Date.now()}-${tabSeq}`, title: `Tab ${tabSeq}`, cwd };
+  const paneId = newPaneId();
+  const leaf: PaneLeaf = { kind: "leaf", paneId, cwd };
+  return {
+    id: `tab-${Date.now()}-${tabSeq}`,
+    title: `Tab ${tabSeq}`,
+    cwd,
+    root: leaf,
+    activePaneId: paneId,
+  };
 }
 
 export default function App() {
@@ -80,6 +106,12 @@ export default function App() {
   useEffect(() => {
     activeRef.current = activeId;
   }, [activeId]);
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
+  const activeTab = tabs.find((t) => t.id === activeId) || tabs[0];
 
   // Load settings
   useEffect(() => {
@@ -107,11 +139,13 @@ export default function App() {
     return off;
   }, []);
 
-  // Git status for active tab: subscribe to per-tab + global events
+  // Git status for the active pane: subscribe per-pane + global events.
+  // Main tracks cwd per pty (= pane) id; the owning tab gets the title.
+  const activePaneId = activeTab?.activePaneId ?? "";
   useEffect(() => {
     const api = termApi();
-    if (!api || !activeId) return;
-    const off1 = api.onGitChangedFor(activeId, (st) => {
+    if (!api || !activeId || !activePaneId) return;
+    const off1 = api.onGitChangedFor(activePaneId, (st) => {
       setGit(st as GitStatus);
       setCwd((st as GitStatus).cwd || "");
       setTabs((prev) =>
@@ -130,7 +164,8 @@ export default function App() {
       );
     });
     const off2 = api.onGitChanged((msg) => {
-      if (msg.tabId !== activeRef.current) return;
+      const owner = tabsRef.current.find((t) => findLeaf(t.root, msg.tabId));
+      if (!owner || owner.id !== activeRef.current) return;
       setGit(msg as unknown as GitStatus);
       const g = msg as unknown as GitStatus;
       setCwd(g.cwd || "");
@@ -139,18 +174,24 @@ export default function App() {
       off1();
       off2();
     };
-  }, [activeId]);
+  }, [activeId, activePaneId]);
 
   const closeTab = useCallback((id: string) => {
     setTabs((prev) => {
+      const closing = prev.find((t) => t.id === id);
+      if (closing) {
+        const api = termApi();
+        for (const leaf of collectLeaves(closing.root))
+          api?.ptyKill(leaf.paneId);
+      }
       if (prev.length === 1) {
-        // Keep at least one tab: kill pty and respawn fresh id
-        termApi()?.ptyKill(id);
-        const nt = newTab();
+        // Keep at least one tab: fresh tab with a single pane
+        const startDir =
+          settingsRef.current.terminal.startDir.trim() || undefined;
+        const nt = newTab(startDir);
         setActiveId(nt.id);
         return [nt];
       }
-      termApi()?.ptyKill(id);
       const idx = prev.findIndex((t) => t.id === id);
       const next = prev.filter((t) => t.id !== id);
       if (id === activeRef.current) {
@@ -163,12 +204,67 @@ export default function App() {
 
   const addTab = useCallback(
     (cwdToUse?: string) => {
-      const nt = newTab(cwdToUse ?? (git?.cwd || cwd || undefined));
+      const startDir = settingsRef.current.terminal.startDir.trim();
+      const nt = newTab(cwdToUse ?? (startDir || git?.cwd || cwd || undefined));
       setTabs((prev) => [...prev, nt]);
       setActiveId(nt.id);
     },
     [git?.cwd, cwd],
   );
+
+  // Focus a pane within its tab.
+  const focusPane = useCallback((tabId: string, paneId: string) => {
+    setTabs((prev) =>
+      prev.map((t) => (t.id === tabId ? { ...t, activePaneId: paneId } : t)),
+    );
+  }, []);
+
+  // Split the active pane; the new pane inherits the tab's current cwd.
+  const splitPane = useCallback(
+    (dir: SplitDir) => {
+      const tabId = activeRef.current;
+      const tab = tabsRef.current.find((t) => t.id === tabId);
+      if (!tab || !findLeaf(tab.root, tab.activePaneId)) return;
+      const paneId = newPaneId();
+      const newLeaf: PaneLeaf = {
+        kind: "leaf",
+        paneId,
+        cwd: git?.cwd || cwd || undefined,
+      };
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === tabId
+            ? {
+                ...t,
+                root: splitLeaf(t.root, t.activePaneId, newLeaf, dir),
+                activePaneId: paneId,
+              }
+            : t,
+        ),
+      );
+    },
+    [git?.cwd, cwd],
+  );
+
+  // Close the active pane; last pane closes the tab instead.
+  const closePane = useCallback(() => {
+    const tabId = activeRef.current;
+    const tab = tabsRef.current.find((t) => t.id === tabId);
+    if (!tab) return;
+    if (countLeaves(tab.root) <= 1) {
+      closeTab(tabId);
+      return;
+    }
+    termApi()?.ptyKill(tab.activePaneId);
+    setTabs((prev) =>
+      prev.map((t) => {
+        if (t.id !== tabId) return t;
+        const root = removeLeaf(t.root, t.activePaneId);
+        if (!root) return t;
+        return { ...t, root, activePaneId: firstLeaf(root).paneId };
+      }),
+    );
+  }, [closeTab]);
 
   // Switch tab (also dismisses the find bar).
   const selectTab = useCallback((id: string) => {
@@ -196,9 +292,11 @@ export default function App() {
       else if (action === "open-settings") setShowSettings(true);
       else if (action === "open-search") setSearchOpen(true);
       else if (action === "open-palette") setPaletteOpen(true);
+      else if (action === "split-pane") splitPane("horizontal");
+      else if (action === "close-pane") closePane();
     });
     return off;
-  }, [addTab, closeTab, selectTab, git?.cwd, cwd]);
+  }, [addTab, closeTab, selectTab, splitPane, closePane, git?.cwd, cwd]);
 
   // Keyboard shortcuts in renderer (works in dev + packaged)
   useEffect(() => {
@@ -236,6 +334,13 @@ export default function App() {
       } else if (mod && e.shiftKey && key === "d") {
         e.preventDefault();
         addTab(git?.cwd || cwd || undefined);
+      } else if (e.altKey && e.shiftKey && !mod && key === "d") {
+        // Split active pane horizontally (stacked), like Windows Terminal.
+        e.preventDefault();
+        splitPane("horizontal");
+      } else if (e.altKey && e.shiftKey && !mod && key === "c") {
+        e.preventDefault();
+        closePane();
       } else if (mod && key === ",") {
         e.preventDefault();
         setShowSettings(true);
@@ -251,7 +356,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [addTab, closeTab, selectTab, git?.cwd, cwd]);
+  }, [addTab, closeTab, selectTab, splitPane, closePane, git?.cwd, cwd]);
 
   const saveSettings = useCallback((next: AppSettings) => {
     setSettings(next);
@@ -259,8 +364,6 @@ export default function App() {
       ?.settingsSet(next)
       .catch(() => undefined);
   }, []);
-
-  const activeTab = tabs.find((t) => t.id === activeId) || tabs[0];
 
   const paletteCommands: PaletteCommand[] = [
     {
@@ -288,6 +391,18 @@ export default function App() {
       title: "Find in terminal…",
       hint: "Ctrl+Shift+F",
       run: () => setSearchOpen(true),
+    },
+    {
+      id: "cmd:split-pane",
+      title: "Split pane horizontally",
+      hint: "Shift+Alt+D",
+      run: () => splitPane("horizontal"),
+    },
+    {
+      id: "cmd:close-pane",
+      title: "Close active pane",
+      hint: "Shift+Alt+C",
+      run: () => closePane(),
     },
     {
       id: "cmd:settings",
@@ -337,22 +452,23 @@ export default function App() {
       <div className="terminals">
         {searchOpen && activeTab && (
           <SearchBar
-            tabId={activeTab.id}
+            tabId={activeTab.activePaneId}
             bg={settings.theme.bg}
             fg={settings.theme.fg}
             onClose={() => setSearchOpen(false)}
           />
         )}
         {tabs.map((t) => (
-          <TerminalView
+          <PaneLayout
             key={t.id}
-            tabId={t.id}
-            active={t.id === activeTab?.id}
+            root={t.root}
+            tabActive={t.id === activeTab?.id}
+            activePaneId={t.activePaneId}
             fontFamily={settings.theme.fontFamily}
             fontSize={settings.theme.fontSize}
             bg={settings.theme.bg}
             fg={settings.theme.fg}
-            initialCwd={t.cwd}
+            onFocusPane={(paneId) => focusPane(t.id, paneId)}
           />
         ))}
       </div>
@@ -372,7 +488,7 @@ export default function App() {
       )}
       {paletteOpen && activeTab && (
         <CommandPalette
-          tabId={activeTab.id}
+          tabId={activeTab.activePaneId}
           commands={paletteCommands}
           onClose={() => setPaletteOpen(false)}
         />

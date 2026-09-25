@@ -8,23 +8,30 @@ import { termApi } from "../types";
 import { registerSearch, unregisterSearch } from "../lib/searchRegistry";
 
 interface Props {
-  tabId: string;
-  active: boolean;
+  /** Unique pty id for this pane. */
+  paneId: string;
+  /** False when another tab is active (pane hidden). */
+  tabActive: boolean;
+  /** True when this is the focused pane of the active tab. */
+  focused: boolean;
   fontFamily: string;
   fontSize: number;
   bg: string;
   fg: string;
   initialCwd?: string;
+  onFocusPane: (paneId: string) => void;
 }
 
 export default function TerminalView({
-  tabId,
-  active,
+  paneId,
+  tabActive,
+  focused,
   fontFamily,
   fontSize,
   bg,
   fg,
   initialCwd,
+  onFocusPane,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -51,7 +58,7 @@ export default function TerminalView({
     term.loadAddon(new WebLinksAddon());
     const search = new SearchAddon();
     term.loadAddon(search);
-    registerSearch(tabId, search);
+    registerSearch(paneId, search);
     term.open(el);
     termRef.current = term;
     fitRef.current = fit;
@@ -71,7 +78,7 @@ export default function TerminalView({
         void api
           .clipboardRead()
           .then((text) => {
-            if (text) api.ptyWrite(tabId, text);
+            if (text) api.ptyWrite(paneId, text);
           })
           .catch(() => undefined);
       } else {
@@ -121,7 +128,10 @@ export default function TerminalView({
       if (term.hasSelection()) copySelection();
       else pasteClipboard();
     };
-    const onMouseDown = () => term.focus();
+    const onMouseDown = () => {
+      term.focus();
+      onFocusPane(paneId);
+    };
     el.addEventListener("contextmenu", onContextMenu);
     el.addEventListener("mousedown", onMouseDown);
 
@@ -141,30 +151,30 @@ export default function TerminalView({
         fit.fit();
         const dims = { cols: term.cols || 80, rows: term.rows || 24 };
         await api.ptySpawn({
-          id: tabId,
+          id: paneId,
           cwd: initialCwd,
           cols: dims.cols,
           rows: dims.rows,
         });
-        if (initialCwd) api.ptySeedCwd(tabId, initialCwd);
+        if (initialCwd) api.ptySeedCwd(paneId, initialCwd);
       } catch (e) {
         term.writeln(`\x1b[31mPTY spawn failed: ${String(e)}\x1b[0m`);
         term.writeln("If node-pty is missing, run: bun run rebuild");
         return;
       }
-      offData = api.onPtyData(tabId, (data) => term.write(data));
-      offExit = api.onPtyExit(tabId, () =>
+      offData = api.onPtyData(paneId, (data) => term.write(data));
+      offExit = api.onPtyExit(paneId, () =>
         term.writeln("\r\n\x1b[90m[process exited]\x1b[0m"),
       );
-      term.onData((d) => api.ptyWrite(tabId, d));
+      term.onData((d) => api.ptyWrite(paneId, d));
     };
     void spawn();
 
     const ro = new ResizeObserver(() => {
-      if (!active) return;
+      if (!tabActive) return;
       try {
         fit.fit();
-        api?.ptyResize(tabId, term.cols, term.rows);
+        api?.ptyResize(paneId, term.cols, term.rows);
       } catch {
         /* noop */
       }
@@ -179,23 +189,23 @@ export default function TerminalView({
       el.removeEventListener("mousedown", onMouseDown);
       offData?.();
       offExit?.();
-      unregisterSearch(tabId);
+      unregisterSearch(paneId);
       term.dispose();
       termRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabId]);
+  }, [paneId]);
 
   // Focus requests from overlays (search bar, palette) closing.
   useEffect(() => {
     const onFocusReq = (e: Event) => {
-      if ((e as CustomEvent<string>).detail === tabId) {
+      if ((e as CustomEvent<string>).detail === paneId) {
         termRef.current?.focus();
       }
     };
     window.addEventListener("involvex:focus-term", onFocusReq);
     return () => window.removeEventListener("involvex:focus-term", onFocusReq);
-  }, [tabId]);
+  }, [paneId]);
 
   // Apply theme/font live
   useEffect(() => {
@@ -211,33 +221,34 @@ export default function TerminalView({
       t.options.fontSize = fontSize;
       try {
         fitRef.current?.fit();
-        termApi()?.ptyResize(tabId, t.cols, t.rows);
+        termApi()?.ptyResize(paneId, t.cols, t.rows);
       } catch {
         /* noop */
       }
     }
-  }, [bg, fg, fontFamily, fontSize, tabId]);
+  }, [bg, fg, fontFamily, fontSize, paneId]);
 
-  // Refit when becoming active
+  // Refit + focus when this becomes the focused pane of the active tab.
+  // (The PaneLayout wrapper handles the focused outline.)
   useEffect(() => {
-    if (!active) return;
+    if (!focused || !tabActive) return;
     requestAnimationFrame(() => {
       try {
         fitRef.current?.fit();
         const t = termRef.current;
-        if (t) termApi()?.ptyResize(tabId, t.cols, t.rows);
+        if (t) termApi()?.ptyResize(paneId, t.cols, t.rows);
         termRef.current?.focus();
       } catch {
         /* noop */
       }
     });
-  }, [active, tabId]);
+  }, [focused, tabActive, paneId]);
 
   return (
     <div
       ref={containerRef}
       style={{
-        display: active ? "block" : "none",
+        display: tabActive ? "block" : "none",
         width: "100%",
         height: "100%",
         background: bg,
