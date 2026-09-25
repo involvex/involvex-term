@@ -123,7 +123,8 @@ const patch = spawnSync(process.execPath, ["scripts/patch-node-pty.mjs"], {
 });
 if (patch.status !== 0) process.exit(patch.status ?? 1);
 
-// 2. Rebuild with forced interpreter
+// 2. Rebuild with forced interpreter (skip when already built, unless --force)
+const force = process.argv.includes("--force");
 const env = {
   ...process.env,
   PYTHON: python,
@@ -132,10 +133,13 @@ const env = {
 function runPkg(bin, args) {
   return spawnSync(bin, args, { cwd: ROOT, stdio: "inherit", env });
 }
-let build = runPkg("bun", ["x", "electron-rebuild", "-f", "-w", "node-pty"]);
+const rebuildArgs = ["electron-rebuild", "-w", "node-pty"];
+if (force) rebuildArgs.push("-f");
+else console.log("[rebuild-pty] skipping up-to-date modules if possible");
+let build = runPkg("bun", ["x", ...rebuildArgs]);
 if (build.error?.code === "ENOENT") {
   console.log("[rebuild-pty] `bun` not found, falling back to `npx`");
-  build = runPkg("npx", ["electron-rebuild", "-f", "-w", "node-pty"]);
+  build = runPkg("npx", rebuildArgs);
 }
 if (build.error) {
   console.error(`[rebuild-pty] failed to launch rebuild: ${build.error.message}`);

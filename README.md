@@ -23,10 +23,10 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
 ## Quickstart (Bun, PowerShell)
 
 ```powershell
-bun install
-bun run dev:electron   # vite dev + electron (use default `vite` runner)
-# or web-only preview:
-bun run dev
+bun install               # postinstall only applies the node-pty Spectre patch
+bun run dev:electron      # dev (vite + Electron)
+bun run rebuild           # FORCE full node-pty rebuild (slow, rarely needed)
+bun run build             # tsc + vite + node-pty rebuild (skipped if up-to-date) + electron-builder
 ```
 
 Build:

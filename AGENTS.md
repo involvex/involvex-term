@@ -8,7 +8,7 @@ Dark theme `#1e1e1e / #cccccc`. Settings live at `~/.involvex-term/settings.json
 ```powershell
 bun install               # postinstall only applies the node-pty Spectre patch
 bun run dev:electron      # dev (vite + Electron)
-bun run rebuild           # rebuild node-pty for Electron ABI (self-sufficient, see below)
+bun run rebuild           # FORCE full node-pty rebuild (slow, rarely needed)
 bun run build             # tsc + vite + node-pty rebuild + electron-builder (outputs release/)
 bunx tsc --noEmit         # ground truth for types (opencode LSP reports false electron errors)
 bun scripts/test-osc7.mjs # OSC7/CWD end-to-end test (run under Electron)
