@@ -394,6 +394,8 @@ export default function TerminalView({
 			marks.dispose()
 			term.dispose()
 			termRef.current = null
+			// Tear down the pty when this pane unmounts (tab close / session replace).
+			api?.ptyKill(paneId)
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [paneId])

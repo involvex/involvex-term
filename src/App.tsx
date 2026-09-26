@@ -119,7 +119,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 	tray: {enabled: true, minimizeToTray: true, closeToTray: true},
 	quake: {
 		enabled: false,
-		hotkey: 'Ctrl+`',
+		hotkey: 'Alt+`',
 		heightPercent: 50,
 		hideOnFocusLoss: true,
 	},
@@ -148,8 +148,9 @@ function newTab(cwd?: string, profileId?: string): TabInfo {
 }
 
 export default function App() {
-	const [tabs, setTabs] = useState<TabInfo[]>(() => [newTab()])
-	const [activeId, setActiveId] = useState<string>(() => tabs[0]?.id ?? '')
+	const [bootstrapped, setBootstrapped] = useState(false)
+	const [tabs, setTabs] = useState<TabInfo[]>([])
+	const [activeId, setActiveId] = useState<string>('')
 	const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
 	const [showSettings, setShowSettings] = useState(false)
 	const [git, setGit] = useState<GitStatus | null>(null)
@@ -307,7 +308,15 @@ export default function App() {
 	// Load settings (+ restore previous session on fresh launch)
 	useEffect(() => {
 		const api = termApi()
-		if (!api) return
+		if (!api) {
+			queueMicrotask(() => {
+				const t = newTab()
+				setTabs([t])
+				setActiveId(t.id)
+				setBootstrapped(true)
+			})
+			return
+		}
 		api
 			.settingsGet()
 			.then(async s => {
@@ -336,9 +345,10 @@ export default function App() {
 						openFresh()
 						return
 					}
+					const startFallback = merged.terminal.startDir.trim() || undefined
 					const restored: TabInfo[] = []
 					for (const [i, st] of saved.entries()) {
-						const root = normalizeSessionRoot(st.root)
+						const root = normalizeSessionRoot(st.root, startFallback)
 						if (!root) continue
 						tabSeq += 1
 						restored.push({
@@ -360,7 +370,12 @@ export default function App() {
 					openFresh()
 				}
 			})
-			.catch(() => undefined)
+			.catch(() => {
+				const t = newTab()
+				setTabs([t])
+				setActiveId(t.id)
+			})
+			.finally(() => setBootstrapped(true))
 		const off = api.onSettingsChanged(s =>
 			setSettings({...DEFAULT_SETTINGS, ...(s as AppSettings)}),
 		)
@@ -917,74 +932,80 @@ export default function App() {
 			className="app"
 			style={{background: settings.theme.bg, color: settings.theme.fg}}
 		>
-			<TabBar
-				tabs={tabs}
-				activeId={activeTab?.id || ''}
-				profiles={settings.terminal.profiles}
-				defaultProfileId={settings.terminal.defaultProfileId}
-				onSelect={selectTab}
-				onClose={closeTab}
-				onNew={profileId => addTab(undefined, profileId)}
-				onRename={renameTab}
-				onReorder={reorderTabs}
-				onOpenOpencode={launchOpencode}
-				opencodeAvailable={opencodeAvailable}
-				onOpenSettings={() => setShowSettings(true)}
-			/>
-			<div className="terminals">
-				{searchOpen && activeTab && (
-					<SearchBar
-						tabId={activeTab.activePaneId}
-						bg={settings.theme.bg}
-						fg={settings.theme.fg}
-						onClose={() => setSearchOpen(false)}
+			{!bootstrapped || tabs.length === 0 ? (
+				<div className="web-warning">Starting…</div>
+			) : (
+				<>
+					<TabBar
+						tabs={tabs}
+						activeId={activeTab?.id || ''}
+						profiles={settings.terminal.profiles}
+						defaultProfileId={settings.terminal.defaultProfileId}
+						onSelect={selectTab}
+						onClose={closeTab}
+						onNew={profileId => addTab(undefined, profileId)}
+						onRename={renameTab}
+						onReorder={reorderTabs}
+						onOpenOpencode={launchOpencode}
+						opencodeAvailable={opencodeAvailable}
+						onOpenSettings={() => setShowSettings(true)}
 					/>
-				)}
-				{tabs.map(t => (
-					<PaneLayout
-						key={t.id}
-						root={t.root}
-						tabActive={t.id === activeTab?.id}
-						activePaneId={t.activePaneId}
-						fontFamily={effectiveFontFamily(settings.theme)}
-						fontSize={settings.theme.fontSize}
-						bg={settings.theme.bg}
-						fg={settings.theme.fg}
-						completionBell={settings.terminal.completionBell}
-						scrollback={settings.terminal.scrollback}
-						scrollbar={settings.terminal.scrollbar}
-						onFocusPane={paneId => focusPane(t.id, paneId)}
-						onResizeSplit={(splitId, ratio) =>
-							resizeSplit(t.id, splitId, ratio)
-						}
-						onBackgroundIdle={showCompletionToast}
+					<div className="terminals">
+						{searchOpen && activeTab && (
+							<SearchBar
+								tabId={activeTab.activePaneId}
+								bg={settings.theme.bg}
+								fg={settings.theme.fg}
+								onClose={() => setSearchOpen(false)}
+							/>
+						)}
+						{tabs.map(t => (
+							<PaneLayout
+								key={t.id}
+								root={t.root}
+								tabActive={t.id === activeTab?.id}
+								activePaneId={t.activePaneId}
+								fontFamily={effectiveFontFamily(settings.theme)}
+								fontSize={settings.theme.fontSize}
+								bg={settings.theme.bg}
+								fg={settings.theme.fg}
+								completionBell={settings.terminal.completionBell}
+								scrollback={settings.terminal.scrollback}
+								scrollbar={settings.terminal.scrollbar}
+								onFocusPane={paneId => focusPane(t.id, paneId)}
+								onResizeSplit={(splitId, ratio) =>
+									resizeSplit(t.id, splitId, ratio)
+								}
+								onBackgroundIdle={showCompletionToast}
+							/>
+						))}
+					</div>
+					{toast && <div className="completion-toast">{toast}</div>}
+					{!isElectron() && (
+						<div className="web-warning">
+							Web preview — PTY/Git/Sys need Electron. Run{' '}
+							<code>bun run dev:electron</code>.
+						</div>
+					)}
+					<StatusBar
+						git={git}
+						sys={sys}
+						opencode={settings.footer.showOpencode ? opencode : null}
+						settings={settings}
+						cwd={cwd}
+						onOpencodeContinue={continueOpencode}
+						onOpencodeNew={launchOpencode}
+						onGitRefreshed={s => {
+							setGit(s)
+							if (s.cwd) setCwd(s.cwd)
+						}}
+						onToast={msg => {
+							setToast(msg)
+							window.setTimeout(() => setToast(null), 2800)
+						}}
 					/>
-				))}
-			</div>
-			{toast && <div className="completion-toast">{toast}</div>}
-			{!isElectron() && (
-				<div className="web-warning">
-					Web preview — PTY/Git/Sys need Electron. Run{' '}
-					<code>bun run dev:electron</code>.
-				</div>
+				</>
 			)}
-			<StatusBar
-				git={git}
-				sys={sys}
-				opencode={settings.footer.showOpencode ? opencode : null}
-				settings={settings}
-				cwd={cwd}
-				onOpencodeContinue={continueOpencode}
-				onOpencodeNew={launchOpencode}
-				onGitRefreshed={s => {
-					setGit(s)
-					if (s.cwd) setCwd(s.cwd)
-				}}
-				onToast={msg => {
-					setToast(msg)
-					window.setTimeout(() => setToast(null), 2800)
-				}}
-			/>
 			{showSettings && (
 				<SettingsModal
 					settings={settings}

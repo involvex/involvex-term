@@ -62,14 +62,21 @@ function isRecord(x: unknown): x is Record<string, unknown> {
 /**
  * Validate unknown session JSON into a PaneNode, regenerating missing or
  * duplicate pane/split ids. Returns null when the shape is unusable.
+ * @param fallbackCwd Applied when a leaf has no saved cwd (e.g. startDir).
  */
-export function normalizeSessionRoot(raw: unknown): PaneNode | null {
+export function normalizeSessionRoot(
+	raw: unknown,
+	fallbackCwd?: string,
+): PaneNode | null {
 	const seen = new Set<string>()
 	const fixLeaf = (l: Record<string, unknown>): PaneLeaf => {
 		let id = typeof l['paneId'] === 'string' && l['paneId'] ? l['paneId'] : ''
 		if (!id || seen.has(id)) id = newPaneId()
 		seen.add(id)
-		const cwd = typeof l['cwd'] === 'string' ? l['cwd'] : undefined
+		const cwd =
+			typeof l['cwd'] === 'string' && l['cwd'].trim()
+				? l['cwd']
+				: fallbackCwd || undefined
 		const profileId =
 			typeof l['profileId'] === 'string' && l['profileId']
 				? l['profileId']

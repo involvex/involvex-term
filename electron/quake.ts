@@ -13,6 +13,7 @@ let returnState: {
 	visible: boolean
 } | null = null
 let registeredAccel: string | null = null
+let lastFailKey: string | null = null
 
 export function isQuakeActive(): boolean {
 	return quakeActive
@@ -22,8 +23,32 @@ function toAccel(hotkey: string): string {
 	return hotkey
 		.trim()
 		.replace(/Ctrl\+/gi, 'CommandOrControl+')
+		.replace(/Cmd\+/gi, 'CommandOrControl+')
 		.replace(/Alt\+/gi, 'Alt+')
 		.replace(/Shift\+/gi, 'Shift+')
+		.replace(/Win\+/gi, 'Super+')
+		.replace(/Meta\+/gi, 'Super+')
+}
+
+/** Electron + Windows often reject bare `` ` ``; try Grave / alternatives. */
+function accelCandidates(primary: string): string[] {
+	const base = toAccel(primary || 'Alt+`')
+	const out: string[] = []
+	const add = (a: string) => {
+		if (a && !out.includes(a)) out.push(a)
+	}
+	add(base)
+	// `` Ctrl+` `` → Ctrl+Grave (more reliable on Win)
+	add(base.replace(/\+`$/, '+Grave'))
+	add(base.replace(/\+`$/, '+Oem_3'))
+	// Fallbacks if the preferred combo is stolen (Windows Terminal, etc.)
+	add('Alt+`')
+	add('Alt+Grave')
+	add('CommandOrControl+Shift+`')
+	add('CommandOrControl+Shift+Grave')
+	add('Super+`')
+	add('Super+Grave')
+	return out
 }
 
 function clampHeight(pct: number): number {
@@ -115,23 +140,44 @@ export function registerQuake(
 			dismissQuake(win, false)
 			return
 		}
-		// Live-apply geometry tweaks while summoned.
 		try {
 			applyDropdownGeometry(win, s.quake.heightPercent)
 		} catch {
 			/* noop */
 		}
 	}
-	if (!s.quake.enabled) return
-	const accel = toAccel(s.quake.hotkey || 'Ctrl+`')
-	try {
-		if (globalShortcut.register(accel, () => toggleQuake(win, getSettings))) {
-			registeredAccel = accel
-		} else {
-			console.error(`[quake] global shortcut denied or invalid: ${accel}`)
+	if (!s.quake.enabled) {
+		lastFailKey = null
+		return
+	}
+
+	const wanted = s.quake.hotkey || 'Alt+`'
+	const candidates = accelCandidates(wanted)
+	const failKey = candidates.join('|')
+	for (const accel of candidates) {
+		try {
+			if (globalShortcut.register(accel, () => toggleQuake(win, getSettings))) {
+				registeredAccel = accel
+				lastFailKey = null
+				if (accel !== toAccel(wanted) && accel !== wanted) {
+					console.warn(
+						`[quake] "${wanted}" unavailable — using ${accel} instead`,
+					)
+				}
+				return
+			}
+		} catch {
+			/* try next */
 		}
-	} catch (e) {
-		console.error('[quake] register failed:', e)
+	}
+
+	if (lastFailKey !== failKey) {
+		lastFailKey = failKey
+		console.error(
+			`[quake] global shortcut denied or invalid for "${wanted}" ` +
+				`(tried: ${candidates.join(', ')}). Another app may own it ` +
+				`(Windows Terminal, PowerToys, …) — pick a free hotkey in Settings.`,
+		)
 	}
 }
 

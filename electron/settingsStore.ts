@@ -145,7 +145,7 @@ const TraySchema = z.object({
 
 const QuakeSchema = z.object({
 	enabled: z.boolean().default(false),
-	hotkey: z.string().default('Ctrl+`'),
+	hotkey: z.string().default('Alt+`'),
 	heightPercent: z.number().min(20).max(90).default(50),
 	hideOnFocusLoss: z.boolean().default(true),
 })

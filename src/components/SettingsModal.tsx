@@ -447,6 +447,10 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 							}
 						/>
 					</label>
+					<p className="footer-dim">
+						Used for new tabs and when Startup is “New tab”. With session
+						restore enabled, previous tab folders are restored instead.
+					</p>
 					<label>
 						<input
 							type="checkbox"
@@ -760,6 +764,10 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 							}
 						/>
 					</label>
+					<p className="footer-dim">
+						Must be free globally (Windows Terminal / PowerToys often own
+						Ctrl+`). Default Alt+`; if denied we try Grave / Alt / Win variants.
+					</p>
 					<label>
 						Height (%)
 						<input

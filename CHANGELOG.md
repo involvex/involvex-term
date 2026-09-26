@@ -10,6 +10,14 @@ All notable changes to this project are documented in this file.
   remote URL / branch name
 - OpenCode multi-session picker in the footer (new, continue last, pick by id)
 
+### Fixed
+
+- Start directory honored on spawn (and deferred first tab until settings load);
+  session restore still reuses saved pane cwds — use Startup → “New tab” for
+  startDir on every launch
+- Quake hotkey: try Grave/Alt/Win fallbacks when Ctrl+` is denied; quieter logs
+- Chromium disk cache: dedicated `~/.involvex-term/electron` userData + single-instance lock
+
 ## [0.4.0] - 2026-09-25
 
 ### Added

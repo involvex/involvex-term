@@ -49,6 +49,21 @@ import {
 	scheduleStartupUpdateCheck,
 } from './updater.js'
 
+// Isolate Chromium profile under ~/.involvex-term so dev + packaged builds
+// and multiple instances don't fight over the default Electron userData cache.
+const USER_DATA = path.join(os.homedir(), '.involvex-term', 'electron')
+try {
+	fs.mkdirSync(USER_DATA, {recursive: true})
+	app.setPath('userData', USER_DATA)
+} catch {
+	/* keep Electron default */
+}
+
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+	app.quit()
+}
+
 let isQuitting = false
 
 function iconPath(): string {
@@ -202,7 +217,11 @@ function registerIpc() {
 				profileId?: string
 			},
 		) => {
-			const entry = spawnPty(id, cwd || os.homedir(), cols, rows, {
+			const start =
+				(cwd && cwd.trim()) ||
+				settings.terminal.startDir?.trim() ||
+				os.homedir()
+			const entry = spawnPty(id, start, cols, rows, {
 				profileId,
 				profiles: settings.terminal.profiles as never,
 				defaultProfileId: settings.terminal.defaultProfileId,
@@ -519,6 +538,14 @@ app.on('activate', () => {
 	if (BrowserWindow.getAllWindows().length === 0) createWindow()
 })
 
-registerIpc()
-watchSettingsFile()
-app.whenReady().then(createWindow)
+if (gotLock) {
+	app.on('second-instance', () => {
+		if (!win || win.isDestroyed()) return
+		if (win.isMinimized()) win.restore()
+		win.show()
+		win.focus()
+	})
+	registerIpc()
+	watchSettingsFile()
+	app.whenReady().then(createWindow)
+}
