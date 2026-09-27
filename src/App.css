@@ -113,6 +113,37 @@ body {
 	background: #1a3a34;
 }
 
+.tab-quick-cmd {
+	max-width: 72px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: 11px;
+}
+
+.tab-pin {
+	display: inline-flex;
+	align-items: center;
+	opacity: 0.85;
+	color: #e5c07b;
+	margin-right: 2px;
+}
+
+.tab-color-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	flex-shrink: 0;
+	margin-right: 2px;
+}
+
+.tab-colored {
+	box-shadow: inset 0 -2px 0 var(--tab-accent, transparent);
+}
+
+.tab-colored.tab-active {
+	box-shadow: inset 0 -2px 0 var(--tab-accent, #4ec9b0);
+}
+
 .tabbar-spacer {
 	flex: 1;
 }
@@ -228,6 +259,18 @@ body {
 	margin-bottom: 8px;
 	padding-bottom: 8px;
 	border-bottom: 1px solid #2d2d2d;
+}
+
+.snippet-row-drag {
+	cursor: grab;
+	align-items: center;
+}
+
+.snippet-drag-handle {
+	opacity: 0.45;
+	font-size: 12px;
+	user-select: none;
+	padding: 0 4px;
 }
 
 .settings-btn-row {
@@ -360,12 +403,69 @@ body {
 	min-height: 26px;
 }
 
+.statusbar-modules {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+	flex: 1;
+	flex-wrap: nowrap;
+	overflow: hidden;
+}
+
 .statusbar-left,
 .statusbar-right {
 	display: flex;
 	align-items: center;
 	gap: 12px;
 	min-width: 0;
+}
+
+.statusbar-editing {
+	outline: 1px dashed #4ec9b0;
+	outline-offset: -1px;
+}
+
+.statusbar-edit-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 1px 6px;
+	border: 1px solid #3c3c3c;
+	border-radius: 3px;
+	cursor: grab;
+	background: #161616;
+}
+
+.statusbar-edit-hidden {
+	opacity: 0.45;
+}
+
+.statusbar-edit-label {
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	opacity: 0.7;
+}
+
+.statusbar-done {
+	flex-shrink: 0;
+	background: #2d2d2d;
+	border: 1px solid #4ec9b0;
+	color: #4ec9b0;
+	font: inherit;
+	font-size: 11px;
+	padding: 2px 8px;
+	border-radius: 3px;
+	cursor: pointer;
+}
+
+.statusbar-done:hover {
+	background: #333;
+}
+
+.footer-cwd-end {
+	margin-left: auto;
 }
 
 .footer-item {

@@ -56,6 +56,23 @@ export interface CommandSnippet {
 	sendEnter: boolean
 }
 
+export interface QuickCommand {
+	id: string
+	label: string
+	command: string
+	sendEnter: boolean
+}
+
+export interface AgentTool {
+	id: string
+	name: string
+	label: string
+	binary: string
+	command: string
+	continueCommand?: string
+	sessionProvider: 'opencode' | 'none'
+}
+
 export interface UpdateStatus {
 	state:
 		| 'idle'
@@ -85,6 +102,7 @@ export interface AppSettings {
 		showCpu: boolean
 		showMem: boolean
 		showOpencode: boolean
+		showCwd: boolean
 		modulesOrder: string[]
 		refreshMs: number
 	}
@@ -98,6 +116,11 @@ export interface AppSettings {
 		scrollback: number
 		scrollbar: boolean
 		snippets: CommandSnippet[]
+		quickCommands: QuickCommand[]
+	}
+	agent: {
+		activeId: string
+		tools: AgentTool[]
 	}
 	startup: {
 		mode: 'session' | 'new'
@@ -125,6 +148,10 @@ export interface SessionTab {
 	title: string
 	/** User-pinned title; when set, auto git titles are skipped. */
 	customTitle?: string
+	/** When true, close requires confirm and bulk-close skips this tab. */
+	pinned?: boolean
+	/** Optional accent color (#rrggbb). */
+	color?: string
 	/** Pane tree JSON (validated/normalized on load). */
 	root: unknown
 }
@@ -177,6 +204,12 @@ export interface TermApiShape {
 	onTabAction: (cb: (action: string) => void) => () => void
 	opencodeAvailable: () => Promise<boolean>
 	opencodeStatus: (cwd?: string) => Promise<OpencodeStatus>
+	agentWhich: (binary: string) => Promise<boolean>
+	dialogSaveText: (opts: {
+		content: string
+		defaultPath?: string
+		title?: string
+	}) => Promise<{ok: boolean; path?: string; error?: string}>
 	dialogConfirm: (opts: {
 		message: string
 		detail?: string

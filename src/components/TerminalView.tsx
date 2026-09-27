@@ -11,6 +11,7 @@ import {
 	registerTermActions,
 	unregisterTermActions,
 } from '../lib/termActions'
+import {serializeTerminalBuffer} from '../lib/termBuffer'
 import {
 	copyText,
 	openHit,
@@ -134,6 +135,7 @@ export default function TerminalView({
 				term.clear()
 				term.focus()
 			},
+			exportBuffer: () => serializeTerminalBuffer(term),
 			addMark: () => marks.addMark(),
 			jumpPrevMark: () => marks.jumpPrev(),
 			jumpNextMark: () => marks.jumpNext(),

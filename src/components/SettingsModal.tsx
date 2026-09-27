@@ -1,6 +1,12 @@
-import {useEffect, useState} from 'react'
+import {useEffect, useState, type DragEvent} from 'react'
+import {defaultAgentTools} from '../lib/agents'
 import {THEME_PRESETS} from '../lib/themePresets'
-import {termApi, type AppSettings, type CommandSnippet} from '../types'
+import {
+	termApi,
+	type AppSettings,
+	type CommandSnippet,
+	type QuickCommand,
+} from '../types'
 
 interface Props {
 	settings: AppSettings
@@ -17,7 +23,7 @@ const HOTKEY_ACTIONS: Array<{id: string; label: string}> = [
 	{id: 'settings', label: 'Open settings'},
 	{id: 'find', label: 'Find in terminal'},
 	{id: 'palette', label: 'Command palette'},
-	{id: 'opencode', label: 'Open OpenCode'},
+	{id: 'opencode', label: 'Open agent'},
 	{id: 'split-pane', label: 'Split pane (horizontal)'},
 	{id: 'split-pane-vertical', label: 'Split pane (vertical)'},
 	{id: 'close-pane', label: 'Close pane'},
@@ -310,7 +316,7 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 								})
 							}
 						/>{' '}
-						Show OpenCode sessions
+						Show agent status (footer)
 					</label>
 					<label>
 						<input
@@ -337,6 +343,18 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 						Memory
 					</label>
 					<label>
+						<input
+							type="checkbox"
+							checked={settings.footer.showCwd !== false}
+							onChange={e =>
+								set({
+									footer: {...settings.footer, showCwd: e.target.checked},
+								})
+							}
+						/>{' '}
+						Show path (CWD)
+					</label>
+					<label>
 						Refresh (ms){' '}
 						<input
 							type="number"
@@ -354,13 +372,19 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 							}
 						/>
 					</label>
+					<p className="footer-dim">
+						Right-click the status bar to toggle modules or enter
+						drag-to-reorder layout mode.
+					</p>
 				</section>
 
 				<section>
 					<h3>Hotkeys</h3>
 					<p className="footer-dim">
 						Takes effect on restart of menu (applied live where possible).
-						Format: Ctrl+Shift+T
+						Format: Ctrl+Shift+T. Pane split defaults use Shift+Alt+… — if that
+						conflicts with Windows language switching, remap to Ctrl+Alt+D
+						(etc.).
 					</p>
 					{HOTKEY_ACTIONS.map(a => (
 						<label
@@ -596,6 +620,264 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 						}}
 					>
 						Add snippet
+					</button>
+				</section>
+
+				<section>
+					<h3>Quick command buttons</h3>
+					<p className="footer-dim">
+						Compact buttons on the tab bar (left of the agent). Drag rows to
+						reorder. Click writes the command into the focused pane.
+					</p>
+					{(settings.terminal.quickCommands ?? []).map((qc, idx) => (
+						<div
+							key={qc.id}
+							className="snippet-row snippet-row-drag"
+							draggable
+							onDragStart={e => {
+								e.dataTransfer.setData('text/plain', String(idx))
+								e.dataTransfer.effectAllowed = 'move'
+							}}
+							onDragOver={e => e.preventDefault()}
+							onDrop={(e: DragEvent) => {
+								e.preventDefault()
+								const from = Number(e.dataTransfer.getData('text/plain'))
+								if (Number.isNaN(from) || from === idx) return
+								const list = [...(settings.terminal.quickCommands ?? [])]
+								const [moved] = list.splice(from, 1)
+								if (!moved) return
+								list.splice(idx, 0, moved)
+								set({terminal: {...settings.terminal, quickCommands: list}})
+							}}
+						>
+							<span
+								className="snippet-drag-handle"
+								title="Drag to reorder"
+								aria-hidden
+							>
+								⋮⋮
+							</span>
+							<label>
+								Label{' '}
+								<input
+									type="text"
+									maxLength={12}
+									value={qc.label}
+									onChange={e => {
+										const quickCommands = [
+											...(settings.terminal.quickCommands ?? []),
+										]
+										quickCommands[idx] = {...qc, label: e.target.value}
+										set({
+											terminal: {...settings.terminal, quickCommands},
+										})
+									}}
+								/>
+							</label>
+							<label className="wide">
+								Command{' '}
+								<input
+									type="text"
+									value={qc.command}
+									onChange={e => {
+										const quickCommands = [
+											...(settings.terminal.quickCommands ?? []),
+										]
+										quickCommands[idx] = {...qc, command: e.target.value}
+										set({
+											terminal: {...settings.terminal, quickCommands},
+										})
+									}}
+								/>
+							</label>
+							<label>
+								<input
+									type="checkbox"
+									checked={qc.sendEnter !== false}
+									onChange={e => {
+										const quickCommands = [
+											...(settings.terminal.quickCommands ?? []),
+										]
+										quickCommands[idx] = {
+											...qc,
+											sendEnter: e.target.checked,
+										}
+										set({
+											terminal: {...settings.terminal, quickCommands},
+										})
+									}}
+								/>{' '}
+								Enter
+							</label>
+							<button
+								type="button"
+								className="settings-btn"
+								onClick={() => {
+									const quickCommands = (
+										settings.terminal.quickCommands ?? []
+									).filter((_, i) => i !== idx)
+									set({terminal: {...settings.terminal, quickCommands}})
+								}}
+							>
+								Remove
+							</button>
+						</div>
+					))}
+					<button
+						type="button"
+						className="settings-btn"
+						onClick={() => {
+							const qc: QuickCommand = {
+								id: `qc-${Date.now()}`,
+								label: 'cmd',
+								command: '',
+								sendEnter: true,
+							}
+							set({
+								terminal: {
+									...settings.terminal,
+									quickCommands: [
+										...(settings.terminal.quickCommands ?? []),
+										qc,
+									],
+								},
+							})
+						}}
+					>
+						Add button
+					</button>
+				</section>
+
+				<section>
+					<h3>Coding agent</h3>
+					<p className="footer-dim">
+						Default is OpenCode. Switch to another CLI tool — the tab-bar button
+						and Ctrl+Shift+O launch the active agent. Session picker is
+						OpenCode-only.
+					</p>
+					<label className="wide">
+						Active agent
+						<select
+							value={settings.agent?.activeId || 'opencode'}
+							onChange={e =>
+								set({
+									agent: {
+										...(settings.agent ?? {
+											activeId: 'opencode',
+											tools: defaultAgentTools(),
+										}),
+										activeId: e.target.value,
+										tools: settings.agent?.tools?.length
+											? settings.agent.tools
+											: defaultAgentTools(),
+									},
+								})
+							}
+						>
+							{(settings.agent?.tools?.length
+								? settings.agent.tools
+								: defaultAgentTools()
+							).map(t => (
+								<option
+									key={t.id}
+									value={t.id}
+								>
+									{t.name} ({t.label})
+								</option>
+							))}
+						</select>
+					</label>
+					{(settings.agent?.tools?.length
+						? settings.agent.tools
+						: defaultAgentTools()
+					).map((tool, idx) => (
+						<div
+							key={tool.id}
+							className="snippet-row"
+						>
+							<label>
+								Label{' '}
+								<input
+									type="text"
+									maxLength={4}
+									value={tool.label}
+									onChange={e => {
+										const tools = [
+											...(settings.agent?.tools?.length
+												? settings.agent.tools
+												: defaultAgentTools()),
+										]
+										tools[idx] = {...tool, label: e.target.value}
+										set({
+											agent: {
+												activeId: settings.agent?.activeId || 'opencode',
+												tools,
+											},
+										})
+									}}
+								/>
+							</label>
+							<label className="wide">
+								Command{' '}
+								<input
+									type="text"
+									value={tool.command}
+									onChange={e => {
+										const tools = [
+											...(settings.agent?.tools?.length
+												? settings.agent.tools
+												: defaultAgentTools()),
+										]
+										tools[idx] = {...tool, command: e.target.value}
+										set({
+											agent: {
+												activeId: settings.agent?.activeId || 'opencode',
+												tools,
+											},
+										})
+									}}
+								/>
+							</label>
+							<label className="wide">
+								Continue{' '}
+								<input
+									type="text"
+									value={tool.continueCommand ?? ''}
+									placeholder="optional"
+									onChange={e => {
+										const tools = [
+											...(settings.agent?.tools?.length
+												? settings.agent.tools
+												: defaultAgentTools()),
+										]
+										tools[idx] = {
+											...tool,
+											continueCommand: e.target.value || undefined,
+										}
+										set({
+											agent: {
+												activeId: settings.agent?.activeId || 'opencode',
+												tools,
+											},
+										})
+									}}
+								/>
+							</label>
+						</div>
+					))}
+					<button
+						type="button"
+						className="settings-btn"
+						onClick={() =>
+							set({
+								agent: {
+									activeId: 'opencode',
+									tools: defaultAgentTools(),
+								},
+							})
+						}
+					>
+						Reset agents to defaults
 					</button>
 				</section>
 

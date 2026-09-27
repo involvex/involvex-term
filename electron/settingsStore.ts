@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {z} from 'zod'
+import {defaultAgentTools} from './agents.js'
 import {defaultProfileId, defaultProfiles} from './shellProfiles.js'
 import type {SessionState} from './types.js'
 
@@ -28,7 +29,8 @@ const FooterSchema = z.object({
 	showCpu: z.boolean().default(true),
 	showMem: z.boolean().default(true),
 	showOpencode: z.boolean().default(true),
-	modulesOrder: z.array(z.string()).default(['git', 'opencode', 'sys']),
+	showCwd: z.boolean().default(true),
+	modulesOrder: z.array(z.string()).default(['git', 'opencode', 'sys', 'cwd']),
 	refreshMs: z.number().min(500).max(10000).default(1500),
 })
 
@@ -76,6 +78,14 @@ const SnippetSchema = z.object({
 	sendEnter: z.boolean().default(true),
 })
 
+const QuickCommandSchema = z.object({
+	id: z.string().min(1),
+	/** Short label shown on the tab-bar button (max 12). */
+	label: z.string().min(1).max(12),
+	command: z.string().min(1),
+	sendEnter: z.boolean().default(true),
+})
+
 function defaultSnippets() {
 	return [
 		{
@@ -113,6 +123,24 @@ const TerminalSchema = z.object({
 	scrollbar: z.boolean().default(true),
 	/** Quick-run commands for the palette. */
 	snippets: z.array(SnippetSchema).default(defaultSnippets()),
+	/** Compact buttons on the tab bar (left of agent). */
+	quickCommands: z.array(QuickCommandSchema).default([]),
+})
+
+const AgentToolSchema = z.object({
+	id: z.string().min(1),
+	name: z.string().min(1),
+	label: z.string().min(1).max(4),
+	binary: z.string().min(1),
+	command: z.string().min(1),
+	continueCommand: z.string().optional(),
+	sessionProvider: z.enum(['opencode', 'none']).default('none'),
+})
+
+const AgentSchema = z.object({
+	/** Active tool id (default OpenCode). */
+	activeId: z.string().default('opencode'),
+	tools: z.array(AgentToolSchema).default(defaultAgentTools()),
 })
 
 const StartupSchema = z.object({
@@ -158,6 +186,7 @@ export const SettingsSchema = z.object({
 	hotkeys: HotkeysSchema,
 	tabs: TabsSchema.prefault({}),
 	terminal: TerminalSchema.prefault({}),
+	agent: AgentSchema.prefault({}),
 	startup: StartupSchema.prefault({}),
 	window: WindowSchema.prefault({}),
 	tray: TraySchema.prefault({}),
@@ -245,11 +274,19 @@ export function loadSession(): SessionState | null {
 		}
 		if (!raw || !Array.isArray(raw.tabs)) return null
 		const tabs = raw.tabs.filter(isValidSessionTab).map(t => {
-			const rec = t as {title?: unknown; customTitle?: unknown; root: unknown}
+			const rec = t as {
+				title?: unknown
+				customTitle?: unknown
+				pinned?: unknown
+				color?: unknown
+				root: unknown
+			}
 			return {
 				title: typeof rec.title === 'string' ? rec.title : 'shell',
 				customTitle:
 					typeof rec.customTitle === 'string' ? rec.customTitle : undefined,
+				pinned: rec.pinned === true,
+				color: typeof rec.color === 'string' ? rec.color : undefined,
 				root: rec.root,
 			}
 		})
@@ -269,12 +306,16 @@ export function saveSession(next: SessionState): void {
 					const rec = t as {
 						title?: unknown
 						customTitle?: unknown
+						pinned?: unknown
+						color?: unknown
 						root: unknown
 					}
 					return {
 						title: typeof rec.title === 'string' ? rec.title : 'shell',
 						customTitle:
 							typeof rec.customTitle === 'string' ? rec.customTitle : undefined,
+						pinned: rec.pinned === true ? true : undefined,
+						color: typeof rec.color === 'string' ? rec.color : undefined,
 						root: rec.root,
 					}
 				})

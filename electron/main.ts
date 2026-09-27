@@ -309,6 +309,53 @@ function registerIpc() {
 		getOpencodeStatus(cwd),
 	)
 
+	ipcMain.handle('agent:which', async (_e, {binary}: {binary: string}) => {
+		const name = String(binary ?? '').trim()
+		if (!name || /[\r\n"]/.test(name)) return false
+		try {
+			const {execFile} = await import('node:child_process')
+			const {promisify} = await import('node:util')
+			const execFileAsync = promisify(execFile)
+			if (process.platform === 'win32') {
+				await execFileAsync('where.exe', [name])
+			} else {
+				await execFileAsync('which', [name])
+			}
+			return true
+		} catch {
+			return false
+		}
+	})
+
+	ipcMain.handle(
+		'dialog:saveText',
+		async (
+			_e,
+			{
+				content,
+				defaultPath,
+				title,
+			}: {content: string; defaultPath?: string; title?: string},
+		) => {
+			if (!win || win.isDestroyed()) return {ok: false, error: 'no window'}
+			const {canceled, filePath} = await dialog.showSaveDialog(win, {
+				title: title || 'Export text',
+				defaultPath: defaultPath || 'terminal.txt',
+				filters: [
+					{name: 'Text', extensions: ['txt', 'log']},
+					{name: 'All files', extensions: ['*']},
+				],
+			})
+			if (canceled || !filePath) return {ok: false, error: 'canceled'}
+			try {
+				fs.writeFileSync(filePath, content ?? '', 'utf8')
+				return {ok: true, path: filePath}
+			} catch (e) {
+				return {ok: false, error: e instanceof Error ? e.message : String(e)}
+			}
+		},
+	)
+
 	ipcMain.handle(
 		'dialog:confirm',
 		async (

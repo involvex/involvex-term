@@ -3,6 +3,7 @@ import type {IMarker, Terminal} from '@xterm/xterm'
 
 export interface TermActions {
 	clearBuffer: () => void
+	exportBuffer: () => string
 	addMark: () => void
 	jumpPrevMark: () => void
 	jumpNextMark: () => void

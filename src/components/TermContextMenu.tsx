@@ -10,6 +10,11 @@ export type ContextMenuIcon =
 	| 'close-other'
 	| 'close-pane'
 	| 'close-tab'
+	| 'pin'
+	| 'rename'
+	| 'check'
+	| 'color'
+	| 'export'
 
 export interface ContextMenuItem {
 	id: string
@@ -79,6 +84,36 @@ function MenuIcon({name}: {name: ContextMenuIcon}) {
 			return (
 				<svg {...common}>
 					<path d="M4 4h8v8H4V4zm1.5 1.5v5h5v-5h-5zm1.8 1.2.7.7L7.5 7.2 8.5 8.2l-.7.7-1-1-1 1-.7-.7 1-1-1-1z" />
+				</svg>
+			)
+		case 'pin':
+			return (
+				<svg {...common}>
+					<path d="M8 2.5 9.5 5H12l-2 2.2.8 3.8L8 9.5 5.2 11l.8-3.8L4 5h2.5L8 2.5zm0 8.2V14" />
+				</svg>
+			)
+		case 'rename':
+			return (
+				<svg {...common}>
+					<path d="M9.5 2.5 13.5 6.5 6 14H2v-4L9.5 2.5zm0 1.4L3.5 10v2.5H6L12.1 4.9 9.5 3.9z" />
+				</svg>
+			)
+		case 'check':
+			return (
+				<svg {...common}>
+					<path d="M6.5 11.2 3.2 7.9l.9-.9 2.4 2.4 5-5 .9.9-5.9 5.9z" />
+				</svg>
+			)
+		case 'color':
+			return (
+				<svg {...common}>
+					<path d="M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zm0 1.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zM5.5 7.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm5 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM8 12a1.2 1.2 0 1 0 0-2.4A1.2 1.2 0 0 0 8 12z" />
+				</svg>
+			)
+		case 'export':
+			return (
+				<svg {...common}>
+					<path d="M8 2v7.2L5.8 7l-.8.8L8.5 11l3.5-3.2-.8-.8L9 9.2V2H8zM3 12v2h10v-2h-1v1H4v-1H3z" />
 				</svg>
 			)
 		default:

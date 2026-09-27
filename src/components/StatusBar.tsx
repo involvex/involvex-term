@@ -3,9 +3,12 @@ import {
 	useLayoutEffect,
 	useRef,
 	useState,
+	type DragEvent,
+	type MouseEvent as ReactMouseEvent,
 	type ReactNode,
 } from 'react'
 import {createPortal} from 'react-dom'
+import {resolveActiveAgent} from '../lib/agents'
 import {
 	termApi,
 	type AppSettings,
@@ -15,6 +18,12 @@ import {
 	type OpencodeStatus,
 	type SysStats,
 } from '../types'
+import TermContextMenu, {
+	type ContextMenuItem,
+	type TermContextMenuState,
+} from './TermContextMenu'
+
+const FOOTER_MODULES = ['git', 'opencode', 'sys', 'cwd'] as const
 
 function fmtUptime(sec: number): string {
 	const h = Math.floor(sec / 3600)
@@ -344,11 +353,17 @@ export function GitWidget({
 export function OpencodeWidget({
 	status,
 	cwd,
+	agentLabel = 'OC',
+	agentName = 'OpenCode',
+	sessionProvider = 'opencode',
 	onContinue,
 	onNew,
 }: {
 	status: OpencodeStatus | null
 	cwd?: string
+	agentLabel?: string
+	agentName?: string
+	sessionProvider?: 'opencode' | 'none'
 	onContinue?: (sessionId?: string) => void
 	onNew?: () => void
 }) {
@@ -356,13 +371,27 @@ export function OpencodeWidget({
 	const [open, setOpen] = useState(false)
 	const [anchor, setAnchor] = useState<DOMRect | null>(null)
 
+	if (sessionProvider !== 'opencode') {
+		return (
+			<button
+				type="button"
+				className="footer-item footer-oc-btn"
+				title={`Launch ${agentName}`}
+				onClick={() => onNew?.()}
+			>
+				<span className="footer-oc-label">{agentLabel}</span>
+				<span className="footer-oc-title"> · {agentName}</span>
+			</button>
+		)
+	}
+
 	if (!status) {
 		return (
 			<span
 				className="footer-item footer-dim"
-				title="OpenCode status…"
+				title={`${agentName} status…`}
 			>
-				OC …
+				{agentLabel} …
 			</span>
 		)
 	}
@@ -370,9 +399,9 @@ export function OpencodeWidget({
 		return (
 			<span
 				className="footer-item footer-dim"
-				title="OpenCode not found on PATH"
+				title={`${agentName} not found on PATH`}
 			>
-				OC off
+				{agentLabel} off
 			</span>
 		)
 	}
@@ -407,11 +436,11 @@ export function OpencodeWidget({
 								`latest: ${status.latest.title}`,
 								`${status.sessionCount} session(s)`,
 							].join('\n')
-						: 'Click to start or pick an OpenCode session'
+						: `Click to start or pick a ${agentName} session`
 				}
 				onClick={openPicker}
 			>
-				<span className="footer-oc-label">OC</span>
+				<span className="footer-oc-label">{agentLabel}</span>
 				{status.sessionCount > 1 && (
 					<span className="footer-dim"> {status.sessionCount}</span>
 				)}
@@ -444,7 +473,7 @@ export function OpencodeWidget({
 							setOpen(false)
 						}}
 					>
-						Continue last (`opencode -c`)
+						Continue last
 					</button>
 					{sessions.length > 0 && (
 						<>
@@ -523,12 +552,65 @@ export function SysWidget({
 function footerOrder(settings: AppSettings): string[] {
 	const order = settings.footer.modulesOrder?.length
 		? [...settings.footer.modulesOrder]
-		: ['git', 'opencode', 'sys']
-	if (settings.footer.showOpencode && !order.includes('opencode')) {
-		const gi = order.indexOf('git')
-		order.splice(gi >= 0 ? gi + 1 : 0, 0, 'opencode')
+		: ['git', 'opencode', 'sys', 'cwd']
+	for (const id of FOOTER_MODULES) {
+		if (!order.includes(id)) order.push(id)
 	}
-	return order
+	return order.filter(m => (FOOTER_MODULES as readonly string[]).includes(m))
+}
+
+function moduleVisible(settings: AppSettings, m: string): boolean {
+	if (m === 'git') return settings.footer.showGit
+	if (m === 'opencode') return settings.footer.showOpencode
+	if (m === 'sys') return settings.footer.showSys
+	if (m === 'cwd') return settings.footer.showCwd !== false
+	return false
+}
+
+function moduleLabel(m: string): string {
+	if (m === 'git') return 'Git'
+	if (m === 'opencode') return 'Agent'
+	if (m === 'sys') return 'PC stats'
+	if (m === 'cwd') return 'Path'
+	return m
+}
+
+function StatusBarEditItem({
+	index,
+	label,
+	hidden,
+	onReorder,
+	children,
+}: {
+	index: number
+	label: string
+	hidden: boolean
+	onReorder: (from: number, to: number) => void
+	children: ReactNode
+}) {
+	return (
+		<span
+			className={`statusbar-edit-item${hidden ? ' statusbar-edit-hidden' : ''}`}
+			draggable
+			onDragStart={e => {
+				e.dataTransfer.setData('text/plain', String(index))
+				e.dataTransfer.effectAllowed = 'move'
+			}}
+			onDragOver={e => {
+				e.preventDefault()
+			}}
+			onDrop={(e: DragEvent) => {
+				e.preventDefault()
+				const from = Number(e.dataTransfer.getData('text/plain'))
+				if (Number.isNaN(from)) return
+				onReorder(from, index)
+			}}
+			title="Drag to reorder"
+		>
+			<span className="statusbar-edit-label">{label}</span>
+			{!hidden ? children : null}
+		</span>
+	)
 }
 
 export default function StatusBar({
@@ -537,6 +619,7 @@ export default function StatusBar({
 	opencode,
 	settings,
 	cwd,
+	onSettingsChange,
 	onOpencodeContinue,
 	onOpencodeNew,
 	onGitRefreshed,
@@ -547,48 +630,159 @@ export default function StatusBar({
 	opencode: OpencodeStatus | null
 	settings: AppSettings
 	cwd: string
+	onSettingsChange?: (next: AppSettings) => void
 	onOpencodeContinue?: (sessionId?: string) => void
 	onOpencodeNew?: () => void
 	onGitRefreshed?: (s: GitStatus) => void
 	onToast?: (msg: string) => void
 }) {
 	const order = footerOrder(settings)
-	return (
-		<footer className="statusbar">
-			<div className="statusbar-left">
-				{order.map(m =>
-					m === 'git' && settings.footer.showGit ? (
-						<GitWidget
-							key="git"
-							status={git}
-							onRefreshed={onGitRefreshed}
-							onToast={onToast}
-						/>
-					) : m === 'opencode' && settings.footer.showOpencode ? (
-						<OpencodeWidget
-							key="opencode"
-							status={opencode}
-							cwd={cwd}
-							onContinue={onOpencodeContinue}
-							onNew={onOpencodeNew}
-						/>
-					) : m === 'sys' && settings.footer.showSys ? (
-						<SysWidget
-							key="sys"
-							stats={sys}
-							settings={settings}
-						/>
-					) : null,
-				)}
-			</div>
-			<div className="statusbar-right">
+	const activeAgent = resolveActiveAgent(
+		settings.agent?.tools,
+		settings.agent?.activeId,
+	)
+	const [editMode, setEditMode] = useState(false)
+	const [ctxMenu, setCtxMenu] = useState<TermContextMenuState | null>(null)
+
+	const patchFooter = (patch: Partial<AppSettings['footer']>) => {
+		onSettingsChange?.({
+			...settings,
+			footer: {...settings.footer, ...patch},
+		})
+	}
+
+	useEffect(() => {
+		if (!editMode) return
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') setEditMode(false)
+		}
+		window.addEventListener('keydown', onKey)
+		return () => window.removeEventListener('keydown', onKey)
+	}, [editMode])
+
+	const openFooterMenu = (e: ReactMouseEvent) => {
+		e.preventDefault()
+		const toggle = (key: keyof AppSettings['footer'], label: string) => {
+			const cur = settings.footer[key]
+			if (typeof cur !== 'boolean') return
+			return {
+				id: `toggle-${key}`,
+				label,
+				icon: cur ? ('check' as const) : undefined,
+				run: () => patchFooter({[key]: !cur}),
+			} satisfies ContextMenuItem
+		}
+		const items: ContextMenuItem[] = [
+			toggle('showGit', 'Show Git')!,
+			toggle('showOpencode', 'Show agent')!,
+			toggle('showSys', 'Show PC stats')!,
+			toggle('showCpu', 'Show CPU')!,
+			toggle('showMem', 'Show Memory')!,
+			toggle('showCwd', 'Show path')!,
+			{id: 'sep', label: '', separator: true},
+			{
+				id: 'edit',
+				label: editMode ? 'Done customizing' : 'Customize layout…',
+				run: () => setEditMode(v => !v),
+			},
+		]
+		setCtxMenu({
+			x: e.clientX,
+			y: e.clientY,
+			hit: null,
+			hasSelection: false,
+			items,
+		})
+	}
+
+	const reorder = (from: number, to: number) => {
+		if (from === to) return
+		const next = [...order]
+		const [moved] = next.splice(from, 1)
+		if (!moved) return
+		next.splice(to, 0, moved)
+		patchFooter({modulesOrder: next})
+	}
+
+	const renderModule = (m: string, i: number) => {
+		const visible = moduleVisible(settings, m)
+		if (!editMode && !visible) return null
+
+		const body =
+			m === 'git' && visible ? (
+				<GitWidget
+					status={git}
+					onRefreshed={onGitRefreshed}
+					onToast={onToast}
+				/>
+			) : m === 'opencode' && visible ? (
+				<OpencodeWidget
+					status={opencode}
+					cwd={cwd}
+					agentLabel={activeAgent.label}
+					agentName={activeAgent.name}
+					sessionProvider={activeAgent.sessionProvider}
+					onContinue={onOpencodeContinue}
+					onNew={onOpencodeNew}
+				/>
+			) : m === 'sys' && visible ? (
+				<SysWidget
+					stats={sys}
+					settings={settings}
+				/>
+			) : m === 'cwd' && visible ? (
 				<span
-					className="footer-item footer-dim footer-cwd"
+					className={`footer-item footer-dim footer-cwd${
+						[...order].reverse().find(x => moduleVisible(settings, x)) ===
+							'cwd' && !editMode
+							? ' footer-cwd-end'
+							: ''
+					}`}
 					title={cwd}
 				>
 					{cwd}
 				</span>
+			) : null
+
+		if (editMode) {
+			return (
+				<StatusBarEditItem
+					key={m}
+					index={i}
+					label={moduleLabel(m)}
+					hidden={!visible}
+					onReorder={reorder}
+				>
+					{body}
+				</StatusBarEditItem>
+			)
+		}
+		return body ? <span key={m}>{body}</span> : null
+	}
+
+	return (
+		<footer
+			className={`statusbar${editMode ? ' statusbar-editing' : ''}`}
+			onContextMenu={openFooterMenu}
+		>
+			<div className="statusbar-modules">
+				{order.map((m, i) => renderModule(m, i))}
 			</div>
+			{editMode && (
+				<button
+					type="button"
+					className="statusbar-done"
+					onClick={() => setEditMode(false)}
+				>
+					Done
+				</button>
+			)}
+			{ctxMenu && (
+				<TermContextMenu
+					menu={ctxMenu}
+					onClose={() => setCtxMenu(null)}
+				/>
+			)}
 		</footer>
 	)
 }

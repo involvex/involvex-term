@@ -7,6 +7,8 @@ import SearchBar from './components/SearchBar'
 import SettingsModal from './components/SettingsModal'
 import StatusBar from './components/StatusBar'
 import TabBar, {type TabInfo} from './components/TabBar'
+import {defaultAgentTools, resolveActiveAgent} from './lib/agents'
+import {matchHotkey} from './lib/hotkeys'
 import {
 	collectLeaves,
 	countLeaves,
@@ -33,6 +35,7 @@ import {
 	type AppSettings,
 	type GitStatus,
 	type OpencodeStatus,
+	type QuickCommand,
 	type SysStats,
 	type UpdateStatus,
 } from './types'
@@ -52,7 +55,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 		showCpu: true,
 		showMem: true,
 		showOpencode: true,
-		modulesOrder: ['git', 'opencode', 'sys'],
+		showCwd: true,
+		modulesOrder: ['git', 'opencode', 'sys', 'cwd'],
 		refreshMs: 1500,
 	},
 	hotkeys: {
@@ -110,6 +114,11 @@ const DEFAULT_SETTINGS: AppSettings = {
 				sendEnter: true,
 			},
 		],
+		quickCommands: [],
+	},
+	agent: {
+		activeId: 'opencode',
+		tools: defaultAgentTools(),
 	},
 	startup: {mode: 'session', profileId: ''},
 	window: {
@@ -163,8 +172,8 @@ export default function App() {
 	const [cwd, setCwd] = useState('')
 	const [searchOpen, setSearchOpen] = useState(false)
 	const [paletteOpen, setPaletteOpen] = useState(false)
-	const [opencodeAvailable, setOpencodeAvailable] = useState(true)
 	const [opencode, setOpencode] = useState<OpencodeStatus | null>(null)
+	const [agentAvailable, setAgentAvailable] = useState(true)
 	const [toast, setToast] = useState<string | null>(null)
 	// Latest-value refs for use inside IPC callbacks (synced in effects,
 	// never written during render).
@@ -182,21 +191,31 @@ export default function App() {
 	}, [settings])
 
 	const activeTab = tabs.find(t => t.id === activeId) || tabs[0]
+	const activeAgent = resolveActiveAgent(
+		settings.agent?.tools,
+		settings.agent?.activeId,
+	)
 
-	// Detect OpenCode CLI on PATH (main process).
+	// Detect active agent CLI on PATH.
 	useEffect(() => {
 		const api = termApi()
 		if (!api) return
-		api
-			.opencodeAvailable()
-			.then(setOpencodeAvailable)
-			.catch(() => setOpencodeAvailable(false))
-	}, [])
+		const check =
+			activeAgent.sessionProvider === 'opencode'
+				? api.opencodeAvailable()
+				: api.agentWhich(activeAgent.binary)
+		check
+			.then(ok => {
+				setAgentAvailable(ok)
+			})
+			.catch(() => setAgentAvailable(false))
+	}, [activeAgent.binary, activeAgent.sessionProvider])
 
-	// Poll OpenCode session status for the status bar.
+	// Poll OpenCode sessions when that provider is active + footer shown.
 	useEffect(() => {
 		const api = termApi()
 		if (!api || !settings.footer.showOpencode) return
+		if (activeAgent.sessionProvider !== 'opencode') return
 		let cancelled = false
 		const tick = () => {
 			api
@@ -204,7 +223,7 @@ export default function App() {
 				.then(s => {
 					if (!cancelled) {
 						setOpencode(s)
-						setOpencodeAvailable(s.available)
+						setAgentAvailable(s.available)
 					}
 				})
 				.catch(() => {
@@ -219,17 +238,21 @@ export default function App() {
 				})
 		}
 		tick()
-		// CLI spawn is heavier than sysinfo — floor at 5s.
 		const ms = Math.max(5000, settings.footer.refreshMs || 1500)
 		const timer = setInterval(tick, ms)
 		return () => {
 			cancelled = true
 			clearInterval(timer)
 		}
-	}, [cwd, settings.footer.showOpencode, settings.footer.refreshMs])
+	}, [
+		cwd,
+		settings.footer.showOpencode,
+		settings.footer.refreshMs,
+		activeAgent.sessionProvider,
+	])
 
-	/** Inject an OpenCode CLI command into the focused pane. */
-	const writeOpencodeCmd = useCallback((cmd: string) => {
+	/** Inject an agent CLI command into the focused pane. */
+	const writeAgentCmd = useCallback((cmd: string) => {
 		const api = termApi()
 		if (!api) return
 		const tab = tabsRef.current.find(t => t.id === activeRef.current)
@@ -239,17 +262,28 @@ export default function App() {
 		setTimeout(() => api.ptyWrite(paneId, `${cmd}\r`), 50)
 	}, [])
 
-	/** Fresh OpenCode TUI in the focused pane. */
-	const launchOpencode = useCallback(() => {
-		writeOpencodeCmd('opencode')
-	}, [writeOpencodeCmd])
+	const launchAgent = useCallback(() => {
+		const agent = resolveActiveAgent(
+			settingsRef.current.agent?.tools,
+			settingsRef.current.agent?.activeId,
+		)
+		writeAgentCmd(agent.command)
+	}, [writeAgentCmd])
 
-	/** Continue a session (by id) or the last session (`-c`). */
-	const continueOpencode = useCallback(
+	const continueAgent = useCallback(
 		(sessionId?: string) => {
-			writeOpencodeCmd(sessionId ? `opencode -s ${sessionId}` : 'opencode -c')
+			const agent = resolveActiveAgent(
+				settingsRef.current.agent?.tools,
+				settingsRef.current.agent?.activeId,
+			)
+			if (agent.sessionProvider === 'opencode' && sessionId) {
+				writeAgentCmd(`opencode -s ${sessionId}`)
+				return
+			}
+			if (agent.continueCommand) writeAgentCmd(agent.continueCommand)
+			else writeAgentCmd(agent.command)
 		},
-		[writeOpencodeCmd],
+		[writeAgentCmd],
 	)
 
 	const runSnippet = useCallback((command: string, sendEnter: boolean) => {
@@ -360,6 +394,8 @@ export default function App() {
 							id: `tab-restored-${Date.now()}-${i}`,
 							title: st.title || `Tab ${tabSeq}`,
 							customTitle: st.customTitle,
+							pinned: st.pinned === true,
+							color: st.color,
 							cwd: undefined,
 							root,
 							activePaneId: firstLeaf(root).paneId,
@@ -433,10 +469,20 @@ export default function App() {
 	}, [activeId, activePaneId])
 
 	const closeTab = useCallback(async (id: string) => {
-		if (settingsRef.current.tabs.confirmClose) {
-			const tab = tabsRef.current.find(t => t.id === id)
-			const label = tab?.title || 'this tab'
-			const api = termApi()
+		const tab = tabsRef.current.find(t => t.id === id)
+		const label = tab?.title || 'this tab'
+		const api = termApi()
+		if (tab?.pinned) {
+			const ok = api
+				? await api.dialogConfirm({
+						message: `Unpin and close "${label}"?`,
+						detail: 'This tab is pinned.',
+						title: 'Close pinned tab',
+						buttons: ['Close', 'Cancel'],
+					})
+				: window.confirm(`Unpin and close ${label}?`)
+			if (!ok) return
+		} else if (settingsRef.current.tabs.confirmClose) {
 			const ok = api
 				? await api.dialogConfirm({
 						message: `Close "${label}"?`,
@@ -450,9 +496,9 @@ export default function App() {
 		setTabs(prev => {
 			const closing = prev.find(t => t.id === id)
 			if (closing) {
-				const api = termApi()
+				const killApi = termApi()
 				for (const leaf of collectLeaves(closing.root))
-					api?.ptyKill(leaf.paneId)
+					killApi?.ptyKill(leaf.paneId)
 			}
 			if (prev.length === 1) {
 				// Keep at least one tab: fresh tab with a single pane
@@ -475,6 +521,42 @@ export default function App() {
 		})
 	}, [])
 
+	const togglePinTab = useCallback((id: string) => {
+		setTabs(prev =>
+			prev.map(t => (t.id === id ? {...t, pinned: !t.pinned} : t)),
+		)
+	}, [])
+
+	const setTabColor = useCallback((id: string, color: string | undefined) => {
+		setTabs(prev => prev.map(t => (t.id === id ? {...t, color} : t)))
+	}, [])
+
+	const exportTabBuffer = useCallback(async (tabId: string) => {
+		const tab = tabsRef.current.find(t => t.id === tabId)
+		if (!tab) return
+		const actions = getTermActions(tab.activePaneId)
+		const text = actions?.exportBuffer() ?? ''
+		const api = termApi()
+		if (!api) {
+			await navigator.clipboard?.writeText(text)
+			setToast('Buffer copied to clipboard')
+			window.setTimeout(() => setToast(null), 2800)
+			return
+		}
+		const res = await api.dialogSaveText({
+			content: text,
+			defaultPath: `${(tab.customTitle || tab.title || 'terminal').replace(/[<>:"/\\|?*]/g, '_')}.txt`,
+			title: 'Export terminal text',
+		})
+		if (res.ok) {
+			setToast(`Exported ${res.path}`)
+			window.setTimeout(() => setToast(null), 2800)
+		} else if (res.error && res.error !== 'canceled') {
+			setToast(res.error)
+			window.setTimeout(() => setToast(null), 2800)
+		}
+	}, [])
+
 	const addTab = useCallback(
 		(cwdToUse?: string, profileId?: string) => {
 			const startDir = settingsRef.current.terminal.startDir.trim()
@@ -487,6 +569,34 @@ export default function App() {
 			setActiveId(nt.id)
 		},
 		[git?.cwd, cwd],
+	)
+
+	const duplicateTab = useCallback(
+		(id: string) => {
+			const tab = tabsRef.current.find(t => t.id === id)
+			if (!tab) return
+			const leaf = findLeaf(tab.root, tab.activePaneId)
+			addTab(leaf?.cwd || git?.cwd || cwd || undefined, leaf?.profileId)
+		},
+		[addTab, git?.cwd, cwd],
+	)
+
+	const closeOtherTabs = useCallback(
+		async (keepId: string) => {
+			const toClose = tabsRef.current.filter(t => t.id !== keepId && !t.pinned)
+			for (const t of toClose) await closeTab(t.id)
+		},
+		[closeTab],
+	)
+
+	const closeTabsToRight = useCallback(
+		async (id: string) => {
+			const idx = tabsRef.current.findIndex(t => t.id === id)
+			if (idx < 0) return
+			const toClose = tabsRef.current.slice(idx + 1).filter(t => !t.pinned)
+			for (const t of toClose) await closeTab(t.id)
+		},
+		[closeTab],
 	)
 
 	const renameTab = useCallback((id: string, title: string) => {
@@ -553,6 +663,30 @@ export default function App() {
 			const tab = tabsRef.current.find(t => t.id === tabId)
 			if (!tab) return
 			const paneId = targetPaneId ?? tab.activePaneId
+			if (!findLeaf(tab.root, paneId)) return
+			const newLeaf = newSplitLeaf(tab, paneId)
+			setTabs(prev =>
+				prev.map(t =>
+					t.id === tabId
+						? {
+								...t,
+								root: splitLeaf(t.root, paneId, newLeaf, dir),
+								activePaneId: newLeaf.paneId,
+							}
+						: t,
+				),
+			)
+		},
+		[newSplitLeaf],
+	)
+
+	const splitPaneOnTab = useCallback(
+		(tabId: string, dir: SplitDir) => {
+			setActiveId(tabId)
+			activeRef.current = tabId
+			const tab = tabsRef.current.find(t => t.id === tabId)
+			if (!tab) return
+			const paneId = tab.activePaneId
 			if (!findLeaf(tab.root, paneId)) return
 			const newLeaf = newSplitLeaf(tab, paneId)
 			setTabs(prev =>
@@ -695,7 +829,7 @@ export default function App() {
 			else if (action === 'open-settings') setShowSettings(true)
 			else if (action === 'open-search') setSearchOpen(true)
 			else if (action === 'open-palette') setPaletteOpen(true)
-			else if (action === 'open-opencode') launchOpencode()
+			else if (action === 'open-opencode') launchAgent()
 			else if (action === 'split-pane') splitPane('horizontal')
 			else if (action === 'split-pane-vertical') splitPane('vertical')
 			else if (action === 'close-pane') closePane()
@@ -712,14 +846,16 @@ export default function App() {
 		selectTab,
 		splitPane,
 		closePane,
-		launchOpencode,
+		launchAgent,
 		activePaneActions,
 		checkUpdates,
 		git?.cwd,
 		cwd,
 	])
 
-	// Keyboard shortcuts in renderer (works in dev + packaged)
+	// Keyboard shortcuts in renderer (works in dev + packaged).
+	// Pane Alt+Shift chords are primarily handled in main via before-input-event;
+	// this path still honors remapped settings.hotkeys as a fallback.
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent) => {
 			// Never hijack keys typed into inputs (settings fields, find bar…).
@@ -729,65 +865,69 @@ export default function App() {
 				(target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
 			)
 				return
-			const mod = e.ctrlKey || e.metaKey
-			const key = e.key.toLowerCase()
-			if (mod && e.shiftKey && key === 't') {
+			const hk = settingsRef.current.hotkeys
+			const hit = (id: string, fallback: string) =>
+				matchHotkey(e, hk[id] || fallback)
+
+			if (hit('new-tab', 'Ctrl+Shift+T')) {
 				e.preventDefault()
 				addTab()
-			} else if (mod && e.shiftKey && key === 'f') {
+			} else if (hit('find', 'Ctrl+Shift+F')) {
 				e.preventDefault()
 				setSearchOpen(true)
-			} else if (mod && e.shiftKey && key === 'p') {
+			} else if (hit('palette', 'Ctrl+Shift+P')) {
 				e.preventDefault()
 				setPaletteOpen(true)
-			} else if (mod && e.shiftKey && key === 'o') {
+			} else if (hit('opencode', 'Ctrl+Shift+O')) {
 				e.preventDefault()
-				launchOpencode()
-			} else if (mod && e.shiftKey && key === 'w') {
+				launchAgent()
+			} else if (hit('close-tab', 'Ctrl+Shift+W')) {
 				e.preventDefault()
-				if (activeRef.current) closeTab(activeRef.current)
-			} else if (mod && key === 'tab') {
+				if (activeRef.current) void closeTab(activeRef.current)
+			} else if (hit('next-tab', 'Ctrl+Tab')) {
 				e.preventDefault()
 				const ts = tabsRef.current
 				const i = ts.findIndex(t => t.id === activeRef.current)
-				const n = e.shiftKey
-					? (i - 1 + ts.length) % ts.length
-					: (i + 1) % ts.length
-				const nt = ts[n]
+				const nt = ts[(i + 1) % ts.length]
 				if (nt) selectTab(nt.id)
-			} else if (mod && e.shiftKey && key === 'd') {
+			} else if (hit('prev-tab', 'Ctrl+Shift+Tab')) {
 				e.preventDefault()
-				addTab(git?.cwd || cwd || undefined)
-			} else if (e.altKey && e.shiftKey && !mod && key === 'd') {
-				// Split active pane horizontally (stacked), like Windows Terminal.
+				const ts = tabsRef.current
+				const i = ts.findIndex(t => t.id === activeRef.current)
+				const nt = ts[(i - 1 + ts.length) % ts.length]
+				if (nt) selectTab(nt.id)
+			} else if (hit('duplicate-tab', 'Ctrl+Shift+D')) {
+				e.preventDefault()
+				if (activeRef.current) duplicateTab(activeRef.current)
+			} else if (hit('split-pane', 'Shift+Alt+D')) {
 				e.preventDefault()
 				splitPane('horizontal')
-			} else if (e.altKey && e.shiftKey && !mod && key === 'v') {
-				// Split active pane vertically (side-by-side).
+			} else if (hit('split-pane-vertical', 'Shift+Alt+V')) {
 				e.preventDefault()
 				splitPane('vertical')
-			} else if (e.altKey && e.shiftKey && !mod && key === 'c') {
+			} else if (hit('close-pane', 'Shift+Alt+C')) {
 				e.preventDefault()
 				closePane()
-			} else if (mod && e.shiftKey && key === 'k') {
+			} else if (hit('clear-buffer', 'Ctrl+Shift+K')) {
 				e.preventDefault()
 				activePaneActions()?.clearBuffer()
-			} else if (mod && e.shiftKey && key === 'm') {
+			} else if (hit('mark-prompt', 'Ctrl+Shift+M')) {
 				e.preventDefault()
 				activePaneActions()?.addMark()
-			} else if (mod && e.shiftKey && e.key === 'ArrowUp') {
+			} else if (hit('prev-mark', 'Ctrl+Shift+Up')) {
 				e.preventDefault()
 				activePaneActions()?.jumpPrevMark()
-			} else if (mod && e.shiftKey && e.key === 'ArrowDown') {
+			} else if (hit('next-mark', 'Ctrl+Shift+Down')) {
 				e.preventDefault()
 				activePaneActions()?.jumpNextMark()
-			} else if (mod && e.shiftKey && key === 'u') {
+			} else if (hit('check-updates', 'Ctrl+Shift+U')) {
 				e.preventDefault()
 				void checkUpdates()
-			} else if (mod && key === ',') {
+			} else if (hit('settings', 'Ctrl+,')) {
 				e.preventDefault()
 				setShowSettings(true)
-			} else if (mod && /^[1-9]$/.test(key)) {
+			} else if ((e.ctrlKey || e.metaKey) && /^[1-9]$/.test(e.key)) {
+				const key = e.key
 				const i = Number(key) - 1
 				const t = tabsRef.current[Math.min(i, tabsRef.current.length - 1)]
 				if (t && (key !== '9' || i < 8)) selectTab(t.id)
@@ -805,11 +945,10 @@ export default function App() {
 		selectTab,
 		splitPane,
 		closePane,
-		launchOpencode,
+		launchAgent,
 		activePaneActions,
 		checkUpdates,
-		git?.cwd,
-		cwd,
+		duplicateTab,
 	])
 
 	const saveSettings = useCallback((next: AppSettings) => {
@@ -835,6 +974,8 @@ export default function App() {
 				tabs: tabsNow.map(t => ({
 					title: t.customTitle || t.title,
 					customTitle: t.customTitle,
+					pinned: t.pinned || undefined,
+					color: t.color,
 					root: mapLeafCwd(t.root, cwds),
 				})),
 			})
@@ -863,6 +1004,8 @@ export default function App() {
 					tabs: tabsRef.current.map(t => ({
 						title: t.customTitle || t.title,
 						customTitle: t.customTitle,
+						pinned: t.pinned || undefined,
+						color: t.color,
 						root: t.root,
 					})),
 				})
@@ -904,19 +1047,19 @@ export default function App() {
 		{
 			id: 'cmd:split-pane',
 			title: 'Split pane horizontally',
-			hint: 'Shift+Alt+D',
+			hint: settings.hotkeys['split-pane'] || 'Shift+Alt+D',
 			run: () => splitPane('horizontal'),
 		},
 		{
 			id: 'cmd:split-pane-vertical',
 			title: 'Split pane vertically',
-			hint: 'Shift+Alt+V',
+			hint: settings.hotkeys['split-pane-vertical'] || 'Shift+Alt+V',
 			run: () => splitPane('vertical'),
 		},
 		{
 			id: 'cmd:close-pane',
 			title: 'Close active pane',
-			hint: 'Shift+Alt+C',
+			hint: settings.hotkeys['close-pane'] || 'Shift+Alt+C',
 			run: () => closePane(),
 		},
 		{
@@ -927,17 +1070,18 @@ export default function App() {
 		},
 		{
 			id: 'cmd:opencode',
-			title: 'Open OpenCode',
-			hint: opencodeAvailable ? 'Ctrl+Shift+O' : 'not found on PATH',
-			run: () => launchOpencode(),
+			title: `Open ${activeAgent.name}`,
+			hint: agentAvailable ? 'Ctrl+Shift+O' : 'not found on PATH',
+			run: () => launchAgent(),
 		},
 		{
 			id: 'cmd:opencode-continue',
-			title: 'Continue OpenCode session',
-			hint: opencode?.latest
-				? shortOcHint(opencode.latest.title)
-				: 'opencode -c',
-			run: () => continueOpencode(opencode?.latest?.id),
+			title: `Continue ${activeAgent.name}`,
+			hint:
+				activeAgent.sessionProvider === 'opencode' && opencode?.latest
+					? shortOcHint(opencode.latest.title)
+					: activeAgent.continueCommand || activeAgent.command,
+			run: () => continueAgent(opencode?.latest?.id),
 		},
 		{
 			id: 'cmd:clear-buffer',
@@ -999,6 +1143,20 @@ export default function App() {
 					footer: {...settings.footer, showSys: !settings.footer.showSys},
 				}),
 		},
+		{
+			id: 'cmd:toggle-agent',
+			title: settings.footer.showOpencode
+				? `Hide ${activeAgent.name} status`
+				: `Show ${activeAgent.name} status`,
+			run: () =>
+				saveSettings({
+					...settings,
+					footer: {
+						...settings.footer,
+						showOpencode: !settings.footer.showOpencode,
+					},
+				}),
+		},
 		...tabs.map((t, i) => ({
 			id: `cmd:goto-${t.id}`,
 			title: `Go to tab ${i + 1}: ${t.title}`,
@@ -1021,13 +1179,26 @@ export default function App() {
 						activeId={activeTab?.id || ''}
 						profiles={settings.terminal.profiles}
 						defaultProfileId={settings.terminal.defaultProfileId}
+						quickCommands={settings.terminal.quickCommands ?? []}
+						agentLabel={activeAgent.label}
+						agentName={activeAgent.name}
+						agentAvailable={agentAvailable}
 						onSelect={selectTab}
-						onClose={closeTab}
+						onClose={id => void closeTab(id)}
 						onNew={profileId => addTab(undefined, profileId)}
 						onRename={renameTab}
 						onReorder={reorderTabs}
-						onOpenOpencode={launchOpencode}
-						opencodeAvailable={opencodeAvailable}
+						onTogglePin={togglePinTab}
+						onSetColor={setTabColor}
+						onDuplicate={duplicateTab}
+						onSplit={(id, dir) => splitPaneOnTab(id, dir)}
+						onExportBuffer={id => void exportTabBuffer(id)}
+						onCloseOthers={id => void closeOtherTabs(id)}
+						onCloseToRight={id => void closeTabsToRight(id)}
+						onQuickCommand={(cmd: QuickCommand) =>
+							runSnippet(cmd.command, cmd.sendEnter !== false)
+						}
+						onOpenAgent={launchAgent}
 						onOpenSettings={() => setShowSettings(true)}
 					/>
 					<div className="terminals">
@@ -1103,8 +1274,9 @@ export default function App() {
 						opencode={settings.footer.showOpencode ? opencode : null}
 						settings={settings}
 						cwd={cwd}
-						onOpencodeContinue={continueOpencode}
-						onOpencodeNew={launchOpencode}
+						onSettingsChange={saveSettings}
+						onOpencodeContinue={continueAgent}
+						onOpencodeNew={launchAgent}
 						onGitRefreshed={s => {
 							setGit(s)
 							if (s.cwd) setCwd(s.cwd)

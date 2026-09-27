@@ -25,6 +25,12 @@ export type FooterModuleId = 'git' | 'sys'
  * JSON here — structurally validated/normalized on the renderer side. */
 export interface SessionTab {
 	title: string
+	/** User-pinned title; when set, auto git titles are skipped. */
+	customTitle?: string
+	/** When true, close requires confirm and bulk-close skips this tab. */
+	pinned?: boolean
+	/** Optional accent color (#rrggbb). */
+	color?: string
 	root: unknown
 }
 

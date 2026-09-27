@@ -60,6 +60,12 @@ export interface TermApi {
 			created: number
 		}>
 	}>
+	agentWhich: (binary: string) => Promise<boolean>
+	dialogSaveText: (opts: {
+		content: string
+		defaultPath?: string
+		title?: string
+	}) => Promise<{ok: boolean; path?: string; error?: string}>
 	dialogConfirm: (opts: {
 		message: string
 		detail?: string
@@ -120,6 +126,8 @@ const api: TermApi = {
 	onTabAction: cb => sub('tab:action', cb as never),
 	opencodeAvailable: () => ipcRenderer.invoke('opencode:available'),
 	opencodeStatus: cwd => ipcRenderer.invoke('opencode:status', {cwd}),
+	agentWhich: binary => ipcRenderer.invoke('agent:which', {binary}),
+	dialogSaveText: opts => ipcRenderer.invoke('dialog:saveText', opts),
 	dialogConfirm: opts => ipcRenderer.invoke('dialog:confirm', opts),
 	openExternal: url => ipcRenderer.invoke('shell:openExternal', {url}),
 	openPath: filePath => ipcRenderer.invoke('shell:openPath', {path: filePath}),
