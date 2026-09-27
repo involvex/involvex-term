@@ -29,6 +29,7 @@
 		"lint": "eslint . --report-unused-disable-directives --max-warnings 0",
 		"preview": "vite preview",
 		"rebuild": "bun scripts/rebuild-pty.mjs --force",
+		"release": "bun scripts/release.mjs",
 		"typecheck": "tsc --noEmit"
 	},
 	"prettier": "@involvex/prettier-config",
