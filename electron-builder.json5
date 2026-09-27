@@ -31,9 +31,12 @@
 	},
 	linux: {
 		icon: 'public/icon.png',
+		category: 'TerminalEmulator',
+		syncDesktopName: true,
 		target: ['AppImage'],
 		artifactName: '${productName}-Linux-${version}.${ext}',
 	},
+
 	publish: [
 		{
 			provider: 'github',

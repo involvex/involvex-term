@@ -8,6 +8,14 @@ on:
   push:
     tags:
       - v*
+  # Rebuild/attach artifacts to an existing release (uses this workflow from main).
+  # Example: gh workflow run release.yml -f tag=v0.5.1
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to attach artifacts to (e.g. v0.5.1)
+        required: true
+        type: string
 
 jobs:
   build:
@@ -20,6 +28,9 @@ jobs:
           - os: ubuntu-latest
             platform: linux
     runs-on: ${{ matrix.os }}
+    env:
+      # softprops uploads; electron-builder must never publish (avoids draft/release clash)
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v7.0.1
 
@@ -37,6 +48,7 @@ jobs:
       - name: Generate icons
         run: bun scripts/generate-icon.mjs
 
+      # build:release = electron-builder --publish never (no link-latest; no GH upload)
       - name: Build
         run: bun run build:release
 
@@ -44,6 +56,8 @@ jobs:
         if: matrix.platform == 'win'
         uses: softprops/action-gh-release@v2.2.0
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          draft: false
           files: |
             release/**/involvex-term-Windows-*-Setup.exe
             release/**/involvex-term-Windows-*-Setup.exe.blockmap
@@ -56,6 +70,8 @@ jobs:
         if: matrix.platform == 'linux'
         uses: softprops/action-gh-release@v2.2.0
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          draft: false
           files: |
             release/**/involvex-term-Linux-*.AppImage
             release/**/latest-linux.yml
