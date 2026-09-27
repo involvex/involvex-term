@@ -11,13 +11,18 @@ import {
 	collectLeaves,
 	countLeaves,
 	findLeaf,
+	findNeighborPane,
 	firstLeaf,
+	keepOnlyPane,
 	mapLeafCwd,
 	newPaneId,
 	normalizeSessionRoot,
 	removeLeaf,
 	splitLeaf,
+	splitLeafToward,
+	swapPanes,
 	updateSplitRatio,
+	type PaneDirection,
 	type PaneLeaf,
 	type SplitDir,
 } from './lib/panes'
@@ -522,36 +527,105 @@ export default function App() {
 		)
 	}, [])
 
-	// Split the active pane; the new pane inherits the tab's current cwd.
-	const splitPane = useCallback(
-		(dir: SplitDir) => {
-			const tabId = activeRef.current
-			const tab = tabsRef.current.find(t => t.id === tabId)
-			if (!tab || !findLeaf(tab.root, tab.activePaneId)) return
-			const activeLeaf = findLeaf(tab.root, tab.activePaneId)
+	const newSplitLeaf = useCallback(
+		(tab: TabInfo, targetPaneId: string): PaneLeaf => {
+			const activeLeaf = findLeaf(tab.root, targetPaneId)
 			const paneId = newPaneId()
-			const newLeaf: PaneLeaf = {
+			return {
 				kind: 'leaf',
 				paneId,
-				cwd: git?.cwd || cwd || undefined,
+				cwd:
+					activeLeaf?.cwd ||
+					(tab.id === activeRef.current ? git?.cwd || cwd : undefined) ||
+					undefined,
 				profileId:
 					activeLeaf?.profileId ||
 					settingsRef.current.terminal.defaultProfileId,
 			}
+		},
+		[git?.cwd, cwd],
+	)
+
+	// Split a pane; the new pane inherits the target pane's cwd/profile.
+	const splitPane = useCallback(
+		(dir: SplitDir, targetPaneId?: string) => {
+			const tabId = activeRef.current
+			const tab = tabsRef.current.find(t => t.id === tabId)
+			if (!tab) return
+			const paneId = targetPaneId ?? tab.activePaneId
+			if (!findLeaf(tab.root, paneId)) return
+			const newLeaf = newSplitLeaf(tab, paneId)
 			setTabs(prev =>
 				prev.map(t =>
 					t.id === tabId
 						? {
 								...t,
-								root: splitLeaf(t.root, t.activePaneId, newLeaf, dir),
-								activePaneId: paneId,
+								root: splitLeaf(t.root, paneId, newLeaf, dir),
+								activePaneId: newLeaf.paneId,
 							}
 						: t,
 				),
 			)
 		},
-		[git?.cwd, cwd],
+		[newSplitLeaf],
 	)
+
+	const splitPaneToward = useCallback(
+		(toward: PaneDirection, targetPaneId?: string) => {
+			const tabId = activeRef.current
+			const tab = tabsRef.current.find(t => t.id === tabId)
+			if (!tab) return
+			const paneId = targetPaneId ?? tab.activePaneId
+			if (!findLeaf(tab.root, paneId)) return
+			const newLeaf = newSplitLeaf(tab, paneId)
+			setTabs(prev =>
+				prev.map(t =>
+					t.id === tabId
+						? {
+								...t,
+								root: splitLeafToward(t.root, paneId, newLeaf, toward),
+								activePaneId: newLeaf.paneId,
+							}
+						: t,
+				),
+			)
+		},
+		[newSplitLeaf],
+	)
+
+	const swapPane = useCallback(
+		(toward: PaneDirection, targetPaneId?: string) => {
+			const tabId = activeRef.current
+			const tab = tabsRef.current.find(t => t.id === tabId)
+			if (!tab) return
+			const paneId = targetPaneId ?? tab.activePaneId
+			const other = findNeighborPane(tab.root, paneId, toward)
+			if (!other) return
+			setTabs(prev =>
+				prev.map(t =>
+					t.id === tabId ? {...t, root: swapPanes(t.root, paneId, other)} : t,
+				),
+			)
+		},
+		[],
+	)
+
+	const closeOtherPanes = useCallback((targetPaneId?: string) => {
+		const tabId = activeRef.current
+		const tab = tabsRef.current.find(t => t.id === tabId)
+		if (!tab) return
+		const keepId = targetPaneId ?? tab.activePaneId
+		const kept = keepOnlyPane(tab.root, keepId)
+		if (!kept || countLeaves(tab.root) <= 1) return
+		for (const leaf of collectLeaves(tab.root)) {
+			if (leaf.paneId !== keepId) termApi()?.ptyKill(leaf.paneId)
+		}
+		setTabs(prev =>
+			prev.map(t =>
+				t.id === tabId ? {...t, root: kept, activePaneId: keepId} : t,
+			),
+		)
+	}, [])
 
 	// Drag a split divider to a new ratio.
 	const resizeSplit = useCallback(
@@ -566,25 +640,31 @@ export default function App() {
 		},
 		[],
 	)
-	// Close the active pane; last pane closes the tab instead.
-	const closePane = useCallback(() => {
-		const tabId = activeRef.current
-		const tab = tabsRef.current.find(t => t.id === tabId)
-		if (!tab) return
-		if (countLeaves(tab.root) <= 1) {
-			closeTab(tabId)
-			return
-		}
-		termApi()?.ptyKill(tab.activePaneId)
-		setTabs(prev =>
-			prev.map(t => {
-				if (t.id !== tabId) return t
-				const root = removeLeaf(t.root, t.activePaneId)
-				if (!root) return t
-				return {...t, root, activePaneId: firstLeaf(root).paneId}
-			}),
-		)
-	}, [closeTab])
+	// Close a pane; last pane closes the tab instead.
+	const closePane = useCallback(
+		(targetPaneId?: string) => {
+			const tabId = activeRef.current
+			const tab = tabsRef.current.find(t => t.id === tabId)
+			if (!tab) return
+			const paneId = targetPaneId ?? tab.activePaneId
+			if (countLeaves(tab.root) <= 1) {
+				closeTab(tabId)
+				return
+			}
+			termApi()?.ptyKill(paneId)
+			setTabs(prev =>
+				prev.map(t => {
+					if (t.id !== tabId) return t
+					const root = removeLeaf(t.root, paneId)
+					if (!root) return t
+					const nextActive =
+						paneId === t.activePaneId ? firstLeaf(root).paneId : t.activePaneId
+					return {...t, root, activePaneId: nextActive}
+				}),
+			)
+		},
+		[closeTab],
+	)
 
 	// Switch tab (also dismisses the find bar).
 	const selectTab = useCallback((id: string) => {
@@ -977,6 +1057,36 @@ export default function App() {
 									resizeSplit(t.id, splitId, ratio)
 								}
 								onBackgroundIdle={showCompletionToast}
+								onPaneMenu={{
+									onFind: paneId => {
+										focusPane(t.id, paneId)
+										setSearchOpen(true)
+									},
+									onSplitToward: (paneId, toward) => {
+										focusPane(t.id, paneId)
+										splitPaneToward(toward, paneId)
+									},
+									onSwap: (paneId, toward) => {
+										focusPane(t.id, paneId)
+										swapPane(toward, paneId)
+									},
+									onClosePane: paneId => {
+										focusPane(t.id, paneId)
+										closePane(paneId)
+									},
+									onCloseOtherPanes: paneId => {
+										focusPane(t.id, paneId)
+										closeOtherPanes(paneId)
+									},
+									onDuplicateTab: paneId => {
+										const leaf = findLeaf(t.root, paneId)
+										addTab(
+											leaf?.cwd || git?.cwd || cwd || undefined,
+											leaf?.profileId,
+										)
+									},
+									onCloseTab: () => closeTab(t.id),
+								}}
 							/>
 						))}
 					</div>

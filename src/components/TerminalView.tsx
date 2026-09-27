@@ -4,6 +4,7 @@ import {WebLinksAddon} from '@xterm/addon-web-links'
 import {Terminal} from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import {useEffect, useRef, useState} from 'react'
+import type {PaneDirection} from '../lib/panes'
 import {registerSearch, unregisterSearch} from '../lib/searchRegistry'
 import {
 	createMarkController,
@@ -23,6 +24,18 @@ import TermContextMenu, {
 	type TermContextMenuState,
 } from './TermContextMenu'
 
+export interface TerminalPaneMenu {
+	paneCount: number
+	onFind: () => void
+	onSplitToward: (toward: PaneDirection) => void
+	onSwap: (toward: PaneDirection) => void
+	canSwap: (toward: PaneDirection) => boolean
+	onClosePane: () => void
+	onCloseOtherPanes: () => void
+	onDuplicateTab: () => void
+	onCloseTab: () => void
+}
+
 interface Props {
 	/** Unique pty id for this pane. */
 	paneId: string
@@ -41,6 +54,7 @@ interface Props {
 	scrollbar?: boolean
 	onFocusPane: (paneId: string) => void
 	onBackgroundIdle?: (paneId: string) => void
+	paneMenu?: TerminalPaneMenu
 }
 
 function truncateHint(s: string, max = 42): string {
@@ -64,6 +78,7 @@ export default function TerminalView({
 	scrollbar = true,
 	onFocusPane,
 	onBackgroundIdle,
+	paneMenu,
 }: Props) {
 	const containerRef = useRef<HTMLDivElement>(null)
 	const termRef = useRef<Terminal | null>(null)
@@ -73,6 +88,7 @@ export default function TerminalView({
 	const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const hadBgOutput = useRef(false)
 	const [ctxMenu, setCtxMenu] = useState<TermContextMenuState | null>(null)
+	const paneMenuRef = useRef(paneMenu)
 	const [menuTabActive, setMenuTabActive] = useState(tabActive)
 	if (menuTabActive !== tabActive) {
 		setMenuTabActive(tabActive)
@@ -83,6 +99,10 @@ export default function TerminalView({
 		focusedRef.current = focused
 		tabActiveRef.current = tabActive
 	}, [focused, tabActive])
+
+	useEffect(() => {
+		paneMenuRef.current = paneMenu
+	}, [paneMenu])
 
 	useEffect(() => {
 		const el = containerRef.current
@@ -197,6 +217,79 @@ export default function TerminalView({
 			const hit = resolveContextHit(term, e)
 			const hasSelection = term.hasSelection()
 			const items: ContextMenuItem[] = []
+
+			const menuActions = paneMenuRef.current
+			if (menuActions) {
+				const splitDirs: {id: PaneDirection; label: string}[] = [
+					{id: 'right', label: 'Right'},
+					{id: 'down', label: 'Down'},
+					{id: 'left', label: 'Left'},
+					{id: 'up', label: 'Up'},
+				]
+				const swapDirs: {id: PaneDirection; label: string}[] = [
+					{id: 'left', label: 'Left'},
+					{id: 'right', label: 'Right'},
+					{id: 'up', label: 'Up'},
+					{id: 'down', label: 'Down'},
+				]
+				items.push({
+					id: 'find',
+					label: 'Find…',
+					icon: 'find',
+					hint: 'Ctrl+Shift+F',
+					run: () => menuActions.onFind(),
+				})
+				items.push({
+					id: 'duplicate-tab',
+					label: 'Duplicate tab',
+					icon: 'duplicate',
+					hint: 'Ctrl+Shift+D',
+					run: () => menuActions.onDuplicateTab(),
+				})
+				items.push({
+					id: 'split-pane',
+					label: 'Split pane',
+					icon: 'split',
+					children: splitDirs.map(d => ({
+						id: `split-${d.id}`,
+						label: d.label,
+						run: () => menuActions.onSplitToward(d.id),
+					})),
+				})
+				items.push({
+					id: 'swap-pane',
+					label: 'Swap pane',
+					icon: 'swap',
+					children: swapDirs.map(d => ({
+						id: `swap-${d.id}`,
+						label: d.label,
+						disabled: !menuActions.canSwap(d.id),
+						run: () => menuActions.onSwap(d.id),
+					})),
+				})
+				items.push({
+					id: 'close-other',
+					label: 'Close other panes',
+					icon: 'close-other',
+					disabled: menuActions.paneCount <= 1,
+					run: () => menuActions.onCloseOtherPanes(),
+				})
+				items.push({
+					id: 'close-pane',
+					label: 'Close pane',
+					icon: 'close-pane',
+					hint: 'Shift+Alt+C',
+					run: () => menuActions.onClosePane(),
+				})
+				items.push({
+					id: 'close-tab',
+					label: 'Close tab',
+					icon: 'close-tab',
+					hint: 'Ctrl+Shift+W',
+					run: () => menuActions.onCloseTab(),
+				})
+				items.push({id: 'sep-pane', label: '', separator: true})
+			}
 
 			if (hit?.kind === 'url') {
 				items.push({

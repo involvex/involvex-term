@@ -1,12 +1,14 @@
 import {useEffect, useMemo, useRef, useState} from 'react'
 import {
 	collectLeaves,
+	findNeighborPane,
 	layoutPanes,
 	splitBoundaries,
+	type PaneDirection,
 	type PaneNode,
 	type SplitDir,
 } from '../lib/panes'
-import TerminalView from './TerminalView'
+import TerminalView, {type TerminalPaneMenu} from './TerminalView'
 
 interface Theme {
 	fontFamily: string
@@ -26,6 +28,15 @@ interface Props extends Theme {
 	onFocusPane: (paneId: string) => void
 	onResizeSplit: (splitId: string, ratio: number) => void
 	onBackgroundIdle?: (paneId: string) => void
+	onPaneMenu?: {
+		onFind: (paneId: string) => void
+		onSplitToward: (paneId: string, toward: PaneDirection) => void
+		onSwap: (paneId: string, toward: PaneDirection) => void
+		onClosePane: (paneId: string) => void
+		onCloseOtherPanes: (paneId: string) => void
+		onDuplicateTab: (paneId: string) => void
+		onCloseTab: () => void
+	}
 }
 
 interface Drag {
@@ -55,6 +66,7 @@ export default function PaneLayout({
 	onFocusPane,
 	onResizeSplit,
 	onBackgroundIdle,
+	onPaneMenu,
 }: Props) {
 	const leaves = useMemo(() => collectLeaves(root), [root])
 	const areas = useMemo(() => layoutPanes(root), [root])
@@ -100,6 +112,22 @@ export default function PaneLayout({
 			{leaves.map(leaf => {
 				const a = areas.get(leaf.paneId)
 				const focused = leaf.paneId === activePaneId
+				const paneMenu: TerminalPaneMenu | undefined = onPaneMenu
+					? {
+							paneCount: leaves.length,
+							canSwap: toward =>
+								findNeighborPane(root, leaf.paneId, toward) !== null,
+							onFind: () => onPaneMenu.onFind(leaf.paneId),
+							onSplitToward: toward =>
+								onPaneMenu.onSplitToward(leaf.paneId, toward),
+							onSwap: toward => onPaneMenu.onSwap(leaf.paneId, toward),
+							onClosePane: () => onPaneMenu.onClosePane(leaf.paneId),
+							onCloseOtherPanes: () =>
+								onPaneMenu.onCloseOtherPanes(leaf.paneId),
+							onDuplicateTab: () => onPaneMenu.onDuplicateTab(leaf.paneId),
+							onCloseTab: onPaneMenu.onCloseTab,
+						}
+					: undefined
 				return (
 					<div
 						key={leaf.paneId}
@@ -128,6 +156,7 @@ export default function PaneLayout({
 							scrollbar={scrollbar}
 							onFocusPane={onFocusPane}
 							onBackgroundIdle={onBackgroundIdle}
+							paneMenu={paneMenu}
 						/>
 					</div>
 				)
