@@ -73,3 +73,29 @@ Renderer (React, src/)              Main (electron/)
   (all gitignored). Do commit `bun.lock`, `public/icon.*`, `scripts/`.
 - Commit style: `feat:` / `fix:` / `build:` with scope in body, e.g.
   `git commit -m "feat: tray menu" -m "- bullet details"`.
+
+## Cloud agents (Linux)
+
+Agents run on Ubuntu. Bun is on `PATH` (`~/.bun/bin`, linked at
+`/usr/local/bin/bun`). Install dependencies with
+`bun install --frozen-lockfile`.
+
+If `node_modules/electron/dist/electron` is missing, download it with
+`node node_modules/electron/install.js`.
+
+`node-pty` has no Linux prebuild. `bun run rebuild` compiles it for
+Electron's ABI before a pane can spawn a shell. The rebuild script uses
+the first Python that can `import distutils.version`. On Ubuntu 24.04
+that is Python 3.12 when `python3-setuptools` is installed.
+
+`bun run dev:electron` starts Vite at `http://localhost:5173/` and opens
+the Electron window. A display is required. The Linux shell profile is
+`$SHELL --login` (bash). OSC 7 cwd tracking is injected for PowerShell
+only, so the footer path and Git widget stay on the directory the pane
+was spawned in (home, unless settings set a start directory).
+
+```bash
+bunx tsc --noEmit
+bun run lint
+bun run format:check
+```
