@@ -1,12 +1,13 @@
 name: Release
+permissions:
+  contents: write
+  packages: write
+  id-token: write
 
 on:
   push:
     tags:
       - v*
-
-permissions:
-  contents: write
 
 jobs:
   build:
