@@ -20,14 +20,21 @@
 				target: 'nsis',
 				arch: ['x64'],
 			},
+			{
+				target: 'portable',
+				arch: ['x64'],
+			},
 		],
-		artifactName: '${productName}-Windows-${version}-Setup.${ext}',
 	},
 	nsis: {
 		oneClick: false,
 		perMachine: false,
 		allowToChangeInstallationDirectory: true,
 		deleteAppDataOnUninstall: false,
+		artifactName: '${productName}-Windows-${version}-Setup.${ext}',
+	},
+	portable: {
+		artifactName: '${productName}-Windows-${version}-Portable.${ext}',
 	},
 	linux: {
 		icon: 'public/icon.png',

@@ -29,7 +29,8 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
 - Ctrl+click URLs and local paths; scrollback / scrollbar / font fallback
 - Optional Windows 11 mica title-bar backdrop
 - Command snippets in the palette; clear buffer / prompt marks
-- In-app update check (packaged NSIS/AppImage via GitHub Releases)
+- In-app update check (packaged NSIS/AppImage via GitHub Releases; portable
+  build also published on each release)
 - Export / import settings from Settings
 - Footer Git menu (branch switch, Explorer, copy remote) + OpenCode session picker
 

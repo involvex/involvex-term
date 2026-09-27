@@ -61,6 +61,7 @@ jobs:
           files: |
             release/**/involvex-term-Windows-*-Setup.exe
             release/**/involvex-term-Windows-*-Setup.exe.blockmap
+            release/**/involvex-term-Windows-*-Portable.exe
             release/**/latest.yml
           fail_on_unmatched_files: true
         env:
