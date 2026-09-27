@@ -71,9 +71,23 @@ All notable changes to this project are documented in this file.
 - Theme presets (involvex, VS Code Dark+, One Dark, Dracula, Solarized Dark)
 - Background-pane completion toast (BEL or idle after output)
 
-## [0.1.1] - Unreleased
+## [0.5.2] - 2026-09-27
 
 ### Added
+
+- tab menu, footer customize, agent CLI swap
+- publish Windows Portable.exe on GitHub Releases
+
+### Fixed
+
+- harden release/CI and add GitHub Pages docs
+
+### Changed
+
+- chore: enhance Electron app configuration and GitHub Actions
+- chore: downgrade Bun version in CI and release workflows
+- chore: update GitHub Actions workflows with permissions
+- chore: update GitHub Actions workflows to use latest action versions
 
 - Click footer OpenCode status to continue that session (`opencode -s <id>`)
 - Vertical split panes (`Shift+Alt+V`), menu, and command palette entry
