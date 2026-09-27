@@ -146,29 +146,144 @@ export function findLeaf(node: PaneNode, paneId: string): PaneLeaf | null {
 	return findLeaf(node.first, paneId) ?? findLeaf(node.second, paneId) ?? null
 }
 
+export type PaneDirection = 'left' | 'right' | 'up' | 'down'
+
 /** Replace the leaf `paneId` with a split holding the old + new leaf. */
 export function splitLeaf(
 	node: PaneNode,
 	paneId: string,
 	newLeaf: PaneLeaf,
 	dir: SplitDir,
+	placeNew: 'before' | 'after' = 'after',
 ): PaneNode {
 	if (node.kind === 'leaf') {
 		if (node.paneId !== paneId) return node
-		return {
+		const split: PaneSplit = {
 			kind: 'split',
 			id: newSplitId(),
 			dir,
 			ratio: 0.5,
-			first: node,
-			second: newLeaf,
+			first: placeNew === 'before' ? newLeaf : node,
+			second: placeNew === 'before' ? node : newLeaf,
 		}
+		return split
 	}
 	return {
 		...node,
-		first: splitLeaf(node.first, paneId, newLeaf, dir),
-		second: splitLeaf(node.second, paneId, newLeaf, dir),
+		first: splitLeaf(node.first, paneId, newLeaf, dir, placeNew),
+		second: splitLeaf(node.second, paneId, newLeaf, dir, placeNew),
 	}
+}
+
+/** Split relative to the focused pane (Windows Terminal directions). */
+export function splitLeafToward(
+	node: PaneNode,
+	paneId: string,
+	newLeaf: PaneLeaf,
+	toward: PaneDirection,
+): PaneNode {
+	const map: Record<
+		PaneDirection,
+		{dir: SplitDir; placeNew: 'before' | 'after'}
+	> = {
+		right: {dir: 'vertical', placeNew: 'after'},
+		left: {dir: 'vertical', placeNew: 'before'},
+		down: {dir: 'horizontal', placeNew: 'after'},
+		up: {dir: 'horizontal', placeNew: 'before'},
+	}
+	const {dir, placeNew} = map[toward]
+	return splitLeaf(node, paneId, newLeaf, dir, placeNew)
+}
+
+function paneCenter(area: GridArea): {x: number; y: number} {
+	return {
+		x: (area.colStart + area.colEnd) / 2,
+		y: (area.rowStart + area.rowEnd) / 2,
+	}
+}
+
+function spansOverlap(a: GridArea, b: GridArea, axis: 'x' | 'y'): boolean {
+	if (axis === 'x') {
+		return Math.max(a.colStart, b.colStart) < Math.min(a.colEnd, b.colEnd)
+	}
+	return Math.max(a.rowStart, b.rowStart) < Math.min(a.rowEnd, b.rowEnd)
+}
+
+/** Neighbor pane in a compass direction (for swap). */
+export function findNeighborPane(
+	root: PaneNode,
+	paneId: string,
+	dir: PaneDirection,
+): string | null {
+	const areas = layoutPanes(root)
+	const self = areas.get(paneId)
+	if (!self) return null
+	const c = paneCenter(self)
+	let best: {id: string; dist: number} | null = null
+	for (const [id, area] of areas) {
+		if (id === paneId) continue
+		const n = paneCenter(area)
+		if (dir === 'left') {
+			if (n.x >= c.x || !spansOverlap(self, area, 'y')) continue
+		} else if (dir === 'right') {
+			if (n.x <= c.x || !spansOverlap(self, area, 'y')) continue
+		} else if (dir === 'up') {
+			if (n.y >= c.y || !spansOverlap(self, area, 'x')) continue
+		} else if (n.y <= c.y || !spansOverlap(self, area, 'x')) continue
+		const dist = Math.hypot(n.x - c.x, n.y - c.y)
+		if (!best || dist < best.dist) best = {id, dist}
+	}
+	return best?.id ?? null
+}
+
+function replaceLeaf(
+	node: PaneNode,
+	paneId: string,
+	replacement: PaneLeaf,
+): PaneNode {
+	if (node.kind === 'leaf') {
+		return node.paneId === paneId ? replacement : node
+	}
+	return {
+		...node,
+		first: replaceLeaf(node.first, paneId, replacement),
+		second: replaceLeaf(node.second, paneId, replacement),
+	}
+}
+
+/**
+ * Swap two panes' on-screen positions without remounting terminals
+ * (exchange pane ids + metadata on the two leaf nodes).
+ */
+export function swapPanes(
+	root: PaneNode,
+	paneA: string,
+	paneB: string,
+): PaneNode {
+	const la = findLeaf(root, paneA)
+	const lb = findLeaf(root, paneB)
+	if (!la || !lb || paneA === paneB) return root
+	const atA: PaneLeaf = {
+		kind: 'leaf',
+		paneId: lb.paneId,
+		cwd: lb.cwd,
+		profileId: lb.profileId,
+	}
+	const atB: PaneLeaf = {
+		kind: 'leaf',
+		paneId: la.paneId,
+		cwd: la.cwd,
+		profileId: la.profileId,
+	}
+	let next = replaceLeaf(root, paneA, atA)
+	next = replaceLeaf(next, paneB, atB)
+	return next
+}
+
+/** Collapse the tree to a single leaf. */
+export function keepOnlyPane(root: PaneNode, paneId: string): PaneLeaf | null {
+	const leaf = findLeaf(root, paneId)
+	return leaf ? {...leaf} : null
 }
 
 /**

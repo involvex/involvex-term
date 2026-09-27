@@ -265,6 +265,10 @@ body {
 	color: #cccccc;
 }
 
+.term-context-row {
+	position: relative;
+}
+
 .term-context-item {
 	display: flex;
 	align-items: center;
@@ -278,6 +282,44 @@ body {
 	font: inherit;
 	text-align: left;
 	cursor: pointer;
+}
+
+.term-context-label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.term-context-icon {
+	display: flex;
+	flex-shrink: 0;
+	opacity: 0.9;
+}
+
+.term-context-icon-spacer {
+	width: 16px;
+}
+
+.term-context-chevron {
+	opacity: 0.55;
+	font-size: 14px;
+	line-height: 1;
+	padding-left: 8px;
+}
+
+.term-context-submenu {
+	position: absolute;
+	left: 100%;
+	top: 0;
+	min-width: 160px;
+	padding: 4px 0;
+	margin-left: 2px;
+	background: #252526;
+	border: 1px solid #3c3c3c;
+	border-radius: 6px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+	z-index: 1;
 }
 
 .term-context-item:hover:not(:disabled) {
