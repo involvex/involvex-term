@@ -2,8 +2,33 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.5.0] - Unreleased
+## [0.5.1] - 2026-09-27
 
+### Added
+
+- release script (tag + changelog + gh release)
+- Windows Terminal-style pane context menu
+- v0.5 footer Git menu + OpenCode session picker
+- context-aware terminal right-click menu
+- v0.4 updater, snippets, settings I/O, buffer marks
+- v0.3 startup, links, scrollback, mica + release/latest
+- v0.2 profiles, tab polish, themes, completion toast
+- OpenCode continue and vertical splits
+- add prebuild and typecheck scripts to package.json
+- integrate OpenCode session management and status display
+
+### Fixed
+
+- startDir race, quake shortcut fallbacks, electron userData
+
+### Changed
+
+- chore: normalize line endings to LF
+- style: normalize line endings
+- docs: Linux cloud-agent setup notes
+- chore: update dependencies
+- docs: add product roadmap
+- gitignore
 ### Added
 
 - Footer Git menu: switch branch (local/remote), open repo in Explorer, copy
