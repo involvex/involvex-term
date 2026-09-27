@@ -91,6 +91,15 @@ Write-Output ${JSON.stringify(lnk)}
 	console.log(`[link-latest] desktop → ${lnk.trim()}`)
 }
 
+if (process.platform !== 'win32' || process.env.CI) {
+	const reason =
+		process.platform !== 'win32'
+			? `skipping on ${process.platform}`
+			: 'skipping in CI'
+	console.log(`[link-latest] ${reason} (Windows junction is local-only)`)
+	process.exit(0)
+}
+
 const unpacked = findUnpacked()
 if (!unpacked) {
 	console.error(

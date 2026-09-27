@@ -24,7 +24,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.3
 
       - uses: actions/setup-python@v5
         with:
@@ -36,16 +36,8 @@ jobs:
       - name: Generate icons
         run: bun scripts/generate-icon.mjs
 
-      - name: Linux build deps
-        if: matrix.platform == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y rpm fakeroot
-
       - name: Build
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bun run build
+        run: bun run build:release
 
       - name: Upload Windows artifact
         if: matrix.platform == 'win'
@@ -55,9 +47,7 @@ jobs:
             release/**/involvex-term-Windows-*-Setup.exe
             release/**/involvex-term-Windows-*-Setup.exe.blockmap
             release/**/latest.yml
-          draft: false
-          generate_release_notes: true
-          body_path: CHANGELOG.md
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -68,7 +58,6 @@ jobs:
           files: |
             release/**/involvex-term-Linux-*.AppImage
             release/**/latest-linux.yml
-          draft: false
-          generate_release_notes: true
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -8,7 +8,9 @@ All notable changes to this project are documented in this file.
 
 - release script (tag + changelog + gh release)
 - Windows Terminal-style pane context menu
-- v0.5 footer Git menu + OpenCode session picker
+- Footer Git menu: switch branch (local/remote), open repo in Explorer, copy
+  remote URL / branch name
+- OpenCode multi-session picker in the footer (new, continue last, pick by id)
 - context-aware terminal right-click menu
 - v0.4 updater, snippets, settings I/O, buffer marks
 - v0.3 startup, links, scrollback, mica + release/latest
@@ -19,6 +21,12 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- Start directory honored on spawn (and deferred first tab until settings load);
+  session restore still reuses saved pane cwds — use Startup → “New tab” for
+  startDir on every launch
+- Quake hotkey: try Grave/Alt/Win fallbacks when Ctrl+` is denied; quieter logs
+- Chromium disk cache: dedicated `~/.involvex-term/electron` userData +
+  single-instance lock
 - startDir race, quake shortcut fallbacks, electron userData
 
 ### Changed
@@ -29,19 +37,6 @@ All notable changes to this project are documented in this file.
 - chore: update dependencies
 - docs: add product roadmap
 - gitignore
-### Added
-
-- Footer Git menu: switch branch (local/remote), open repo in Explorer, copy
-  remote URL / branch name
-- OpenCode multi-session picker in the footer (new, continue last, pick by id)
-
-### Fixed
-
-- Start directory honored on spawn (and deferred first tab until settings load);
-  session restore still reuses saved pane cwds — use Startup → “New tab” for
-  startDir on every launch
-- Quake hotkey: try Grave/Alt/Win fallbacks when Ctrl+` is denied; quieter logs
-- Chromium disk cache: dedicated `~/.involvex-term/electron` userData + single-instance lock
 
 ## [0.4.0] - 2026-09-25
 

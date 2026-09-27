@@ -1,6 +1,7 @@
 # involvex-term
 
 [![CI](https://github.com/involvex/involvex-term/actions/workflows/ci.yml/badge.svg)](https://github.com/involvex/involvex-term/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-4ec9b0)](https://involvex.github.io/involvex-term/)
 
 Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.js + node-pty.
 
@@ -131,8 +132,13 @@ src/
   components/      TabBar, PaneLayout, TerminalView, StatusBar, …
   lib/             panes, searchRegistry, focusTerm
 scripts/           rebuild-pty, patch-node-pty, link-latest, generate-icon, test-osc7
-.github/workflows/ ci.yml, release.yml
+.github/workflows/ ci.yml, release.yml, docs.yml
 ```
+
+## Docs
+
+Project site: [involvex.github.io/involvex-term](https://involvex.github.io/involvex-term/)
+(deployed from [`docs/`](docs/) via GitHub Pages).
 
 ## Roadmap
 

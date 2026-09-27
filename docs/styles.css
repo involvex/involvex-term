@@ -1,0 +1,140 @@
+:root {
+	--bg: #1e1e1e;
+	--fg: #cccccc;
+	--muted: #8a8a8a;
+	--accent: #4ec9b0;
+	--border: #333333;
+	--btn: #2d2d2d;
+	--btn-hover: #3a3a3a;
+	font-family:
+		'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+	background:
+		radial-gradient(ellipse at top, #252526 0%, var(--bg) 55%), var(--bg);
+	color: var(--fg);
+	line-height: 1.55;
+}
+
+main {
+	max-width: 42rem;
+	margin: 0 auto;
+	padding: 3rem 1.25rem 4rem;
+}
+
+.hero {
+	text-align: center;
+	margin-bottom: 2.5rem;
+}
+
+.logo {
+	display: block;
+	margin: 0 auto 1rem;
+	border-radius: 12px;
+}
+
+h1 {
+	margin: 0 0 0.5rem;
+	font-size: clamp(1.75rem, 4vw, 2.25rem);
+	font-weight: 600;
+	letter-spacing: -0.02em;
+}
+
+.tagline {
+	margin: 0 auto 1.5rem;
+	max-width: 34rem;
+	color: var(--muted);
+	font-size: 1rem;
+}
+
+.cta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	justify-content: center;
+	margin: 0;
+}
+
+.btn {
+	display: inline-block;
+	padding: 0.55rem 1.1rem;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	background: var(--btn);
+	color: var(--fg);
+	text-decoration: none;
+	font-size: 0.9rem;
+}
+
+.btn:hover {
+	background: var(--btn-hover);
+}
+
+.btn.primary {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+section {
+	margin-bottom: 2rem;
+	padding-top: 0.5rem;
+	border-top: 1px solid var(--border);
+}
+
+h2 {
+	margin: 1rem 0 0.75rem;
+	font-size: 1.05rem;
+	font-weight: 600;
+	color: var(--accent);
+}
+
+ul {
+	margin: 0;
+	padding-left: 1.2rem;
+}
+
+li {
+	margin-bottom: 0.35rem;
+}
+
+.support {
+	list-style: none;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.6rem 1rem;
+}
+
+a {
+	color: var(--accent);
+}
+
+pre {
+	margin: 0 0 1rem;
+	padding: 0.9rem 1rem;
+	overflow-x: auto;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	background: #181818;
+	font-size: 0.85rem;
+}
+
+code {
+	font-family: inherit;
+}
+
+footer {
+	margin-top: 2.5rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--border);
+	color: var(--muted);
+	font-size: 0.85rem;
+	text-align: center;
+}

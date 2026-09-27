@@ -4,7 +4,8 @@
  *
  * The tag push triggers `.github/workflows/release.yml`, which builds the
  * Windows NSIS + Linux AppImage artifacts and attaches them to the release —
- * this script never builds or uploads artifacts itself.
+ * this script never builds or uploads artifacts itself. Release notes are
+ * owned here (`gh release create` / `edit`); CI uploads binaries only.
  *
  * Usage:
  *   bun run release -- --bump patch|minor|major  (default: patch)
@@ -152,9 +153,9 @@ function groupCommits(subjects) {
 
 /**
  * Rewrite the CHANGELOG head for <version>.
- * - Head `## [<any>] - Unreleased` → promoted to `## [<version>] - <date>`,
- *   then generated bullets are appended under Added/Fixed/Changed.
- * - Otherwise a fresh `## [<version>] - <date>` section is inserted.
+ * - Head `## [<any>] - Unreleased` section (through the next `## [` or EOF)
+ *   is replaced with a clean `## [<version>] - <date>` section.
+ * - Otherwise a fresh dated section is inserted after `# Changelog`.
  * Returns {updated, notes} where notes is the released section (for gh).
  */
 function buildChangelog(current, version, groups) {
@@ -172,12 +173,12 @@ function buildChangelog(current, version, groups) {
 			`### Changed\n\n${groups.changed.map(t => `- ${t}`).join('\n')}`,
 		)
 	}
-	const generated = sections.length ? `\n\n${sections.join('\n\n')}` : ''
+	const body = sections.length ? `\n\n${sections.join('\n\n')}` : ''
+	const notes = `${header}${body}`
 
-	const unreleasedRe = /^## \[[^\]]+\] - Unreleased\s*$/m
+	const unreleasedRe = /^## \[[^\]]+\] - Unreleased\s*\n[\s\S]*?(?=\n## \[|$)/m
 	if (unreleasedRe.test(current)) {
-		const updated = current.replace(unreleasedRe, () => `${header}${generated}`)
-		const notes = `${header}${generated}`
+		const updated = current.replace(unreleasedRe, () => `${notes}\n\n`)
 		return {updated, notes}
 	}
 	const anchor = '# Changelog'
@@ -185,9 +186,8 @@ function buildChangelog(current, version, groups) {
 		fail('CHANGELOG.md has no "# Changelog" header')
 	const updated = current.replace(
 		anchor,
-		() => `${anchor}\n\n${header}${generated || '\n'}`,
+		() => `${anchor}\n\n${notes || header}`,
 	)
-	const notes = `${header}${generated}`
 	return {updated, notes}
 }
 
@@ -278,6 +278,7 @@ if (!opts.yes) {
 pkg.version = target
 fs.writeFileSync(PKG_PATH, `${JSON.stringify(pkg, null, '\t')}\n`)
 fs.writeFileSync(CHANGELOG_PATH, updated)
+run('bunx', ['prettier', '--write', 'package.json', 'CHANGELOG.md'])
 console.log(`[release] package.json → ${target}`)
 console.log(`[release] CHANGELOG.md → ${tag} (${today()})`)
 
