@@ -24,7 +24,7 @@ body {
 }
 
 main {
-	max-width: 42rem;
+	max-width: 52rem;
 	margin: 0 auto;
 	padding: 3rem 1.25rem 4rem;
 }
@@ -49,9 +49,48 @@ h1 {
 
 .tagline {
 	margin: 0 auto 1.5rem;
-	max-width: 34rem;
+	max-width: 36rem;
 	color: var(--muted);
 	font-size: 1rem;
+}
+
+.shot {
+	margin: 1.5rem 0 0;
+	padding: 0;
+}
+
+.shot img {
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	height: auto;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: #141414;
+	box-shadow:
+		0 0 0 1px rgba(78, 201, 176, 0.08),
+		0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.hero-shot {
+	margin-top: 2rem;
+	text-align: left;
+}
+
+.shot-secondary {
+	margin-top: 1.25rem;
+}
+
+.shot figcaption {
+	margin-top: 0.65rem;
+	color: var(--muted);
+	font-size: 0.85rem;
+	line-height: 1.45;
+}
+
+section p {
+	margin: 0 0 0.85rem;
+	color: var(--fg);
 }
 
 .cta {

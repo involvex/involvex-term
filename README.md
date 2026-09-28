@@ -206,7 +206,8 @@ directory, and custom shell paths stay machine-local. Token + gist id live in
 ## Docs
 
 Project site: [involvex.github.io/involvex-term](https://involvex.github.io/involvex-term/)
-(deployed from [`docs/`](docs/) via GitHub Pages).
+(deployed from [`docs/`](docs/) via GitHub Pages) — includes screenshots of
+OpenCode split view and agent-aware pane labels.
 
 ## Roadmap
 

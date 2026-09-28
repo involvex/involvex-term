@@ -9,7 +9,7 @@
 		<title>involvex-term</title>
 		<meta
 			name="description"
-			content="Minimalist dark Git-aware terminal — Electron + xterm.js + node-pty."
+			content="Minimalist dark Git-aware terminal — Electron + xterm.js + node-pty. OpenCode and agent CLI hooks built in."
 		/>
 		<link
 			rel="icon"
@@ -33,7 +33,7 @@
 				<h1>involvex-term</h1>
 				<p class="tagline">
 					Minimalist dark Git-aware terminal: Electron + TypeScript + Bun +
-					xterm.js + node-pty.
+					xterm.js + node-pty — with OpenCode and agent CLI hooks in the pane.
 				</p>
 				<p class="cta">
 					<a
@@ -47,6 +47,18 @@
 						>GitHub</a
 					>
 				</p>
+				<figure class="shot hero-shot">
+					<img
+						src="img/agent-split.png"
+						alt="involvex-term split view: PowerShell on the left, OpenCode agent on the right with OC badge and Git footer"
+						width="1280"
+						height="800"
+					/>
+					<figcaption>
+						Shell + OpenCode side by side — launch from the tab bar, continue
+						from the footer OC widget.
+					</figcaption>
+				</figure>
 			</header>
 
 			<section>
@@ -69,6 +81,57 @@
 					</li>
 					<li>Settings at <code>~/.involvex-term/settings.json</code></li>
 				</ul>
+			</section>
+
+			<section id="agents">
+				<h2>Agent integration</h2>
+				<p>
+					Keep your shell and your agent in the same window — no in-app chat,
+					just pane chrome and optional env context for any agent CLI.
+				</p>
+				<ul>
+					<li>
+						<strong>OpenCode</strong> — TabBar <strong>OC</strong> /
+						<code>Ctrl+Shift+O</code> / palette launches
+						<a href="https://opencode.ai">OpenCode</a> in the focused pane;
+						footer <strong>OC</strong> continues with
+						<code>opencode -s &lt;id&gt;</code> (requires
+						<code>opencode</code> on PATH).
+					</li>
+					<li>
+						<strong>Agent-aware pane labels</strong> — matched OpenCode sessions
+						show on tab titles and as pane chips (busy ● vs idle). Toggle under
+						<strong>Settings → Agent → Pane labels</strong>
+						(<code>agent.showPaneLabels</code>, default on).
+					</li>
+					<li>
+						<strong>Agent env hooks</strong> — opt-in
+						<code>INVOLVEX_TERM_*</code> / <code>INVOLVEX_TERM_CONTEXT</code> on
+						PTY spawn for OpenCode or a custom agent command. Off by default;
+						enable under <strong>Settings → Agent → Agent env hooks</strong>.
+					</li>
+				</ul>
+				<figure class="shot shot-secondary">
+					<img
+						src="img/agent-labels-chrome-preview.png"
+						alt="Chrome preview of agent-aware tab titles and pane chips for OpenCode sessions"
+						width="1000"
+						height="640"
+					/>
+					<figcaption>
+						Pane labels: session title on tabs + chips on splits. Full variable
+						tables and settings JSON →
+						<a
+							href="https://github.com/involvex/involvex-term/blob/main/README.md#opencode"
+							>README · OpenCode</a
+						>
+						·
+						<a
+							href="https://github.com/involvex/involvex-term/blob/main/README.md#agent-env-hooks"
+							>Agent env hooks</a
+						>.
+					</figcaption>
+				</figure>
 			</section>
 
 			<section>
