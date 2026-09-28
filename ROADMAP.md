@@ -45,7 +45,7 @@ Shipped in tree (see CHANGELOG 0.2.0 unreleased):
 
 1. ~~Footer Git actions (branch menu, open in Explorer, copy remote)~~
 2. ~~OpenCode multi-session picker~~
-3. Optional AI-agnostic env hooks only (no competing chat UI)
+3. ~~Optional AI-agnostic env hooks only (no competing chat UI)~~
 
 ## Explicitly out of scope
 

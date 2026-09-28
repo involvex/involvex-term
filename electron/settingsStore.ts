@@ -137,10 +137,22 @@ const AgentToolSchema = z.object({
 	sessionProvider: z.enum(['opencode', 'none']).default('none'),
 })
 
+const EnvHooksSchema = z.object({
+	/**
+	 * Inject AI-agnostic session env vars into each new PTY (opt-in).
+	 * See README “Agent env hooks”. Default off — unchanged spawn env.
+	 */
+	enabled: z.boolean().default(false),
+	/** Include git branch / dirty / ahead-behind / remote when available. */
+	includeGit: z.boolean().default(true),
+})
+
 const AgentSchema = z.object({
 	/** Active tool id (default OpenCode). */
 	activeId: z.string().default('opencode'),
 	tools: z.array(AgentToolSchema).default(defaultAgentTools()),
+	/** Optional env vars for agent CLIs (OpenCode, etc.) — no in-app chat. */
+	envHooks: EnvHooksSchema.prefault({}),
 })
 
 const StartupSchema = z.object({

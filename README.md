@@ -66,6 +66,34 @@ Install [OpenCode](https://opencode.ai) so `opencode` is on your PATH, then:
 involvex-term sends `opencode` (or `opencode -s <id>` / `opencode -c`) + Enter
 to the focused pane (after a soft interrupt).
 
+## Agent env hooks
+
+Opt-in session environment for any agent CLI (OpenCode or a custom tool in
+Settings → Agent). **Off by default** so existing shells are unchanged.
+
+Enable under **Settings → Agent → Agent env hooks**. New tabs/panes inherit the
+vars at spawn time; OpenCode launched into that pane sees the same environment.
+
+| Variable                                         | Meaning                                                                                                                                                                              |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TERM_PROGRAM`                                   | Always `involvex-term` when hooks are on                                                                                                                                             |
+| `TERM_PROGRAM_VERSION` / `INVOLVEX_TERM_VERSION` | App version                                                                                                                                                                          |
+| `INVOLVEX_TERM`                                  | `1`                                                                                                                                                                                  |
+| `INVOLVEX_TERM_PANE_ID`                          | Pane id for this PTY                                                                                                                                                                 |
+| `INVOLVEX_TERM_CWD`                              | Spawn working directory                                                                                                                                                              |
+| `INVOLVEX_TERM_GIT_*`                            | Optional git snapshot (`ROOT`, `BRANCH`, `DIRTY`, `AHEAD`, `BEHIND`, `STAGED`, `UNSTAGED`, `UNTRACKED`, `STASH`, `REMOTE`) when “Include git context” is on and the cwd is in a repo |
+| `INVOLVEX_TERM_CONTEXT`                          | Single-line JSON (`v`, `program`, `version`, `paneId`, `cwd`, `git`)                                                                                                                 |
+
+Example (PowerShell):
+
+```powershell
+$env:INVOLVEX_TERM
+$env:INVOLVEX_TERM_CONTEXT | ConvertFrom-Json
+```
+
+Built-in AI chat is intentionally out of scope — use OpenCode (or your agent)
+in the pane.
+
 ## Native module note (node-pty)
 
 `bun run rebuild` / `bun run build` handle the Electron ABI rebuild via
@@ -110,6 +138,10 @@ Stored at `~/.involvex-term/settings.json` (zod-validated, watched live):
 		"scrollback": 5000,
 		"scrollbar": true,
 		"completionBell": true
+	},
+	"agent": {
+		"activeId": "opencode",
+		"envHooks": {"enabled": false, "includeGit": true}
 	},
 	"window": {"acrylic": false},
 	"tabs": {"confirmClose": false, "restoreSession": true}

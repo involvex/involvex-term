@@ -1059,6 +1059,7 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 													...(settings.agent ?? {
 														activeId: 'opencode',
 														tools: defaultAgentTools(),
+														envHooks: {enabled: false, includeGit: true},
 													}),
 													activeId: e.target.value,
 													tools: settings.agent?.tools?.length
@@ -1106,6 +1107,10 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 														agent: {
 															activeId: settings.agent?.activeId || 'opencode',
 															tools,
+															envHooks: settings.agent?.envHooks ?? {
+																enabled: false,
+																includeGit: true,
+															},
 														},
 													})
 												}}
@@ -1127,6 +1132,10 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 														agent: {
 															activeId: settings.agent?.activeId || 'opencode',
 															tools,
+															envHooks: settings.agent?.envHooks ?? {
+																enabled: false,
+																includeGit: true,
+															},
 														},
 													})
 												}}
@@ -1152,6 +1161,10 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 														agent: {
 															activeId: settings.agent?.activeId || 'opencode',
 															tools,
+															envHooks: settings.agent?.envHooks ?? {
+																enabled: false,
+																includeGit: true,
+															},
 														},
 													})
 												}}
@@ -1167,12 +1180,68 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 											agent: {
 												activeId: 'opencode',
 												tools: defaultAgentTools(),
+												envHooks: settings.agent?.envHooks ?? {
+													enabled: false,
+													includeGit: true,
+												},
 											},
 										})
 									}
 								>
 									Reset agents to defaults
 								</button>
+
+								<h3 style={{marginTop: '1.25rem'}}>Agent env hooks</h3>
+								<p className="footer-dim">
+									Opt-in environment variables injected into each new pane so
+									OpenCode or any other agent CLI can read session context. No
+									in-app chat UI — hooks only. New tabs/panes pick up changes;
+									existing shells keep their spawn-time env.
+								</p>
+								<label>
+									<input
+										type="checkbox"
+										checked={settings.agent?.envHooks?.enabled === true}
+										onChange={e =>
+											set({
+												agent: {
+													activeId: settings.agent?.activeId || 'opencode',
+													tools: settings.agent?.tools?.length
+														? settings.agent.tools
+														: defaultAgentTools(),
+													envHooks: {
+														enabled: e.target.checked,
+														includeGit:
+															settings.agent?.envHooks?.includeGit !== false,
+													},
+												},
+											})
+										}
+									/>{' '}
+									Inject session env on PTY spawn
+								</label>
+								<label>
+									<input
+										type="checkbox"
+										disabled={settings.agent?.envHooks?.enabled !== true}
+										checked={settings.agent?.envHooks?.includeGit !== false}
+										onChange={e =>
+											set({
+												agent: {
+													activeId: settings.agent?.activeId || 'opencode',
+													tools: settings.agent?.tools?.length
+														? settings.agent.tools
+														: defaultAgentTools(),
+													envHooks: {
+														enabled: settings.agent?.envHooks?.enabled === true,
+														includeGit: e.target.checked,
+													},
+												},
+											})
+										}
+									/>{' '}
+									Include git context (branch, dirty, ahead/behind, remote)
+								</label>
 							</section>
 						)}
 						{tab === 'sync' && (

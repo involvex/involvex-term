@@ -69,6 +69,9 @@ Renderer (React, src/)              Main (electron/)
   one pane remounts (and resets) the survivors.
 - Settings schema changes must stay backward compatible (zod defaults) —
   mirror them in `src/types.ts` AppSettings + `src/App.tsx` DEFAULT_SETTINGS.
+- Agent env hooks (`agent.envHooks`, off by default): optional
+  `INVOLVEX_TERM_*` / `TERM_PROGRAM` injection on PTY spawn via
+  `electron/envHooks.ts` — no in-app AI chat.
 - Don't commit `dist/`, `dist-electron/`, `release/`, `build/`, `.npmrc`
   (all gitignored). Do commit `bun.lock`, `public/icon.*`, `scripts/`.
 - Commit style: `feat:` / `fix:` / `build:` with scope in body, e.g.

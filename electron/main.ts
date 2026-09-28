@@ -14,6 +14,7 @@ import os from 'node:os'
 import path from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {sniffCwd} from './cwdTracker.js'
+import {buildEnvHooks} from './envHooks.js'
 import {
 	checkoutBranch,
 	getGitStatus,
@@ -23,7 +24,13 @@ import {
 } from './gitEngine.js'
 import {buildMenu} from './hotkeys.js'
 import {getOpencodeStatus, opencodeAvailable} from './opencodeEngine.js'
-import {getPty, killPty, setCwd, spawnPty} from './ptyManager.js'
+import {
+	getPty,
+	killPty,
+	resolveSpawnCwd,
+	setCwd,
+	spawnPty,
+} from './ptyManager.js'
 import {
 	handleQuakeBlur,
 	isQuakeActive,
@@ -224,7 +231,7 @@ async function applyLoadedSettings(): Promise<void> {
 function registerIpc() {
 	ipcMain.handle(
 		'pty:spawn',
-		(
+		async (
 			_e,
 			{
 				id,
@@ -240,14 +247,40 @@ function registerIpc() {
 				profileId?: string
 			},
 		) => {
-			const start =
+			const start = resolveSpawnCwd(
 				(cwd && cwd.trim()) ||
-				settings.terminal.startDir?.trim() ||
-				os.homedir()
+					settings.terminal.startDir?.trim() ||
+					os.homedir(),
+			)
+			const hooks = settings.agent?.envHooks ?? {
+				enabled: false,
+				includeGit: true,
+			}
+			let git = null as Awaited<ReturnType<typeof getGitStatus>> | null
+			let remoteUrl: string | null = null
+			if (hooks.enabled && hooks.includeGit) {
+				try {
+					git = await getGitStatus(start)
+					if (git.repoRoot) {
+						remoteUrl = await getRemoteUrl(git.repoRoot).catch(() => null)
+					}
+				} catch {
+					git = null
+					remoteUrl = null
+				}
+			}
+			const extraEnv = buildEnvHooks(hooks, {
+				paneId: id,
+				cwd: start,
+				appVersion: app.getVersion(),
+				git,
+				remoteUrl,
+			})
 			const entry = spawnPty(id, start, cols, rows, {
 				profileId,
 				profiles: settings.terminal.profiles as never,
 				defaultProfileId: settings.terminal.defaultProfileId,
+				extraEnv,
 			})
 			entry.pty.onData((data: string) => {
 				const cleaned = sniffCwd(id, data, (tabId, newCwd) => {
