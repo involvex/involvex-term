@@ -29,3 +29,5 @@ build
 *.sln
 *.sw?
 .cline
+.env
+*.env

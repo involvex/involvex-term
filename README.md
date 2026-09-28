@@ -32,6 +32,7 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
 - In-app update check (packaged NSIS/AppImage via GitHub Releases; portable
   build also published on each release)
 - Export / import settings from Settings
+- Settings sync via private GitHub Gist (Device Code login; Push / Pull)
 - Footer Git menu (branch switch, Explorer, copy remote) + OpenCode session picker
 
 ## Quickstart (Bun, PowerShell)
@@ -126,6 +127,7 @@ electron/
   gitEngine.ts     simple-git status
   sysEngine.ts     CPU/MEM via systeminformation
   settingsStore.ts ~/.involvex-term/settings.json
+  settingsSync.ts  private Gist sync (Device Code + portable subset)
   hotkeys.ts       Menu accelerators
   tray.ts / quake.ts
 src/
@@ -135,6 +137,18 @@ src/
 scripts/           rebuild-pty, patch-node-pty, link-latest, generate-icon, test-osc7
 .github/workflows/ ci.yml, release.yml, docs.yml
 ```
+
+## Settings sync (GitHub Gist)
+
+Portable prefs (theme, hotkeys, snippets, tray/quake, …) can sync through a
+**private gist** using GitHub OAuth **Device Flow**. Window geometry, start
+directory, and custom shell paths stay machine-local. Token + gist id live in
+`~/.involvex-term/sync.json`.
+
+1. Create a GitHub OAuth App → enable **Device Flow** (no client secret needed).
+2. In Settings → Settings sync, paste the public client ID (or set
+   `INVOLVEX_GITHUB_CLIENT_ID` when launching).
+3. Sign in with GitHub → Push / Pull. Linked installs pull on startup.
 
 ## Docs
 

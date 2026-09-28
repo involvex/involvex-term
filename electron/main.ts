@@ -38,6 +38,18 @@ import {
 	saveSettings,
 	SETTINGS_FILE,
 } from './settingsStore.js'
+import {
+	bumpLocalUpdatedAt,
+	cancelDeviceLogin,
+	finishDeviceLogin,
+	getSyncStatus,
+	pullOnStartup,
+	pullPortable,
+	pushPortable,
+	setSyncClientId,
+	startDeviceLoginAsync,
+	unlinkSync,
+} from './settingsSync.js'
 import {getSysStats} from './sysEngine.js'
 import {destroyTray, setupTray} from './tray.js'
 import {
@@ -196,6 +208,17 @@ function startSysLoop() {
 function stopSysLoop() {
 	if (sysTimer) clearInterval(sysTimer)
 	sysTimer = null
+}
+
+/** Re-apply menus/tray/quake/sys after settings change (import, sync pull, …). */
+async function applyLoadedSettings(): Promise<void> {
+	if (!win || win.isDestroyed()) return
+	applyWindowMaterial(win, settings)
+	win.webContents.send('settings:changed', settings)
+	await buildMenu(win, settings).catch(() => undefined)
+	setupTray(win, iconPath(), settings, quitApp)
+	registerQuake(win, () => settings)
+	startSysLoop()
 }
 
 function registerIpc() {
@@ -428,16 +451,53 @@ function registerIpc() {
 		try {
 			const raw = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'))
 			settings = saveSettings(parseImportedSettings(raw))
-			win.webContents.send('settings:changed', settings)
-			await buildMenu(win, settings).catch(() => undefined)
-			setupTray(win, iconPath(), settings, quitApp)
-			registerQuake(win, () => settings)
-			applyWindowMaterial(win, settings)
-			startSysLoop()
+			bumpLocalUpdatedAt()
+			await applyLoadedSettings()
 			return {ok: true, settings}
 		} catch (e) {
 			return {ok: false, error: e instanceof Error ? e.message : String(e)}
 		}
+	})
+
+	ipcMain.handle('sync:status', () => getSyncStatus())
+	ipcMain.handle('sync:setClientId', (_e, clientId: string) =>
+		setSyncClientId(typeof clientId === 'string' ? clientId : ''),
+	)
+	ipcMain.handle('sync:loginStart', async () => {
+		try {
+			const device = await startDeviceLoginAsync()
+			return {
+				ok: true as const,
+				userCode: device.userCode,
+				verificationUri: device.verificationUri,
+				verificationUriComplete: device.verificationUriComplete,
+				expiresIn: device.expiresIn,
+			}
+		} catch (e) {
+			return {
+				ok: false as const,
+				error: e instanceof Error ? e.message : String(e),
+			}
+		}
+	})
+	ipcMain.handle('sync:loginFinish', async () => finishDeviceLogin())
+	ipcMain.handle('sync:loginCancel', () => {
+		cancelDeviceLogin()
+		return getSyncStatus()
+	})
+	ipcMain.handle('sync:logout', () => unlinkSync())
+	ipcMain.handle('sync:push', async (_e, opts?: {force?: boolean}) => {
+		const result = await pushPortable(settings, {force: opts?.force === true})
+		return result
+	})
+	ipcMain.handle('sync:pull', async () => {
+		const result = await pullPortable(settings)
+		if (result.ok) {
+			settings = saveSettings(result.settings)
+			await applyLoadedSettings()
+			return {ok: true as const, settings, status: result.status}
+		}
+		return result
 	})
 
 	ipcMain.handle('update:check', () => checkForUpdates())
@@ -453,13 +513,9 @@ function registerIpc() {
 	ipcMain.handle('settings:get', () => settings)
 	ipcMain.handle('settings:set', async (_e, next: typeof settings) => {
 		settings = saveSettings(next)
+		bumpLocalUpdatedAt()
 		if (win) {
-			applyWindowMaterial(win, settings)
-			win.webContents.send('settings:changed', settings)
-			await buildMenu(win, settings).catch(() => undefined)
-			setupTray(win, iconPath(), settings, quitApp)
-			registerQuake(win, () => settings)
-			startSysLoop()
+			await applyLoadedSettings()
 		}
 		return settings
 	})
@@ -562,6 +618,11 @@ function createWindow() {
 	bindUpdaterWindow(win)
 	startSysLoop()
 	if (settings.window.checkUpdatesOnStartup) scheduleStartupUpdateCheck()
+	void pullOnStartup(settings).then(async merged => {
+		if (!merged) return
+		settings = saveSettings(merged)
+		await applyLoadedSettings()
+	})
 }
 
 function quitApp(): void {

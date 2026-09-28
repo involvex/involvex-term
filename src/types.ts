@@ -161,6 +161,16 @@ export interface SessionState {
 	tabs: SessionTab[]
 }
 
+export interface SyncStatus {
+	linked: boolean
+	login?: string
+	gistId?: string
+	gistUrl?: string
+	lastSyncedAt?: number
+	localUpdatedAt: number
+	clientIdConfigured: boolean
+}
+
 export interface TermApiShape {
 	ptySpawn: (args: {
 		id: string
@@ -224,6 +234,36 @@ export interface TermApiShape {
 		ok: boolean
 		settings?: AppSettings
 		error?: string
+	}>
+	syncStatus: () => Promise<SyncStatus>
+	syncSetClientId: (clientId: string) => Promise<SyncStatus>
+	syncLoginStart: () => Promise<{
+		ok: boolean
+		userCode?: string
+		verificationUri?: string
+		verificationUriComplete?: string
+		expiresIn?: number
+		error?: string
+	}>
+	syncLoginFinish: () => Promise<{
+		ok: boolean
+		error?: string
+		status: SyncStatus
+	}>
+	syncLoginCancel: () => Promise<SyncStatus>
+	syncLogout: () => Promise<SyncStatus>
+	syncPush: (opts?: {force?: boolean}) => Promise<{
+		ok: boolean
+		needsConfirm?: boolean
+		remoteUpdatedAt?: number
+		error?: string
+		status: SyncStatus
+	}>
+	syncPull: () => Promise<{
+		ok: boolean
+		settings?: AppSettings
+		error?: string
+		status: SyncStatus
 	}>
 	updateCheck: () => Promise<UpdateStatus>
 	updateDownload: () => Promise<UpdateStatus>

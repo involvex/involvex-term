@@ -150,4 +150,26 @@ if (build.error) {
 	)
 	process.exit(1)
 }
-process.exit(build.status ?? 1)
+if ((build.status ?? 1) !== 0) process.exit(build.status ?? 1)
+
+// Staging conpty.dll next to build/Release/conpty.node (required for useConptyDll).
+if (process.platform === 'win32') {
+	const ptyRoot = path.join(ROOT, 'node_modules', 'node-pty')
+	const releaseDir = path.join(ptyRoot, 'build', 'Release')
+	const destDir = path.join(releaseDir, 'conpty')
+	const arch = process.arch === 'arm64' ? 'win32-arm64' : 'win32-x64'
+	const srcDir = path.join(ptyRoot, 'prebuilds', arch, 'conpty')
+	const srcDll = path.join(srcDir, 'conpty.dll')
+	if (fs.existsSync(srcDll) && fs.existsSync(releaseDir)) {
+		fs.mkdirSync(destDir, {recursive: true})
+		for (const name of fs.readdirSync(srcDir)) {
+			fs.copyFileSync(path.join(srcDir, name), path.join(destDir, name))
+		}
+		console.log(`[rebuild-pty] staged ${destDir}`)
+	} else {
+		console.warn(
+			'[rebuild-pty] conpty prebuild missing — spawn will use inbox ConPTY',
+		)
+	}
+}
+process.exit(0)

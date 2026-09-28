@@ -805,6 +805,71 @@ body {
 	color: #cccccc;
 }
 
+.modal.settings-modal {
+	width: min(780px, 96vw);
+	max-height: 88vh;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	padding-bottom: 12px;
+}
+
+.settings-layout {
+	display: flex;
+	gap: 0;
+	min-height: 0;
+	flex: 1;
+	margin-top: 12px;
+	border-top: 1px solid #3c3c3c;
+}
+
+.settings-nav {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	width: 148px;
+	flex-shrink: 0;
+	padding: 12px 8px 8px 0;
+	border-right: 1px solid #3c3c3c;
+	overflow: auto;
+}
+
+.settings-nav button {
+	text-align: left;
+	background: transparent;
+	border: none;
+	color: #cccccc;
+	font: inherit;
+	font-size: 12px;
+	padding: 7px 10px;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.settings-nav button:hover {
+	background: #2d2d2d;
+}
+
+.settings-nav button.active {
+	background: #094771;
+	color: #ffffff;
+}
+
+.settings-pane {
+	flex: 1;
+	min-width: 0;
+	overflow: auto;
+	padding: 4px 4px 8px 16px;
+	max-height: min(70vh, 640px);
+}
+
+.settings-pane > section:first-child,
+.settings-pane > :first-child > section:first-child {
+	border-top: none;
+	margin-top: 0;
+	padding-top: 4px;
+}
+
 .modal-header {
 	display: flex;
 	align-items: center;

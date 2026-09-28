@@ -6,6 +6,7 @@ import {
 	type AppSettings,
 	type CommandSnippet,
 	type QuickCommand,
+	type SyncStatus,
 } from '../types'
 
 interface Props {
@@ -103,7 +104,241 @@ export function HotkeyInput({
 	)
 }
 
+function formatSyncTime(ms?: number): string {
+	if (!ms) return 'never'
+	try {
+		return new Date(ms).toLocaleString()
+	} catch {
+		return 'never'
+	}
+}
+
+function SyncSection({
+	onSettingsPulled,
+}: {
+	onSettingsPulled: (s: AppSettings) => void
+}) {
+	const api = termApi()
+	const [status, setStatus] = useState<SyncStatus | null>(null)
+	const [clientIdDraft, setClientIdDraft] = useState('')
+	const [busy, setBusy] = useState(false)
+	const [message, setMessage] = useState<string | null>(null)
+	const [device, setDevice] = useState<{
+		userCode: string
+		verificationUri: string
+	} | null>(null)
+
+	useEffect(() => {
+		void api?.syncStatus().then(s => setStatus(s))
+	}, [api])
+
+	const refresh = () => {
+		void api?.syncStatus().then(s => setStatus(s))
+	}
+
+	const run = async (fn: () => Promise<void>) => {
+		setBusy(true)
+		setMessage(null)
+		try {
+			await fn()
+		} finally {
+			setBusy(false)
+			refresh()
+		}
+	}
+
+	return (
+		<section>
+			<h3>Settings sync (GitHub Gist)</h3>
+			<p className="footer-dim">
+				Syncs theme, hotkeys, snippets, and other portable prefs via a private
+				gist. Window size, start directory, and custom shell paths stay local.
+			</p>
+			{status && (
+				<p className="footer-dim">
+					{status.linked
+						? `Signed in as ${status.login || 'GitHub'} · last sync ${formatSyncTime(status.lastSyncedAt)}${status.gistId ? '' : ' · push to create gist'}`
+						: 'Not linked'}
+					{status.gistUrl ? (
+						<>
+							{' '}
+							·{' '}
+							<button
+								type="button"
+								className="settings-btn"
+								onClick={() => void api?.openExternal(status.gistUrl!)}
+							>
+								Open gist
+							</button>
+						</>
+					) : null}
+				</p>
+			)}
+			{!status?.clientIdConfigured && !status?.linked && (
+				<label className="wide">
+					GitHub OAuth client ID (Device Flow){' '}
+					<input
+						type="text"
+						value={clientIdDraft}
+						placeholder="Iv23…"
+						onChange={e => setClientIdDraft(e.target.value)}
+					/>
+					<button
+						type="button"
+						className="settings-btn"
+						disabled={busy || !clientIdDraft.trim()}
+						onClick={() =>
+							void run(async () => {
+								await api?.syncSetClientId(clientIdDraft.trim())
+								setMessage('Client ID saved')
+							})
+						}
+					>
+						Save client ID
+					</button>
+				</label>
+			)}
+			{device && (
+				<p>
+					Enter code <strong>{device.userCode}</strong> at{' '}
+					<code>{device.verificationUri}</code>
+					{busy ? ' — waiting for authorization…' : ''}
+				</p>
+			)}
+			{message && <p className="footer-dim">{message}</p>}
+			<div className="settings-btn-row">
+				{!status?.linked ? (
+					<button
+						type="button"
+						className="settings-btn"
+						disabled={busy}
+						onClick={() =>
+							void run(async () => {
+								const start = await api?.syncLoginStart()
+								if (!start?.ok) {
+									setMessage(start?.error || 'Login failed')
+									return
+								}
+								setDevice({
+									userCode: start.userCode!,
+									verificationUri: start.verificationUri!,
+								})
+								const url =
+									start.verificationUriComplete || start.verificationUri!
+								await api?.openExternal(url)
+								const finish = await api?.syncLoginFinish()
+								setDevice(null)
+								if (!finish?.ok) {
+									setMessage(finish?.error || 'Login failed')
+									return
+								}
+								setMessage(`Signed in as ${finish.status.login || 'GitHub'}`)
+							})
+						}
+					>
+						Sign in with GitHub…
+					</button>
+				) : (
+					<>
+						<button
+							type="button"
+							className="settings-btn"
+							disabled={busy}
+							onClick={() =>
+								void run(async () => {
+									let result = await api?.syncPush()
+									if (result?.needsConfirm) {
+										const ok = await api?.dialogConfirm({
+											title: 'Overwrite remote settings?',
+											message:
+												'Remote gist is newer than this machine. Push anyway?',
+											detail: result.remoteUpdatedAt
+												? `Remote updated: ${formatSyncTime(result.remoteUpdatedAt)}`
+												: undefined,
+											buttons: ['Overwrite', 'Cancel'],
+										})
+										if (!ok) {
+											setMessage('Push canceled')
+											return
+										}
+										result = await api?.syncPush({force: true})
+									}
+									if (!result?.ok) {
+										setMessage(result?.error || 'Push failed')
+										return
+									}
+									setMessage('Pushed to gist')
+								})
+							}
+						>
+							Push
+						</button>
+						<button
+							type="button"
+							className="settings-btn"
+							disabled={busy}
+							onClick={() =>
+								void run(async () => {
+									const result = await api?.syncPull()
+									if (!result?.ok) {
+										setMessage(result?.error || 'Pull failed')
+										return
+									}
+									if (result.settings) onSettingsPulled(result.settings)
+									setMessage('Pulled from gist')
+								})
+							}
+						>
+							Pull
+						</button>
+						<button
+							type="button"
+							className="settings-btn"
+							disabled={busy}
+							onClick={() =>
+								void run(async () => {
+									await api?.syncLogout()
+									setMessage('Unlinked')
+								})
+							}
+						>
+							Unlink
+						</button>
+					</>
+				)}
+				{device && (
+					<button
+						type="button"
+						className="settings-btn"
+						onClick={() => {
+							void api?.syncLoginCancel()
+							setDevice(null)
+							setBusy(false)
+							setMessage('Login canceled')
+							refresh()
+						}}
+					>
+						Cancel login
+					</button>
+				)}
+			</div>
+		</section>
+	)
+}
+
+const SETTINGS_TABS = [
+	{id: 'appearance', label: 'Appearance'},
+	{id: 'terminal', label: 'Terminal'},
+	{id: 'hotkeys', label: 'Hotkeys'},
+	{id: 'status', label: 'Status bar'},
+	{id: 'window', label: 'Window'},
+	{id: 'agent', label: 'Agent'},
+	{id: 'sync', label: 'Sync & data'},
+] as const
+type SettingsTabId = (typeof SETTINGS_TABS)[number]['id']
+
 export default function SettingsModal({settings, onChange, onClose}: Props) {
+	const [tab, setTab] = useState<SettingsTabId>('appearance')
 	const set = (patch: Partial<AppSettings>) => onChange({...settings, ...patch})
 	return (
 		<div
@@ -111,7 +346,7 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 			onClick={onClose}
 		>
 			<div
-				className="modal"
+				className="modal settings-modal"
 				onClick={e => e.stopPropagation()}
 				role="dialog"
 				aria-label="Settings"
@@ -131,958 +366,1129 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 					</button>
 				</div>
 
-				<section>
-					<h3>Theme</h3>
-					<label className="wide">
-						Preset{' '}
-						<select
-							value={
-								THEME_PRESETS.find(
-									p =>
-										p.bg === settings.theme.bg &&
-										p.fg === settings.theme.fg &&
-										p.fontFamily === settings.theme.fontFamily,
-								)?.id ?? ''
-							}
-							onChange={e => {
-								const preset = THEME_PRESETS.find(p => p.id === e.target.value)
-								if (!preset) return
-								set({
-									theme: {
-										...settings.theme,
-										bg: preset.bg,
-										fg: preset.fg,
-										fontFamily: preset.fontFamily,
-									},
-								})
-							}}
-						>
-							<option value="">Custom</option>
-							{THEME_PRESETS.map(p => (
-								<option
-									key={p.id}
-									value={p.id}
-								>
-									{p.name}
-								</option>
-							))}
-						</select>
-					</label>
-					<label>
-						Background{' '}
-						<input
-							type="color"
-							value={settings.theme.bg}
-							onChange={e =>
-								set({theme: {...settings.theme, bg: e.target.value}})
-							}
-						/>
-					</label>
-					<label>
-						Foreground{' '}
-						<input
-							type="color"
-							value={settings.theme.fg}
-							onChange={e =>
-								set({theme: {...settings.theme, fg: e.target.value}})
-							}
-						/>
-					</label>
-					<label>
-						Font size{' '}
-						<input
-							type="number"
-							min={8}
-							max={32}
-							value={settings.theme.fontSize}
-							onChange={e =>
-								set({
-									theme: {
-										...settings.theme,
-										fontSize: Number(e.target.value),
-									},
-								})
-							}
-						/>
-					</label>
-					<label className="wide">
-						Font family{' '}
-						<input
-							type="text"
-							value={settings.theme.fontFamily}
-							onChange={e =>
-								set({
-									theme: {...settings.theme, fontFamily: e.target.value},
-								})
-							}
-						/>
-					</label>
-					<label className="wide">
-						Font fallback{' '}
-						<input
-							type="text"
-							value={settings.theme.fontFallback}
-							onChange={e =>
-								set({
-									theme: {...settings.theme, fontFallback: e.target.value},
-								})
-							}
-						/>
-					</label>
-				</section>
-
-				<section>
-					<h3>Startup</h3>
-					<label className="wide">
-						On launch{' '}
-						<select
-							value={settings.startup.mode}
-							onChange={e =>
-								set({
-									startup: {
-										...settings.startup,
-										mode: e.target.value as 'session' | 'new',
-									},
-								})
-							}
-						>
-							<option value="session">Restore previous session</option>
-							<option value="new">New tab (profile + start dir)</option>
-						</select>
-					</label>
-					<label className="wide">
-						Startup profile{' '}
-						<select
-							value={settings.startup.profileId}
-							onChange={e =>
-								set({
-									startup: {...settings.startup, profileId: e.target.value},
-								})
-							}
-						>
-							<option value="">Default profile</option>
-							{settings.terminal.profiles.map(p => (
-								<option
-									key={p.id}
-									value={p.id}
-								>
-									{p.name}
-								</option>
-							))}
-						</select>
-					</label>
-					<p className="footer-dim">
-						“Restore previous session” still needs Tabs → Restore enabled.
-						Startup profile applies when opening a fresh tab on launch.
-					</p>
-				</section>
-
-				<section>
-					<h3>Footer status bar</h3>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.footer.showGit}
-							onChange={e =>
-								set({
-									footer: {...settings.footer, showGit: e.target.checked},
-								})
-							}
-						/>{' '}
-						Show Git
-					</label>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.footer.showSys}
-							onChange={e =>
-								set({
-									footer: {...settings.footer, showSys: e.target.checked},
-								})
-							}
-						/>{' '}
-						Show PC stats
-					</label>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.footer.showOpencode}
-							onChange={e =>
-								set({
-									footer: {
-										...settings.footer,
-										showOpencode: e.target.checked,
-									},
-								})
-							}
-						/>{' '}
-						Show agent status (footer)
-					</label>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.footer.showCpu}
-							onChange={e =>
-								set({
-									footer: {...settings.footer, showCpu: e.target.checked},
-								})
-							}
-						/>{' '}
-						CPU
-					</label>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.footer.showMem}
-							onChange={e =>
-								set({
-									footer: {...settings.footer, showMem: e.target.checked},
-								})
-							}
-						/>{' '}
-						Memory
-					</label>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.footer.showCwd !== false}
-							onChange={e =>
-								set({
-									footer: {...settings.footer, showCwd: e.target.checked},
-								})
-							}
-						/>{' '}
-						Show path (CWD)
-					</label>
-					<label>
-						Refresh (ms){' '}
-						<input
-							type="number"
-							min={500}
-							max={10000}
-							step={250}
-							value={settings.footer.refreshMs}
-							onChange={e =>
-								set({
-									footer: {
-										...settings.footer,
-										refreshMs: Number(e.target.value),
-									},
-								})
-							}
-						/>
-					</label>
-					<p className="footer-dim">
-						Right-click the status bar to toggle modules or enter
-						drag-to-reorder layout mode.
-					</p>
-				</section>
-
-				<section>
-					<h3>Hotkeys</h3>
-					<p className="footer-dim">
-						Takes effect on restart of menu (applied live where possible).
-						Format: Ctrl+Shift+T. Pane split defaults use Shift+Alt+… — if that
-						conflicts with Windows language switching, remap to Ctrl+Alt+D
-						(etc.).
-					</p>
-					{HOTKEY_ACTIONS.map(a => (
-						<label
-							key={a.id}
-							className="wide"
-						>
-							{a.label}
-							<HotkeyInput
-								value={settings.hotkeys[a.id] ?? ''}
-								ariaLabel={a.label}
-								onChange={v =>
-									set({
-										hotkeys: {...settings.hotkeys, [a.id]: v},
-									})
-								}
-							/>
-						</label>
-					))}
-				</section>
-
-				<section>
-					<h3>Tabs</h3>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.tabs.confirmClose}
-							onChange={e =>
-								set({
-									tabs: {...settings.tabs, confirmClose: e.target.checked},
-								})
-							}
-						/>{' '}
-						Confirm before closing last tab
-					</label>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.tabs.restoreSession}
-							onChange={e =>
-								set({
-									tabs: {...settings.tabs, restoreSession: e.target.checked},
-								})
-							}
-						/>{' '}
-						Restore tabs and splits on launch
-					</label>
-				</section>
-
-				<section>
-					<h3>Terminal</h3>
-					<label className="wide">
-						Default profile{' '}
-						<select
-							value={settings.terminal.defaultProfileId}
-							onChange={e =>
-								set({
-									terminal: {
-										...settings.terminal,
-										defaultProfileId: e.target.value,
-									},
-								})
-							}
-						>
-							{settings.terminal.profiles.map(p => (
-								<option
-									key={p.id}
-									value={p.id}
-								>
-									{p.name}
-								</option>
-							))}
-						</select>
-					</label>
-					<label className="wide">
-						Start directory{' '}
-						<input
-							type="text"
-							placeholder="e.g. D:/repos (empty = home folder)"
-							value={settings.terminal.startDir}
-							onChange={e =>
-								set({
-									terminal: {...settings.terminal, startDir: e.target.value},
-								})
-							}
-						/>
-					</label>
-					<p className="footer-dim">
-						Used for new tabs and when Startup is “New tab”. With session
-						restore enabled, previous tab folders are restored instead.
-					</p>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.terminal.completionBell}
-							onChange={e =>
-								set({
-									terminal: {
-										...settings.terminal,
-										completionBell: e.target.checked,
-									},
-								})
-							}
-						/>{' '}
-						Background pane completion toast
-					</label>
-					<label>
-						Scrollback lines{' '}
-						<input
-							type="number"
-							min={200}
-							max={50000}
-							step={100}
-							value={settings.terminal.scrollback}
-							onChange={e =>
-								set({
-									terminal: {
-										...settings.terminal,
-										scrollback: Number(e.target.value),
-									},
-								})
-							}
-						/>
-					</label>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.terminal.scrollbar}
-							onChange={e =>
-								set({
-									terminal: {
-										...settings.terminal,
-										scrollbar: e.target.checked,
-									},
-								})
-							}
-						/>{' '}
-						Show scrollbar
-					</label>
-					<p className="footer-dim">
-						New tabs use the default profile. Use ▾ next to + (or the command
-						palette) for another shell. Custom profiles live in settings.json
-						under <code>terminal.profiles</code>. Ctrl+click URLs and local
-						paths to open them.
-					</p>
-				</section>
-
-				<section>
-					<h3>Command snippets</h3>
-					<p className="footer-dim">
-						Appear in the command palette as “Run: …”. Written into the focused
-						pane.
-					</p>
-					{(settings.terminal.snippets ?? []).map((snip, idx) => (
-						<div
-							key={snip.id}
-							className="snippet-row"
-						>
-							<label>
-								Name{' '}
-								<input
-									type="text"
-									value={snip.name}
-									onChange={e => {
-										const snippets = [...settings.terminal.snippets]
-										snippets[idx] = {...snip, name: e.target.value}
-										set({
-											terminal: {...settings.terminal, snippets},
-										})
-									}}
-								/>
-							</label>
-							<label className="wide">
-								Command{' '}
-								<input
-									type="text"
-									value={snip.command}
-									onChange={e => {
-										const snippets = [...settings.terminal.snippets]
-										snippets[idx] = {...snip, command: e.target.value}
-										set({
-											terminal: {...settings.terminal, snippets},
-										})
-									}}
-								/>
-							</label>
-							<label>
-								<input
-									type="checkbox"
-									checked={snip.sendEnter !== false}
-									onChange={e => {
-										const snippets = [...settings.terminal.snippets]
-										snippets[idx] = {
-											...snip,
-											sendEnter: e.target.checked,
-										}
-										set({
-											terminal: {...settings.terminal, snippets},
-										})
-									}}
-								/>{' '}
-								Enter
-							</label>
+				<div className="settings-layout">
+					<nav
+						className="settings-nav"
+						aria-label="Settings sections"
+					>
+						{SETTINGS_TABS.map(t => (
 							<button
+								key={t.id}
 								type="button"
-								className="settings-btn"
-								onClick={() => {
-									const snippets = settings.terminal.snippets.filter(
-										(_, i) => i !== idx,
-									)
-									set({terminal: {...settings.terminal, snippets}})
-								}}
+								className={tab === t.id ? 'active' : ''}
+								onClick={() => setTab(t.id)}
 							>
-								Remove
+								{t.label}
 							</button>
-						</div>
-					))}
-					<button
-						type="button"
-						className="settings-btn"
-						onClick={() => {
-							const snip: CommandSnippet = {
-								id: `snip-${Date.now()}`,
-								name: 'New snippet',
-								command: '',
-								sendEnter: true,
-							}
-							set({
-								terminal: {
-									...settings.terminal,
-									snippets: [...(settings.terminal.snippets ?? []), snip],
-								},
-							})
-						}}
-					>
-						Add snippet
-					</button>
-				</section>
-
-				<section>
-					<h3>Quick command buttons</h3>
-					<p className="footer-dim">
-						Compact buttons on the tab bar (left of the agent). Drag rows to
-						reorder. Click writes the command into the focused pane.
-					</p>
-					{(settings.terminal.quickCommands ?? []).map((qc, idx) => (
-						<div
-							key={qc.id}
-							className="snippet-row snippet-row-drag"
-							draggable
-							onDragStart={e => {
-								e.dataTransfer.setData('text/plain', String(idx))
-								e.dataTransfer.effectAllowed = 'move'
-							}}
-							onDragOver={e => e.preventDefault()}
-							onDrop={(e: DragEvent) => {
-								e.preventDefault()
-								const from = Number(e.dataTransfer.getData('text/plain'))
-								if (Number.isNaN(from) || from === idx) return
-								const list = [...(settings.terminal.quickCommands ?? [])]
-								const [moved] = list.splice(from, 1)
-								if (!moved) return
-								list.splice(idx, 0, moved)
-								set({terminal: {...settings.terminal, quickCommands: list}})
-							}}
-						>
-							<span
-								className="snippet-drag-handle"
-								title="Drag to reorder"
-								aria-hidden
-							>
-								⋮⋮
-							</span>
-							<label>
-								Label{' '}
-								<input
-									type="text"
-									maxLength={12}
-									value={qc.label}
-									onChange={e => {
-										const quickCommands = [
-											...(settings.terminal.quickCommands ?? []),
-										]
-										quickCommands[idx] = {...qc, label: e.target.value}
-										set({
-											terminal: {...settings.terminal, quickCommands},
-										})
-									}}
-								/>
-							</label>
-							<label className="wide">
-								Command{' '}
-								<input
-									type="text"
-									value={qc.command}
-									onChange={e => {
-										const quickCommands = [
-											...(settings.terminal.quickCommands ?? []),
-										]
-										quickCommands[idx] = {...qc, command: e.target.value}
-										set({
-											terminal: {...settings.terminal, quickCommands},
-										})
-									}}
-								/>
-							</label>
-							<label>
-								<input
-									type="checkbox"
-									checked={qc.sendEnter !== false}
-									onChange={e => {
-										const quickCommands = [
-											...(settings.terminal.quickCommands ?? []),
-										]
-										quickCommands[idx] = {
-											...qc,
-											sendEnter: e.target.checked,
+						))}
+					</nav>
+					<div className="settings-pane">
+						{tab === 'appearance' && (
+							<section>
+								<h3>Theme</h3>
+								<label className="wide">
+									Preset{' '}
+									<select
+										value={
+											THEME_PRESETS.find(
+												p =>
+													p.bg === settings.theme.bg &&
+													p.fg === settings.theme.fg &&
+													p.fontFamily === settings.theme.fontFamily,
+											)?.id ?? ''
 										}
-										set({
-											terminal: {...settings.terminal, quickCommands},
-										})
-									}}
-								/>{' '}
-								Enter
-							</label>
-							<button
-								type="button"
-								className="settings-btn"
-								onClick={() => {
-									const quickCommands = (
-										settings.terminal.quickCommands ?? []
-									).filter((_, i) => i !== idx)
-									set({terminal: {...settings.terminal, quickCommands}})
-								}}
-							>
-								Remove
-							</button>
-						</div>
-					))}
-					<button
-						type="button"
-						className="settings-btn"
-						onClick={() => {
-							const qc: QuickCommand = {
-								id: `qc-${Date.now()}`,
-								label: 'cmd',
-								command: '',
-								sendEnter: true,
-							}
-							set({
-								terminal: {
-									...settings.terminal,
-									quickCommands: [
-										...(settings.terminal.quickCommands ?? []),
-										qc,
-									],
-								},
-							})
-						}}
-					>
-						Add button
-					</button>
-				</section>
-
-				<section>
-					<h3>Coding agent</h3>
-					<p className="footer-dim">
-						Default is OpenCode. Switch to another CLI tool — the tab-bar button
-						and Ctrl+Shift+O launch the active agent. Session picker is
-						OpenCode-only.
-					</p>
-					<label className="wide">
-						Active agent
-						<select
-							value={settings.agent?.activeId || 'opencode'}
-							onChange={e =>
-								set({
-									agent: {
-										...(settings.agent ?? {
-											activeId: 'opencode',
-											tools: defaultAgentTools(),
-										}),
-										activeId: e.target.value,
-										tools: settings.agent?.tools?.length
-											? settings.agent.tools
-											: defaultAgentTools(),
-									},
-								})
-							}
-						>
-							{(settings.agent?.tools?.length
-								? settings.agent.tools
-								: defaultAgentTools()
-							).map(t => (
-								<option
-									key={t.id}
-									value={t.id}
-								>
-									{t.name} ({t.label})
-								</option>
-							))}
-						</select>
-					</label>
-					{(settings.agent?.tools?.length
-						? settings.agent.tools
-						: defaultAgentTools()
-					).map((tool, idx) => (
-						<div
-							key={tool.id}
-							className="snippet-row"
-						>
-							<label>
-								Label{' '}
-								<input
-									type="text"
-									maxLength={4}
-									value={tool.label}
-									onChange={e => {
-										const tools = [
-											...(settings.agent?.tools?.length
-												? settings.agent.tools
-												: defaultAgentTools()),
-										]
-										tools[idx] = {...tool, label: e.target.value}
-										set({
-											agent: {
-												activeId: settings.agent?.activeId || 'opencode',
-												tools,
-											},
-										})
-									}}
-								/>
-							</label>
-							<label className="wide">
-								Command{' '}
-								<input
-									type="text"
-									value={tool.command}
-									onChange={e => {
-										const tools = [
-											...(settings.agent?.tools?.length
-												? settings.agent.tools
-												: defaultAgentTools()),
-										]
-										tools[idx] = {...tool, command: e.target.value}
-										set({
-											agent: {
-												activeId: settings.agent?.activeId || 'opencode',
-												tools,
-											},
-										})
-									}}
-								/>
-							</label>
-							<label className="wide">
-								Continue{' '}
-								<input
-									type="text"
-									value={tool.continueCommand ?? ''}
-									placeholder="optional"
-									onChange={e => {
-										const tools = [
-											...(settings.agent?.tools?.length
-												? settings.agent.tools
-												: defaultAgentTools()),
-										]
-										tools[idx] = {
-											...tool,
-											continueCommand: e.target.value || undefined,
-										}
-										set({
-											agent: {
-												activeId: settings.agent?.activeId || 'opencode',
-												tools,
-											},
-										})
-									}}
-								/>
-							</label>
-						</div>
-					))}
-					<button
-						type="button"
-						className="settings-btn"
-						onClick={() =>
-							set({
-								agent: {
-									activeId: 'opencode',
-									tools: defaultAgentTools(),
-								},
-							})
-						}
-					>
-						Reset agents to defaults
-					</button>
-				</section>
-
-				<section>
-					<h3>Window & Tray</h3>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.window.acrylic}
-							onChange={e =>
-								set({
-									window: {...settings.window, acrylic: e.target.checked},
-								})
-							}
-						/>{' '}
-						Windows 11 mica backdrop (title bar)
-					</label>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.window.checkUpdatesOnStartup !== false}
-							onChange={e =>
-								set({
-									window: {
-										...settings.window,
-										checkUpdatesOnStartup: e.target.checked,
-									},
-								})
-							}
-						/>{' '}
-						Check for updates on startup (packaged installs)
-					</label>
-					<div className="settings-btn-row">
-						<button
-							type="button"
-							className="settings-btn"
-							onClick={() => {
-								void termApi()
-									?.settingsExport()
-									.then(r => {
-										if (!r.ok && r.error !== 'canceled')
-											window.alert(r.error || 'Export failed')
-									})
-							}}
-						>
-							Export settings…
-						</button>
-						<button
-							type="button"
-							className="settings-btn"
-							onClick={() => {
-								void termApi()
-									?.settingsImport()
-									.then(r => {
-										if (!r.ok) {
-											if (r.error !== 'canceled')
-												window.alert(r.error || 'Import failed')
-											return
-										}
-										if (r.settings) onChange(r.settings as AppSettings)
-									})
-							}}
-						>
-							Import settings…
-						</button>
-						<button
-							type="button"
-							className="settings-btn"
-							onClick={() => {
-								void termApi()
-									?.updateCheck()
-									.then(async s => {
-										const st = s as {
-											state: string
-											version?: string
-											message?: string
-											currentVersion: string
-										}
-										if (st.state === 'available') {
-											const ok = await termApi()?.dialogConfirm({
-												title: 'Update available',
-												message: `Download version ${st.version}?`,
-												detail: `Current: ${st.currentVersion}`,
-												buttons: ['Download', 'Later'],
+										onChange={e => {
+											const preset = THEME_PRESETS.find(
+												p => p.id === e.target.value,
+											)
+											if (!preset) return
+											set({
+												theme: {
+													...settings.theme,
+													bg: preset.bg,
+													fg: preset.fg,
+													fontFamily: preset.fontFamily,
+												},
 											})
-											if (ok) {
-												const d = await termApi()?.updateDownload()
-												if (
-													d &&
-													(d as {state: string}).state === 'downloaded'
-												) {
-													await termApi()?.updateInstall()
-												}
-											}
-										} else if (st.message) {
-											window.alert(st.message)
+										}}
+									>
+										<option value="">Custom</option>
+										{THEME_PRESETS.map(p => (
+											<option
+												key={p.id}
+												value={p.id}
+											>
+												{p.name}
+											</option>
+										))}
+									</select>
+								</label>
+								<label>
+									Background{' '}
+									<input
+										type="color"
+										value={settings.theme.bg}
+										onChange={e =>
+											set({theme: {...settings.theme, bg: e.target.value}})
 										}
-									})
-							}}
-						>
-							Check for updates…
-						</button>
-					</div>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.tray.enabled}
-							onChange={e =>
-								set({tray: {...settings.tray, enabled: e.target.checked}})
-							}
-						/>{' '}
-						Enable system tray icon
-					</label>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.tray.minimizeToTray}
-							onChange={e =>
-								set({
-									tray: {...settings.tray, minimizeToTray: e.target.checked},
-								})
-							}
-						/>{' '}
-						Minimize to tray
-					</label>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.tray.closeToTray}
-							onChange={e =>
-								set({
-									tray: {...settings.tray, closeToTray: e.target.checked},
-								})
-							}
-						/>{' '}
-						Close button hides to tray (quit via tray menu)
-					</label>
-					<p className="footer-dim">
-						Window size & position restore automatically on launch.
-					</p>
-				</section>
+									/>
+								</label>
+								<label>
+									Foreground{' '}
+									<input
+										type="color"
+										value={settings.theme.fg}
+										onChange={e =>
+											set({theme: {...settings.theme, fg: e.target.value}})
+										}
+									/>
+								</label>
+								<label>
+									Font size{' '}
+									<input
+										type="number"
+										min={8}
+										max={32}
+										value={settings.theme.fontSize}
+										onChange={e =>
+											set({
+												theme: {
+													...settings.theme,
+													fontSize: Number(e.target.value),
+												},
+											})
+										}
+									/>
+								</label>
+								<label className="wide">
+									Font family{' '}
+									<input
+										type="text"
+										value={settings.theme.fontFamily}
+										onChange={e =>
+											set({
+												theme: {...settings.theme, fontFamily: e.target.value},
+											})
+										}
+									/>
+								</label>
+								<label className="wide">
+									Font fallback{' '}
+									<input
+										type="text"
+										value={settings.theme.fontFallback}
+										onChange={e =>
+											set({
+												theme: {
+													...settings.theme,
+													fontFallback: e.target.value,
+												},
+											})
+										}
+									/>
+								</label>
+							</section>
+						)}
+						{tab === 'terminal' && (
+							<>
+								<section>
+									<h3>Startup</h3>
+									<label className="wide">
+										On launch{' '}
+										<select
+											value={settings.startup.mode}
+											onChange={e =>
+												set({
+													startup: {
+														...settings.startup,
+														mode: e.target.value as 'session' | 'new',
+													},
+												})
+											}
+										>
+											<option value="session">Restore previous session</option>
+											<option value="new">New tab (profile + start dir)</option>
+										</select>
+									</label>
+									<label className="wide">
+										Startup profile{' '}
+										<select
+											value={settings.startup.profileId}
+											onChange={e =>
+												set({
+													startup: {
+														...settings.startup,
+														profileId: e.target.value,
+													},
+												})
+											}
+										>
+											<option value="">Default profile</option>
+											{settings.terminal.profiles.map(p => (
+												<option
+													key={p.id}
+													value={p.id}
+												>
+													{p.name}
+												</option>
+											))}
+										</select>
+									</label>
+									<p className="footer-dim">
+										“Restore previous session” still needs Tabs → Restore
+										enabled. Startup profile applies when opening a fresh tab on
+										launch.
+									</p>
+								</section>
+							</>
+						)}
+						{tab === 'status' && (
+							<section>
+								<h3>Footer status bar</h3>
+								<label>
+									<input
+										type="checkbox"
+										checked={settings.footer.showGit}
+										onChange={e =>
+											set({
+												footer: {...settings.footer, showGit: e.target.checked},
+											})
+										}
+									/>{' '}
+									Show Git
+								</label>
+								<label>
+									<input
+										type="checkbox"
+										checked={settings.footer.showSys}
+										onChange={e =>
+											set({
+												footer: {...settings.footer, showSys: e.target.checked},
+											})
+										}
+									/>{' '}
+									Show PC stats
+								</label>
+								<label>
+									<input
+										type="checkbox"
+										checked={settings.footer.showOpencode}
+										onChange={e =>
+											set({
+												footer: {
+													...settings.footer,
+													showOpencode: e.target.checked,
+												},
+											})
+										}
+									/>{' '}
+									Show agent status (footer)
+								</label>
+								<label>
+									<input
+										type="checkbox"
+										checked={settings.footer.showCpu}
+										onChange={e =>
+											set({
+												footer: {...settings.footer, showCpu: e.target.checked},
+											})
+										}
+									/>{' '}
+									CPU
+								</label>
+								<label>
+									<input
+										type="checkbox"
+										checked={settings.footer.showMem}
+										onChange={e =>
+											set({
+												footer: {...settings.footer, showMem: e.target.checked},
+											})
+										}
+									/>{' '}
+									Memory
+								</label>
+								<label>
+									<input
+										type="checkbox"
+										checked={settings.footer.showCwd !== false}
+										onChange={e =>
+											set({
+												footer: {...settings.footer, showCwd: e.target.checked},
+											})
+										}
+									/>{' '}
+									Show path (CWD)
+								</label>
+								<label>
+									Refresh (ms){' '}
+									<input
+										type="number"
+										min={500}
+										max={10000}
+										step={250}
+										value={settings.footer.refreshMs}
+										onChange={e =>
+											set({
+												footer: {
+													...settings.footer,
+													refreshMs: Number(e.target.value),
+												},
+											})
+										}
+									/>
+								</label>
+								<p className="footer-dim">
+									Right-click the status bar to toggle modules or enter
+									drag-to-reorder layout mode.
+								</p>
+							</section>
+						)}
+						{tab === 'hotkeys' && (
+							<section>
+								<h3>Hotkeys</h3>
+								<p className="footer-dim">
+									Takes effect on restart of menu (applied live where possible).
+									Format: Ctrl+Shift+T. Pane split defaults use Shift+Alt+… — if
+									that conflicts with Windows language switching, remap to
+									Ctrl+Alt+D (etc.).
+								</p>
+								{HOTKEY_ACTIONS.map(a => (
+									<label
+										key={a.id}
+										className="wide"
+									>
+										{a.label}
+										<HotkeyInput
+											value={settings.hotkeys[a.id] ?? ''}
+											ariaLabel={a.label}
+											onChange={v =>
+												set({
+													hotkeys: {...settings.hotkeys, [a.id]: v},
+												})
+											}
+										/>
+									</label>
+								))}
+							</section>
+						)}
+						{tab === 'terminal' && (
+							<>
+								<section>
+									<h3>Tabs</h3>
+									<label>
+										<input
+											type="checkbox"
+											checked={settings.tabs.confirmClose}
+											onChange={e =>
+												set({
+													tabs: {
+														...settings.tabs,
+														confirmClose: e.target.checked,
+													},
+												})
+											}
+										/>{' '}
+										Confirm before closing last tab
+									</label>
+									<label>
+										<input
+											type="checkbox"
+											checked={settings.tabs.restoreSession}
+											onChange={e =>
+												set({
+													tabs: {
+														...settings.tabs,
+														restoreSession: e.target.checked,
+													},
+												})
+											}
+										/>{' '}
+										Restore tabs and splits on launch
+									</label>
+								</section>
 
-				<section>
-					<h3>Quake dropdown (global hotkey)</h3>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.quake.enabled}
-							onChange={e =>
-								set({
-									quake: {...settings.quake, enabled: e.target.checked},
-								})
-							}
-						/>{' '}
-						Enable (summons the terminal from any app)
-					</label>
-					<label className="wide">
-						Hotkey
-						<HotkeyInput
-							value={settings.quake.hotkey}
-							ariaLabel="Quake hotkey"
-							onChange={v =>
-								set({
-									quake: {...settings.quake, hotkey: v},
-								})
-							}
-						/>
-					</label>
-					<p className="footer-dim">
-						Must be free globally (Windows Terminal / PowerToys often own
-						Ctrl+`). Default Alt+`; if denied we try Grave / Alt / Win variants.
-					</p>
-					<label>
-						Height (%)
-						<input
-							type="number"
-							min={20}
-							max={90}
-							value={settings.quake.heightPercent}
-							onChange={e =>
-								set({
-									quake: {
-										...settings.quake,
-										heightPercent: Number(e.target.value),
-									},
-								})
-							}
-						/>
-					</label>
-					<label>
-						<input
-							type="checkbox"
-							checked={settings.quake.hideOnFocusLoss}
-							onChange={e =>
-								set({
-									quake: {
-										...settings.quake,
-										hideOnFocusLoss: e.target.checked,
-									},
-								})
-							}
-						/>{' '}
-						Hide when focus is lost
-					</label>
-				</section>
+								<section>
+									<h3>Terminal</h3>
+									<label className="wide">
+										Default profile{' '}
+										<select
+											value={settings.terminal.defaultProfileId}
+											onChange={e =>
+												set({
+													terminal: {
+														...settings.terminal,
+														defaultProfileId: e.target.value,
+													},
+												})
+											}
+										>
+											{settings.terminal.profiles.map(p => (
+												<option
+													key={p.id}
+													value={p.id}
+												>
+													{p.name}
+												</option>
+											))}
+										</select>
+									</label>
+									<label className="wide">
+										Start directory{' '}
+										<input
+											type="text"
+											placeholder="e.g. D:/repos (empty = home folder)"
+											value={settings.terminal.startDir}
+											onChange={e =>
+												set({
+													terminal: {
+														...settings.terminal,
+														startDir: e.target.value,
+													},
+												})
+											}
+										/>
+									</label>
+									<p className="footer-dim">
+										Used for new tabs and when Startup is “New tab”. With
+										session restore enabled, previous tab folders are restored
+										instead.
+									</p>
+									<label>
+										<input
+											type="checkbox"
+											checked={settings.terminal.completionBell}
+											onChange={e =>
+												set({
+													terminal: {
+														...settings.terminal,
+														completionBell: e.target.checked,
+													},
+												})
+											}
+										/>{' '}
+										Background pane completion toast
+									</label>
+									<label>
+										Scrollback lines{' '}
+										<input
+											type="number"
+											min={200}
+											max={50000}
+											step={100}
+											value={settings.terminal.scrollback}
+											onChange={e =>
+												set({
+													terminal: {
+														...settings.terminal,
+														scrollback: Number(e.target.value),
+													},
+												})
+											}
+										/>
+									</label>
+									<label>
+										<input
+											type="checkbox"
+											checked={settings.terminal.scrollbar}
+											onChange={e =>
+												set({
+													terminal: {
+														...settings.terminal,
+														scrollbar: e.target.checked,
+													},
+												})
+											}
+										/>{' '}
+										Show scrollbar
+									</label>
+									<p className="footer-dim">
+										New tabs use the default profile. Use ▾ next to + (or the
+										command palette) for another shell. Custom profiles live in
+										settings.json under <code>terminal.profiles</code>.
+										Ctrl+click URLs and local paths to open them.
+									</p>
+								</section>
+
+								<section>
+									<h3>Command snippets</h3>
+									<p className="footer-dim">
+										Appear in the command palette as “Run: …”. Written into the
+										focused pane.
+									</p>
+									{(settings.terminal.snippets ?? []).map((snip, idx) => (
+										<div
+											key={snip.id}
+											className="snippet-row"
+										>
+											<label>
+												Name{' '}
+												<input
+													type="text"
+													value={snip.name}
+													onChange={e => {
+														const snippets = [...settings.terminal.snippets]
+														snippets[idx] = {...snip, name: e.target.value}
+														set({
+															terminal: {...settings.terminal, snippets},
+														})
+													}}
+												/>
+											</label>
+											<label className="wide">
+												Command{' '}
+												<input
+													type="text"
+													value={snip.command}
+													onChange={e => {
+														const snippets = [...settings.terminal.snippets]
+														snippets[idx] = {...snip, command: e.target.value}
+														set({
+															terminal: {...settings.terminal, snippets},
+														})
+													}}
+												/>
+											</label>
+											<label>
+												<input
+													type="checkbox"
+													checked={snip.sendEnter !== false}
+													onChange={e => {
+														const snippets = [...settings.terminal.snippets]
+														snippets[idx] = {
+															...snip,
+															sendEnter: e.target.checked,
+														}
+														set({
+															terminal: {...settings.terminal, snippets},
+														})
+													}}
+												/>{' '}
+												Enter
+											</label>
+											<button
+												type="button"
+												className="settings-btn"
+												onClick={() => {
+													const snippets = settings.terminal.snippets.filter(
+														(_, i) => i !== idx,
+													)
+													set({terminal: {...settings.terminal, snippets}})
+												}}
+											>
+												Remove
+											</button>
+										</div>
+									))}
+									<button
+										type="button"
+										className="settings-btn"
+										onClick={() => {
+											const snip: CommandSnippet = {
+												id: `snip-${Date.now()}`,
+												name: 'New snippet',
+												command: '',
+												sendEnter: true,
+											}
+											set({
+												terminal: {
+													...settings.terminal,
+													snippets: [
+														...(settings.terminal.snippets ?? []),
+														snip,
+													],
+												},
+											})
+										}}
+									>
+										Add snippet
+									</button>
+								</section>
+
+								<section>
+									<h3>Quick command buttons</h3>
+									<p className="footer-dim">
+										Compact buttons on the tab bar (left of the agent). Drag
+										rows to reorder. Click writes the command into the focused
+										pane.
+									</p>
+									{(settings.terminal.quickCommands ?? []).map((qc, idx) => (
+										<div
+											key={qc.id}
+											className="snippet-row snippet-row-drag"
+											draggable
+											onDragStart={e => {
+												e.dataTransfer.setData('text/plain', String(idx))
+												e.dataTransfer.effectAllowed = 'move'
+											}}
+											onDragOver={e => e.preventDefault()}
+											onDrop={(e: DragEvent) => {
+												e.preventDefault()
+												const from = Number(
+													e.dataTransfer.getData('text/plain'),
+												)
+												if (Number.isNaN(from) || from === idx) return
+												const list = [
+													...(settings.terminal.quickCommands ?? []),
+												]
+												const [moved] = list.splice(from, 1)
+												if (!moved) return
+												list.splice(idx, 0, moved)
+												set({
+													terminal: {...settings.terminal, quickCommands: list},
+												})
+											}}
+										>
+											<span
+												className="snippet-drag-handle"
+												title="Drag to reorder"
+												aria-hidden
+											>
+												⋮⋮
+											</span>
+											<label>
+												Label{' '}
+												<input
+													type="text"
+													maxLength={12}
+													value={qc.label}
+													onChange={e => {
+														const quickCommands = [
+															...(settings.terminal.quickCommands ?? []),
+														]
+														quickCommands[idx] = {...qc, label: e.target.value}
+														set({
+															terminal: {...settings.terminal, quickCommands},
+														})
+													}}
+												/>
+											</label>
+											<label className="wide">
+												Command{' '}
+												<input
+													type="text"
+													value={qc.command}
+													onChange={e => {
+														const quickCommands = [
+															...(settings.terminal.quickCommands ?? []),
+														]
+														quickCommands[idx] = {
+															...qc,
+															command: e.target.value,
+														}
+														set({
+															terminal: {...settings.terminal, quickCommands},
+														})
+													}}
+												/>
+											</label>
+											<label>
+												<input
+													type="checkbox"
+													checked={qc.sendEnter !== false}
+													onChange={e => {
+														const quickCommands = [
+															...(settings.terminal.quickCommands ?? []),
+														]
+														quickCommands[idx] = {
+															...qc,
+															sendEnter: e.target.checked,
+														}
+														set({
+															terminal: {...settings.terminal, quickCommands},
+														})
+													}}
+												/>{' '}
+												Enter
+											</label>
+											<button
+												type="button"
+												className="settings-btn"
+												onClick={() => {
+													const quickCommands = (
+														settings.terminal.quickCommands ?? []
+													).filter((_, i) => i !== idx)
+													set({terminal: {...settings.terminal, quickCommands}})
+												}}
+											>
+												Remove
+											</button>
+										</div>
+									))}
+									<button
+										type="button"
+										className="settings-btn"
+										onClick={() => {
+											const qc: QuickCommand = {
+												id: `qc-${Date.now()}`,
+												label: 'cmd',
+												command: '',
+												sendEnter: true,
+											}
+											set({
+												terminal: {
+													...settings.terminal,
+													quickCommands: [
+														...(settings.terminal.quickCommands ?? []),
+														qc,
+													],
+												},
+											})
+										}}
+									>
+										Add button
+									</button>
+								</section>
+							</>
+						)}
+						{tab === 'agent' && (
+							<section>
+								<h3>Coding agent</h3>
+								<p className="footer-dim">
+									Default is OpenCode. Switch to another CLI tool — the tab-bar
+									button and Ctrl+Shift+O launch the active agent. Session
+									picker is OpenCode-only.
+								</p>
+								<label className="wide">
+									Active agent
+									<select
+										value={settings.agent?.activeId || 'opencode'}
+										onChange={e =>
+											set({
+												agent: {
+													...(settings.agent ?? {
+														activeId: 'opencode',
+														tools: defaultAgentTools(),
+													}),
+													activeId: e.target.value,
+													tools: settings.agent?.tools?.length
+														? settings.agent.tools
+														: defaultAgentTools(),
+												},
+											})
+										}
+									>
+										{(settings.agent?.tools?.length
+											? settings.agent.tools
+											: defaultAgentTools()
+										).map(t => (
+											<option
+												key={t.id}
+												value={t.id}
+											>
+												{t.name} ({t.label})
+											</option>
+										))}
+									</select>
+								</label>
+								{(settings.agent?.tools?.length
+									? settings.agent.tools
+									: defaultAgentTools()
+								).map((tool, idx) => (
+									<div
+										key={tool.id}
+										className="snippet-row"
+									>
+										<label>
+											Label{' '}
+											<input
+												type="text"
+												maxLength={4}
+												value={tool.label}
+												onChange={e => {
+													const tools = [
+														...(settings.agent?.tools?.length
+															? settings.agent.tools
+															: defaultAgentTools()),
+													]
+													tools[idx] = {...tool, label: e.target.value}
+													set({
+														agent: {
+															activeId: settings.agent?.activeId || 'opencode',
+															tools,
+														},
+													})
+												}}
+											/>
+										</label>
+										<label className="wide">
+											Command{' '}
+											<input
+												type="text"
+												value={tool.command}
+												onChange={e => {
+													const tools = [
+														...(settings.agent?.tools?.length
+															? settings.agent.tools
+															: defaultAgentTools()),
+													]
+													tools[idx] = {...tool, command: e.target.value}
+													set({
+														agent: {
+															activeId: settings.agent?.activeId || 'opencode',
+															tools,
+														},
+													})
+												}}
+											/>
+										</label>
+										<label className="wide">
+											Continue{' '}
+											<input
+												type="text"
+												value={tool.continueCommand ?? ''}
+												placeholder="optional"
+												onChange={e => {
+													const tools = [
+														...(settings.agent?.tools?.length
+															? settings.agent.tools
+															: defaultAgentTools()),
+													]
+													tools[idx] = {
+														...tool,
+														continueCommand: e.target.value || undefined,
+													}
+													set({
+														agent: {
+															activeId: settings.agent?.activeId || 'opencode',
+															tools,
+														},
+													})
+												}}
+											/>
+										</label>
+									</div>
+								))}
+								<button
+									type="button"
+									className="settings-btn"
+									onClick={() =>
+										set({
+											agent: {
+												activeId: 'opencode',
+												tools: defaultAgentTools(),
+											},
+										})
+									}
+								>
+									Reset agents to defaults
+								</button>
+							</section>
+						)}
+						{tab === 'sync' && (
+							<>
+								<SyncSection onSettingsPulled={onChange} />
+								<section>
+									<h3>Backup & updates</h3>
+									<label>
+										<input
+											type="checkbox"
+											checked={settings.window.checkUpdatesOnStartup !== false}
+											onChange={e =>
+												set({
+													window: {
+														...settings.window,
+														checkUpdatesOnStartup: e.target.checked,
+													},
+												})
+											}
+										/>{' '}
+										Check for updates on startup (packaged installs)
+									</label>
+									<div className="settings-btn-row">
+										<button
+											type="button"
+											className="settings-btn"
+											onClick={() => {
+												void termApi()
+													?.settingsExport()
+													.then(r => {
+														if (!r.ok && r.error !== 'canceled')
+															window.alert(r.error || 'Export failed')
+													})
+											}}
+										>
+											Export settings…
+										</button>
+										<button
+											type="button"
+											className="settings-btn"
+											onClick={() => {
+												void termApi()
+													?.settingsImport()
+													.then(r => {
+														if (!r.ok) {
+															if (r.error !== 'canceled')
+																window.alert(r.error || 'Import failed')
+															return
+														}
+														if (r.settings) onChange(r.settings as AppSettings)
+													})
+											}}
+										>
+											Import settings…
+										</button>
+										<button
+											type="button"
+											className="settings-btn"
+											onClick={() => {
+												void termApi()
+													?.updateCheck()
+													.then(async s => {
+														const st = s as {
+															state: string
+															version?: string
+															message?: string
+															currentVersion: string
+														}
+														if (st.state === 'available') {
+															const ok = await termApi()?.dialogConfirm({
+																title: 'Update available',
+																message: 'Download version ' + st.version + '?',
+																detail: 'Current: ' + st.currentVersion,
+																buttons: ['Download', 'Later'],
+															})
+															if (ok) {
+																const d = await termApi()?.updateDownload()
+																if (
+																	d &&
+																	(d as {state: string}).state === 'downloaded'
+																) {
+																	await termApi()?.updateInstall()
+																}
+															}
+														} else if (st.message) {
+															window.alert(st.message)
+														}
+													})
+											}}
+										>
+											Check for updates…
+										</button>
+									</div>
+								</section>
+							</>
+						)}
+						{tab === 'window' && (
+							<>
+								<section>
+									<h3>Window & Tray</h3>
+									<label>
+										<input
+											type="checkbox"
+											checked={settings.window.acrylic}
+											onChange={e =>
+												set({
+													window: {
+														...settings.window,
+														acrylic: e.target.checked,
+													},
+												})
+											}
+										/>{' '}
+										Windows 11 mica backdrop (title bar)
+									</label>
+									<label>
+										<input
+											type="checkbox"
+											checked={settings.window.checkUpdatesOnStartup !== false}
+											onChange={e =>
+												set({
+													window: {
+														...settings.window,
+														checkUpdatesOnStartup: e.target.checked,
+													},
+												})
+											}
+										/>{' '}
+										Check for updates on startup (packaged installs)
+									</label>
+									<div className="settings-btn-row">
+										<button
+											type="button"
+											className="settings-btn"
+											onClick={() => {
+												void termApi()
+													?.settingsExport()
+													.then(r => {
+														if (!r.ok && r.error !== 'canceled')
+															window.alert(r.error || 'Export failed')
+													})
+											}}
+										>
+											Export settings…
+										</button>
+										<button
+											type="button"
+											className="settings-btn"
+											onClick={() => {
+												void termApi()
+													?.settingsImport()
+													.then(r => {
+														if (!r.ok) {
+															if (r.error !== 'canceled')
+																window.alert(r.error || 'Import failed')
+															return
+														}
+														if (r.settings) onChange(r.settings as AppSettings)
+													})
+											}}
+										>
+											Import settings…
+										</button>
+										<button
+											type="button"
+											className="settings-btn"
+											onClick={() => {
+												void termApi()
+													?.updateCheck()
+													.then(async s => {
+														const st = s as {
+															state: string
+															version?: string
+															message?: string
+															currentVersion: string
+														}
+														if (st.state === 'available') {
+															const ok = await termApi()?.dialogConfirm({
+																title: 'Update available',
+																message: `Download version ${st.version}?`,
+																detail: `Current: ${st.currentVersion}`,
+																buttons: ['Download', 'Later'],
+															})
+															if (ok) {
+																const d = await termApi()?.updateDownload()
+																if (
+																	d &&
+																	(d as {state: string}).state === 'downloaded'
+																) {
+																	await termApi()?.updateInstall()
+																}
+															}
+														} else if (st.message) {
+															window.alert(st.message)
+														}
+													})
+											}}
+										>
+											Check for updates…
+										</button>
+									</div>
+									<label>
+										<input
+											type="checkbox"
+											checked={settings.tray.enabled}
+											onChange={e =>
+												set({
+													tray: {...settings.tray, enabled: e.target.checked},
+												})
+											}
+										/>{' '}
+										Enable system tray icon
+									</label>
+									<label>
+										<input
+											type="checkbox"
+											checked={settings.tray.minimizeToTray}
+											onChange={e =>
+												set({
+													tray: {
+														...settings.tray,
+														minimizeToTray: e.target.checked,
+													},
+												})
+											}
+										/>{' '}
+										Minimize to tray
+									</label>
+									<label>
+										<input
+											type="checkbox"
+											checked={settings.tray.closeToTray}
+											onChange={e =>
+												set({
+													tray: {
+														...settings.tray,
+														closeToTray: e.target.checked,
+													},
+												})
+											}
+										/>{' '}
+										Close button hides to tray (quit via tray menu)
+									</label>
+									<p className="footer-dim">
+										Window size & position restore automatically on launch.
+									</p>
+								</section>
+
+								<section>
+									<h3>Quake dropdown (global hotkey)</h3>
+									<label>
+										<input
+											type="checkbox"
+											checked={settings.quake.enabled}
+											onChange={e =>
+												set({
+													quake: {...settings.quake, enabled: e.target.checked},
+												})
+											}
+										/>{' '}
+										Enable (summons the terminal from any app)
+									</label>
+									<label className="wide">
+										Hotkey
+										<HotkeyInput
+											value={settings.quake.hotkey}
+											ariaLabel="Quake hotkey"
+											onChange={v =>
+												set({
+													quake: {...settings.quake, hotkey: v},
+												})
+											}
+										/>
+									</label>
+									<p className="footer-dim">
+										Must be free globally (Windows Terminal / PowerToys often
+										own Ctrl+`). Default Alt+`; if denied we try Grave / Alt /
+										Win variants.
+									</p>
+									<label>
+										Height (%)
+										<input
+											type="number"
+											min={20}
+											max={90}
+											value={settings.quake.heightPercent}
+											onChange={e =>
+												set({
+													quake: {
+														...settings.quake,
+														heightPercent: Number(e.target.value),
+													},
+												})
+											}
+										/>
+									</label>
+									<label>
+										<input
+											type="checkbox"
+											checked={settings.quake.hideOnFocusLoss}
+											onChange={e =>
+												set({
+													quake: {
+														...settings.quake,
+														hideOnFocusLoss: e.target.checked,
+													},
+												})
+											}
+										/>{' '}
+										Hide when focus is lost
+									</label>
+								</section>
+							</>
+						)}
+					</div>
+				</div>
 			</div>
 		</div>
 	)

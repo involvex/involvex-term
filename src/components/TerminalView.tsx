@@ -416,16 +416,39 @@ export default function TerminalView({
 				return
 			}
 			try {
+				// Container may not be laid out yet — never spawn at FitAddon's
+				// 1×1 / 9×5 collapse (breaks PSReadLine + injects DA replies).
 				fit.fit()
-				const dims = {cols: term.cols || 80, rows: term.rows || 24}
+				let cols = term.cols
+				let rows = term.rows
+				if (cols < 40 || rows < 10) {
+					cols = 80
+					rows = 24
+					try {
+						term.resize(cols, rows)
+					} catch {
+						/* noop */
+					}
+				}
 				await api.ptySpawn({
 					id: paneId,
 					cwd: initialCwd,
-					cols: dims.cols,
-					rows: dims.rows,
+					cols,
+					rows,
 					profileId,
 				})
 				if (initialCwd) api.ptySeedCwd(paneId, initialCwd)
+				// Refit once the pane has real geometry, then push to ConPTY.
+				requestAnimationFrame(() => {
+					try {
+						fit.fit()
+						if (term.cols >= 40 && term.rows >= 10) {
+							api.ptyResize(paneId, term.cols, term.rows)
+						}
+					} catch {
+						/* noop */
+					}
+				})
 			} catch (err) {
 				term.writeln(`\x1b[31mPTY spawn failed: ${String(err)}\x1b[0m`)
 				term.writeln('If node-pty is missing, run: bun run rebuild')
@@ -460,7 +483,19 @@ export default function TerminalView({
 			offExit = api.onPtyExit(paneId, () =>
 				term.writeln('\r\n\x1b[90m[process exited]\x1b[0m'),
 			)
-			term.onData(d => api.ptyWrite(paneId, d))
+			// Suppress ConPTY/xterm Device Attributes replies during startup so
+			// they are not typed into PSReadLine as "[?1;2c".
+			const spawnAt = Date.now()
+			const esc = String.fromCharCode(0x1b)
+			const isAutoTermReply = (d: string) => {
+				if (!d.startsWith(esc + '[')) return false
+				const body = d.slice(2)
+				return /^\??[\d;]*c$/.test(body) || /^\d+;\d+R$/.test(body)
+			}
+			term.onData(d => {
+				if (Date.now() - spawnAt < 4000 && isAutoTermReply(d)) return
+				api.ptyWrite(paneId, d)
+			})
 		}
 		void spawn()
 

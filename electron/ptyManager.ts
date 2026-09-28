@@ -2,6 +2,7 @@ import type * as Pty from 'node-pty'
 import fs from 'node:fs'
 import {createRequire} from 'node:module'
 import os from 'node:os'
+import path from 'node:path'
 import {
 	defaultProfileId,
 	defaultProfiles,
@@ -33,6 +34,36 @@ function lazyPty(): typeof Pty | null {
 			e,
 		)
 		return null
+	}
+}
+
+/**
+ * node-pty's useConptyDll loads conpty\\conpty.dll next to conpty.node
+ * (build/Release). electron-rebuild does not copy it from prebuilds — do that
+ * here so SSH VT input works without breaking spawn when the DLL is missing.
+ */
+function ensureBundledConptyDll(): boolean {
+	if (process.platform !== 'win32') return false
+	try {
+		const ptyRoot = path.dirname(require.resolve('node-pty/package.json'))
+		const releaseDir = path.join(ptyRoot, 'build', 'Release')
+		const destDir = path.join(releaseDir, 'conpty')
+		const destDll = path.join(destDir, 'conpty.dll')
+		if (fs.existsSync(destDll)) return true
+
+		const arch = process.arch === 'arm64' ? 'win32-arm64' : 'win32-x64'
+		const srcDir = path.join(ptyRoot, 'prebuilds', arch, 'conpty')
+		const srcDll = path.join(srcDir, 'conpty.dll')
+		if (!fs.existsSync(srcDll)) return false
+
+		fs.mkdirSync(destDir, {recursive: true})
+		for (const name of fs.readdirSync(srcDir)) {
+			fs.copyFileSync(path.join(srcDir, name), path.join(destDir, name))
+		}
+		return fs.existsSync(destDll)
+	} catch (e) {
+		console.warn('[ptyManager] could not stage conpty.dll:', e)
+		return false
 	}
 }
 
@@ -84,11 +115,16 @@ export function spawnPty(
 			? args
 			: []
 		: args
+	const useConptyDll = ensureBundledConptyDll()
 	const pty = mod.spawn(finalShell, finalArgs, {
 		name: 'xterm-256color',
 		cols: cols || 80,
 		rows: rows || 24,
 		cwd: home,
+		useConpty: true,
+		// Prefer bundled ConPTY for SSH VT passthrough; fall back to inbox
+		// conhost when the DLL could not be staged next to conpty.node.
+		useConptyDll,
 		env: {
 			...process.env,
 			TERM: 'xterm-256color',

@@ -81,6 +81,60 @@ export interface TermApi {
 		settings?: unknown
 		error?: string
 	}>
+	syncStatus: () => Promise<{
+		linked: boolean
+		login?: string
+		gistId?: string
+		gistUrl?: string
+		lastSyncedAt?: number
+		localUpdatedAt: number
+		clientIdConfigured: boolean
+	}>
+	syncSetClientId: (clientId: string) => Promise<{
+		linked: boolean
+		login?: string
+		gistId?: string
+		gistUrl?: string
+		lastSyncedAt?: number
+		localUpdatedAt: number
+		clientIdConfigured: boolean
+	}>
+	syncLoginStart: () => Promise<{
+		ok: boolean
+		userCode?: string
+		verificationUri?: string
+		verificationUriComplete?: string
+		expiresIn?: number
+		error?: string
+	}>
+	syncLoginFinish: () => Promise<{
+		ok: boolean
+		error?: string
+		status: {
+			linked: boolean
+			login?: string
+			gistId?: string
+			gistUrl?: string
+			lastSyncedAt?: number
+			localUpdatedAt: number
+			clientIdConfigured: boolean
+		}
+	}>
+	syncLoginCancel: () => Promise<unknown>
+	syncLogout: () => Promise<unknown>
+	syncPush: (opts?: {force?: boolean}) => Promise<{
+		ok: boolean
+		needsConfirm?: boolean
+		remoteUpdatedAt?: number
+		error?: string
+		status: unknown
+	}>
+	syncPull: () => Promise<{
+		ok: boolean
+		settings?: unknown
+		error?: string
+		status: unknown
+	}>
 	updateCheck: () => Promise<unknown>
 	updateDownload: () => Promise<unknown>
 	updateInstall: () => Promise<void>
@@ -135,6 +189,14 @@ const api: TermApi = {
 		ipcRenderer.invoke('shell:showItemInFolder', {path: filePath}),
 	settingsExport: () => ipcRenderer.invoke('settings:export'),
 	settingsImport: () => ipcRenderer.invoke('settings:import'),
+	syncStatus: () => ipcRenderer.invoke('sync:status'),
+	syncSetClientId: clientId => ipcRenderer.invoke('sync:setClientId', clientId),
+	syncLoginStart: () => ipcRenderer.invoke('sync:loginStart'),
+	syncLoginFinish: () => ipcRenderer.invoke('sync:loginFinish'),
+	syncLoginCancel: () => ipcRenderer.invoke('sync:loginCancel'),
+	syncLogout: () => ipcRenderer.invoke('sync:logout'),
+	syncPush: opts => ipcRenderer.invoke('sync:push', opts),
+	syncPull: () => ipcRenderer.invoke('sync:pull'),
 	updateCheck: () => ipcRenderer.invoke('update:check'),
 	updateDownload: () => ipcRenderer.invoke('update:download'),
 	updateInstall: () => ipcRenderer.invoke('update:install'),
