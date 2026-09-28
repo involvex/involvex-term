@@ -11,6 +11,12 @@
 		"type": "git",
 		"url": "git+https://github.com/involvex/involvex-term.git"
 	},
+	"funding": [
+		{
+			"type": "github",
+			"url": "https://github.com/sponsors/involvex"
+		}
+	],
 	"license": "MIT",
 	"author": "involvex",
 	"type": "module",
@@ -68,5 +74,15 @@
 		"vite-plugin-electron": "^1",
 		"vite-plugin-electron-renderer": "^1"
 	},
-	"desktopName": "dev.involvex.term"
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"desktopName": "dev.involvex.term",
+	"packagemanager": "bun@1.4.2",
+	"sponsors": [
+		{
+			"name": "involvex",
+			"url": "https://github.com/sponsors/involvex"
+		}
+	]
 }
