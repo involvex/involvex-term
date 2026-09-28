@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react'
 import './App.css'
 import type {PaletteCommand} from './commands'
+import AboutModal from './components/AboutModal'
 import CommandPalette from './components/CommandPalette'
 import PaneLayout from './components/PaneLayout'
 import SearchBar from './components/SearchBar'
@@ -32,6 +33,7 @@ import {
 	updateSplitRatio,
 	type PaneDirection,
 	type PaneLeaf,
+	type PaneNode,
 	type SplitDir,
 } from './lib/panes'
 import {getTermActions} from './lib/termActions'
@@ -175,6 +177,7 @@ export default function App() {
 	const [activeId, setActiveId] = useState<string>('')
 	const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
 	const [showSettings, setShowSettings] = useState(false)
+	const [showAbout, setShowAbout] = useState(false)
 	const [git, setGit] = useState<GitStatus | null>(null)
 	const [sys, setSys] = useState<SysStats | null>(null)
 	const [cwd, setCwd] = useState('')
@@ -695,14 +698,32 @@ export default function App() {
 		[git?.cwd, cwd],
 	)
 
+	// leaf.cwd is only the spawn dir; main tracks the live one via OSC 7 / 9;9.
+	const livePaneCwd = useCallback(
+		async (tab: TabInfo, paneId: string): Promise<string | undefined> => {
+			const live = await termApi()
+				?.ptyCwd([paneId])
+				.then(r => r[0]?.cwd ?? null)
+				.catch(() => null)
+			return (
+				live ||
+				findLeaf(tab.root, paneId)?.cwd ||
+				(tab.id === activeRef.current ? git?.cwd || cwd : undefined) ||
+				undefined
+			)
+		},
+		[git?.cwd, cwd],
+	)
+
 	const duplicateTab = useCallback(
-		(id: string) => {
+		async (id: string, paneId?: string) => {
 			const tab = tabsRef.current.find(t => t.id === id)
 			if (!tab) return
-			const leaf = findLeaf(tab.root, tab.activePaneId)
-			addTab(leaf?.cwd || git?.cwd || cwd || undefined, leaf?.profileId)
+			const sourcePaneId = paneId ?? tab.activePaneId
+			const leaf = findLeaf(tab.root, sourcePaneId)
+			addTab(await livePaneCwd(tab, sourcePaneId), leaf?.profileId)
 		},
-		[addTab, git?.cwd, cwd],
+		[addTab, livePaneCwd],
 	)
 
 	const closeOtherTabs = useCallback(
@@ -761,94 +782,67 @@ export default function App() {
 		)
 	}, [])
 
-	const newSplitLeaf = useCallback(
-		(tab: TabInfo, targetPaneId: string): PaneLeaf => {
-			const activeLeaf = findLeaf(tab.root, targetPaneId)
-			const paneId = newPaneId()
-			return {
-				kind: 'leaf',
-				paneId,
-				cwd:
-					activeLeaf?.cwd ||
-					(tab.id === activeRef.current ? git?.cwd || cwd : undefined) ||
-					undefined,
-				profileId:
-					activeLeaf?.profileId ||
-					settingsRef.current.terminal.defaultProfileId,
-			}
-		},
-		[git?.cwd, cwd],
-	)
-
-	// Split a pane; the new pane inherits the target pane's cwd/profile.
-	const splitPane = useCallback(
-		(dir: SplitDir, targetPaneId?: string) => {
-			const tabId = activeRef.current
+	// Split a pane; the new pane inherits the target pane's live cwd/profile.
+	const splitInto = useCallback(
+		async (
+			tabId: string,
+			targetPaneId: string | undefined,
+			insert: (root: PaneNode, paneId: string, leaf: PaneLeaf) => PaneNode,
+		) => {
 			const tab = tabsRef.current.find(t => t.id === tabId)
 			if (!tab) return
 			const paneId = targetPaneId ?? tab.activePaneId
-			if (!findLeaf(tab.root, paneId)) return
-			const newLeaf = newSplitLeaf(tab, paneId)
+			const target = findLeaf(tab.root, paneId)
+			if (!target) return
+			const newLeaf: PaneLeaf = {
+				kind: 'leaf',
+				paneId: newPaneId(),
+				cwd: await livePaneCwd(tab, paneId),
+				profileId:
+					target.profileId || settingsRef.current.terminal.defaultProfileId,
+			}
 			setTabs(prev =>
 				prev.map(t =>
-					t.id === tabId
+					t.id === tabId && findLeaf(t.root, paneId)
 						? {
 								...t,
-								root: splitLeaf(t.root, paneId, newLeaf, dir),
+								root: insert(t.root, paneId, newLeaf),
 								activePaneId: newLeaf.paneId,
 							}
 						: t,
 				),
 			)
 		},
-		[newSplitLeaf],
+		[livePaneCwd],
+	)
+
+	const splitPane = useCallback(
+		(dir: SplitDir, targetPaneId?: string) => {
+			void splitInto(activeRef.current, targetPaneId, (root, id, leaf) =>
+				splitLeaf(root, id, leaf, dir),
+			)
+		},
+		[splitInto],
 	)
 
 	const splitPaneOnTab = useCallback(
 		(tabId: string, dir: SplitDir) => {
 			setActiveId(tabId)
 			activeRef.current = tabId
-			const tab = tabsRef.current.find(t => t.id === tabId)
-			if (!tab) return
-			const paneId = tab.activePaneId
-			if (!findLeaf(tab.root, paneId)) return
-			const newLeaf = newSplitLeaf(tab, paneId)
-			setTabs(prev =>
-				prev.map(t =>
-					t.id === tabId
-						? {
-								...t,
-								root: splitLeaf(t.root, paneId, newLeaf, dir),
-								activePaneId: newLeaf.paneId,
-							}
-						: t,
-				),
+			void splitInto(tabId, undefined, (root, id, leaf) =>
+				splitLeaf(root, id, leaf, dir),
 			)
 		},
-		[newSplitLeaf],
+		[splitInto],
 	)
 
 	const splitPaneToward = useCallback(
 		(toward: PaneDirection, targetPaneId?: string) => {
-			const tabId = activeRef.current
-			const tab = tabsRef.current.find(t => t.id === tabId)
-			if (!tab) return
-			const paneId = targetPaneId ?? tab.activePaneId
-			if (!findLeaf(tab.root, paneId)) return
-			const newLeaf = newSplitLeaf(tab, paneId)
-			setTabs(prev =>
-				prev.map(t =>
-					t.id === tabId
-						? {
-								...t,
-								root: splitLeafToward(t.root, paneId, newLeaf, toward),
-								activePaneId: newLeaf.paneId,
-							}
-						: t,
-				),
+			void splitInto(activeRef.current, targetPaneId, (root, id, leaf) =>
+				splitLeafToward(root, id, leaf, toward),
 			)
 		},
-		[newSplitLeaf],
+		[splitInto],
 	)
 
 	const swapPane = useCallback(
@@ -940,17 +934,15 @@ export default function App() {
 			const idx = tabsNow.findIndex(t => t.id === active)
 			if (action === 'new-tab') addTab()
 			else if (action === 'close-tab') closeTab(active)
-			else if (action === 'duplicate-tab') {
-				const tab = tabsRef.current.find(t => t.id === active)
-				const leaf = tab ? findLeaf(tab.root, tab.activePaneId) : null
-				addTab(git?.cwd || cwd || undefined, leaf?.profileId)
-			} else if (action === 'next-tab' && tabsNow.length > 1)
+			else if (action === 'duplicate-tab') void duplicateTab(active)
+			else if (action === 'next-tab' && tabsNow.length > 1)
 				selectTab(tabsNow[(idx + 1) % tabsNow.length]?.id || active)
 			else if (action === 'prev-tab' && tabsNow.length > 1)
 				selectTab(
 					tabsNow[(idx - 1 + tabsNow.length) % tabsNow.length]?.id || active,
 				)
 			else if (action === 'open-settings') setShowSettings(true)
+			else if (action === 'open-about') setShowAbout(true)
 			else if (action === 'open-search') setSearchOpen(true)
 			else if (action === 'open-palette') setPaletteOpen(true)
 			else if (action === 'open-opencode') launchAgent()
@@ -967,14 +959,13 @@ export default function App() {
 	}, [
 		addTab,
 		closeTab,
+		duplicateTab,
 		selectTab,
 		splitPane,
 		closePane,
 		launchAgent,
 		activePaneActions,
 		checkUpdates,
-		git?.cwd,
-		cwd,
 	])
 
 	// Keyboard shortcuts in renderer (works in dev + packaged).
@@ -1022,7 +1013,7 @@ export default function App() {
 				if (nt) selectTab(nt.id)
 			} else if (hit('duplicate-tab', 'Ctrl+Shift+D')) {
 				e.preventDefault()
-				if (activeRef.current) duplicateTab(activeRef.current)
+				if (activeRef.current) void duplicateTab(activeRef.current)
 			} else if (hit('split-pane', 'Shift+Alt+D')) {
 				e.preventDefault()
 				splitPane('horizontal')
@@ -1160,7 +1151,9 @@ export default function App() {
 			id: 'cmd:duplicate-tab',
 			title: 'Duplicate active tab',
 			hint: 'Ctrl+Shift+D',
-			run: () => addTab(git?.cwd || cwd || undefined),
+			run: () => {
+				if (activeRef.current) void duplicateTab(activeRef.current)
+			},
 		},
 		{
 			id: 'cmd:find',
@@ -1236,6 +1229,11 @@ export default function App() {
 			title: 'Check for updates…',
 			hint: 'Ctrl+Shift+U',
 			run: () => void checkUpdates(),
+		},
+		{
+			id: 'cmd:about',
+			title: 'About Involvex-Term',
+			run: () => setShowAbout(true),
 		},
 		...settings.terminal.snippets.map(s => ({
 			id: `cmd:snippet-${s.id}`,
@@ -1315,7 +1313,7 @@ export default function App() {
 						onReorder={reorderTabs}
 						onTogglePin={togglePinTab}
 						onSetColor={setTabColor}
-						onDuplicate={duplicateTab}
+						onDuplicate={id => void duplicateTab(id)}
 						onSplit={(id, dir) => splitPaneOnTab(id, dir)}
 						onExportBuffer={id => void exportTabBuffer(id)}
 						onCloseOthers={id => void closeOtherTabs(id)}
@@ -1375,13 +1373,7 @@ export default function App() {
 										focusPane(t.id, paneId)
 										closeOtherPanes(paneId)
 									},
-									onDuplicateTab: paneId => {
-										const leaf = findLeaf(t.root, paneId)
-										addTab(
-											leaf?.cwd || git?.cwd || cwd || undefined,
-											leaf?.profileId,
-										)
-									},
+									onDuplicateTab: paneId => void duplicateTab(t.id, paneId),
 									onCloseTab: () => closeTab(t.id),
 								}}
 							/>
@@ -1421,6 +1413,7 @@ export default function App() {
 					onClose={() => setShowSettings(false)}
 				/>
 			)}
+			{showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
 			{paletteOpen && activeTab && (
 				<CommandPalette
 					tabId={activeTab.activePaneId}

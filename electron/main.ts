@@ -441,6 +441,14 @@ function registerIpc() {
 		},
 	)
 
+	ipcMain.handle('app:info', () => ({
+		name: app.getName(),
+		version: app.getVersion(),
+		electron: process.versions.electron,
+		chrome: process.versions.chrome,
+		node: process.versions.node,
+		platform: `${process.platform} ${process.arch}`,
+	}))
 	ipcMain.handle('shell:openExternal', async (_e, {url}: {url: string}) => {
 		const u = String(url ?? '').trim()
 		if (!/^https?:\/\//i.test(u) && !/^mailto:/i.test(u)) return

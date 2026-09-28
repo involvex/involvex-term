@@ -178,6 +178,15 @@ export interface SyncStatus {
 	clientIdConfigured: boolean
 }
 
+export interface AppInfo {
+	name: string
+	version: string
+	electron: string
+	chrome: string
+	node: string
+	platform: string
+}
+
 export interface TermApiShape {
 	ptySpawn: (args: {
 		id: string
@@ -233,6 +242,7 @@ export interface TermApiShape {
 		title?: string
 		buttons?: [string, string]
 	}) => Promise<boolean>
+	appInfo: () => Promise<AppInfo>
 	openExternal: (url: string) => Promise<void>
 	openPath: (filePath: string) => Promise<string>
 	showItemInFolder: (filePath: string) => Promise<void>

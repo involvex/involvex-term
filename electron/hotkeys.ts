@@ -307,6 +307,11 @@ export async function buildMenu(
 				{role: 'togglefullscreen'},
 			],
 		},
+		{
+			id: 'app:about',
+			label: 'About',
+			click: () => win.webContents.send('tab:action', 'open-about'),
+		},
 	]
 	const menu = Menu.buildFromTemplate(template)
 	Menu.setApplicationMenu(menu)

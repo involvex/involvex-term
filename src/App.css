@@ -986,6 +986,65 @@ body {
 .modal-path {
 	font-size: 11px;
 }
+
+.modal.about-modal {
+	width: min(460px, 92vw);
+}
+.about-icon {
+	border-radius: 8px;
+	flex-shrink: 0;
+}
+.about-title {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	flex: 1;
+	font-size: 12px;
+}
+.about-close {
+	align-self: flex-start;
+}
+.about-tagline {
+	margin: 12px 0 8px;
+	font-size: 12px;
+}
+.about-links {
+	margin: 0;
+	border-top: 1px solid #3c3c3c;
+	padding-top: 8px;
+}
+.about-row {
+	display: grid;
+	grid-template-columns: 90px 1fr;
+	gap: 8px;
+	padding: 3px 0;
+	font-size: 12px;
+}
+.about-row dt {
+	color: #858585;
+}
+.about-row dd {
+	margin: 0;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.about-row a {
+	color: #4ec9b0;
+	text-decoration: none;
+}
+.about-row a:hover {
+	text-decoration: underline;
+}
+.about-runtime {
+	margin: 10px 0 0;
+	font-size: 11px;
+}
+.about-actions {
+	justify-content: flex-end;
+	margin-bottom: 0;
+}
 .modal section {
 	margin-top: 12px;
 	border-top: 1px solid #3c3c3c;
