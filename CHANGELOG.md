@@ -1,20 +1,24 @@
 # Changelog
 
+All notable changes to this project are documented in this file.
+
 ## [0.6.0] - 2026-09-28
 
 ### Added
 
-- GitHub gist settings sync and ConPTY SSH fixes
+- Settings sync via private GitHub Gist (Device Flow login, Push / Pull)
+- Tabbed Settings UI (Appearance, Terminal, Hotkeys, Status, Window, Agent, Sync)
 
 ### Fixed
 
+- SSH arrow keys echoing as `^[[A` / `^[[1;2D` (bundled ConPTY DLL)
+- New-tab `[?1;2c` / tiny PTY spawn size crashing PSReadLine
+- Sync UI treating signed-in users as unlinked until first gist push
 - bump action-gh-release for large asset uploads
 
 ### Changed
 
-- funding
-
-All notable changes to this project are documented in this file.
+- funding links
 
 ## [0.5.1] - 2026-09-27
 
