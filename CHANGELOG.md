@@ -13,6 +13,12 @@ All notable changes to this project are documented in this file.
 - Optional AI-agnostic agent env hooks on PTY spawn (Settings → Agent):
   `TERM_PROGRAM`, `INVOLVEX_TERM_*`, and `INVOLVEX_TERM_CONTEXT` JSON for
   OpenCode / other agent CLIs — no in-app chat UI
+- Docs site: agent split screenshot + Agent integration section (OpenCode,
+  pane labels, env hooks) with links to README details
+
+### Changed
+
+- Docs / README: point visitors at GitHub Pages screenshots for agent UI
 
 ## [0.6.0] - 2026-09-28
 
