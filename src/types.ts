@@ -178,6 +178,15 @@ export interface SyncStatus {
 	clientIdConfigured: boolean
 }
 
+export type CliCommand =
+	| {
+			kind: 'split'
+			direction: 'horizontal' | 'vertical'
+			dir?: string
+			profile?: string
+	  }
+	| {kind: 'new-tab'; dir?: string; profile?: string}
+
 export interface AppInfo {
 	name: string
 	version: string
@@ -242,6 +251,8 @@ export interface TermApiShape {
 		title?: string
 		buttons?: [string, string]
 	}) => Promise<boolean>
+	cliPending: () => Promise<CliCommand[]>
+	onCliCommand: (cb: (cmd: CliCommand) => void) => () => void
 	appInfo: () => Promise<AppInfo>
 	openExternal: (url: string) => Promise<void>
 	openPath: (filePath: string) => Promise<string>

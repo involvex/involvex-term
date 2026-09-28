@@ -3,3 +3,6 @@ coverage = true
 coverageDir = "coverage"
 timeout = 5000
 parallel = true
+
+[install]
+linker = "hoisted"

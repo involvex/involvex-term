@@ -13,7 +13,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {fileURLToPath} from 'node:url'
-import {sniffCwd} from './cwdTracker.js'
+import {parseCliArgs, type CliCommand} from './cliArgs.js'
+import {clearCwdPending, sniffCwd} from './cwdTracker.js'
 import {buildEnvHooks} from './envHooks.js'
 import {
 	checkoutBranch,
@@ -84,6 +85,15 @@ if (!gotLock) {
 }
 
 let isQuitting = false
+
+// wt-style CLI commands (`involvex-term sp -d .`). Queued until the renderer
+// has bootstrapped its tabs and asks for them via `cli:pending`.
+const pendingCli: CliCommand[] = []
+let cliReady = false
+{
+	const first = parseCliArgs(process.argv.slice(app.isPackaged ? 1 : 2))
+	if (first) pendingCli.push(first)
+}
 
 function iconPath(): string {
 	const custom = path.join(process.env.VITE_PUBLIC, 'icon.png')
@@ -312,6 +322,7 @@ function registerIpc() {
 	)
 	ipcMain.on('pty:kill', (_e, {id}: {id: string}) => {
 		killPty(id)
+		clearCwdPending(id)
 		const w = gitWatchers.get(id)
 		if (w) {
 			void w.close().catch(() => undefined)
@@ -441,6 +452,10 @@ function registerIpc() {
 		},
 	)
 
+	ipcMain.handle('cli:pending', () => {
+		cliReady = true
+		return pendingCli.splice(0)
+	})
 	ipcMain.handle('app:info', () => ({
 		name: app.getName(),
 		version: app.getVersion(),
@@ -688,7 +703,13 @@ app.on('activate', () => {
 })
 
 if (gotLock) {
-	app.on('second-instance', () => {
+	app.on('second-instance', (_e, argv) => {
+		const cmd = parseCliArgs(argv.slice(app.isPackaged ? 1 : 2))
+		if (cmd) {
+			if (win && !win.isDestroyed() && cliReady) {
+				win.webContents.send('cli:command', cmd)
+			} else pendingCli.push(cmd)
+		}
 		if (!win || win.isDestroyed()) return
 		if (win.isMinimized()) win.restore()
 		win.show()

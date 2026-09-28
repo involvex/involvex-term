@@ -32,8 +32,45 @@ function decodeOsc9Path(p: string): string {
 	return normalizeWinPath(p.trim().replace(/^"(.*)"$/, '$1'))
 }
 
-/** Scan pty output for cwd OSCs, update cwd, return cleaned output. */
+const OSC_STARTS = ['7;file://', '633;P;Cwd=', '9;9;']
+const MAX_PENDING = 4096
+const pending = new Map<string, string>()
+
+export function clearCwdPending(tabId: string): void {
+	pending.delete(tabId)
+}
+
+/** Index of an unterminated cwd OSC at the end of `data`, or -1. */
+function incompleteTailStart(data: string): number {
+	const i = data.lastIndexOf('\x1b]')
+	if (i < 0 || data.length - i > MAX_PENDING) return -1
+	const body = data.slice(i + 2)
+	if (/\x07|\x1b\\/.test(body)) return -1
+	const ok = OSC_STARTS.some(s => s.startsWith(body) || body.startsWith(s))
+	return ok ? i : -1
+}
+
+/**
+ * Scan pty output for cwd OSCs, update cwd, return cleaned output.
+ * A sequence split across chunks is held back and completed by the next one.
+ */
 export function sniffCwd(
+	tabId: string,
+	data: string,
+	onChange?: (tabId: string, cwd: string) => void,
+): string {
+	const combined = (pending.get(tabId) ?? '') + data
+	const cut = incompleteTailStart(combined)
+	if (cut >= 0) pending.set(tabId, combined.slice(cut))
+	else pending.delete(tabId)
+	return sniffComplete(
+		tabId,
+		cut >= 0 ? combined.slice(0, cut) : combined,
+		onChange,
+	)
+}
+
+function sniffComplete(
 	tabId: string,
 	data: string,
 	onChange?: (tabId: string, cwd: string) => void,

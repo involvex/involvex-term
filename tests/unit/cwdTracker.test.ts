@@ -31,6 +31,21 @@ describe('CWD Tracker OSC7 sniffing', () => {
 		expect(output).toBe('aPS C:\\> ')
 	})
 
+	it('reassembles a sequence split across chunks', () => {
+		const seen: string[] = []
+		const cb = (_id: string, cwd: string) => seen.push(cwd)
+		const a = sniffCwd('tab-4', 'hi\x1b]9;9;C:\\spl', cb)
+		expect(a).toBe('hi')
+		expect(seen).toEqual([])
+		const b = sniffCwd('tab-4', 'it\x1b\\ok', cb)
+		expect(b).toBe('ok')
+		expect(seen).toEqual(['C:\\split'])
+	})
+
+	it('does not hold back unrelated escape sequences', () => {
+		expect(sniffCwd('tab-5', 'x\x1b]0;title')).toBe('x\x1b]0;title')
+	})
+
 	it('uses the last cwd sequence when OSC 7 and OSC 9;9 both appear', () => {
 		let capturedCwd = ''
 		sniffCwd(

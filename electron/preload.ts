@@ -72,6 +72,8 @@ export interface TermApi {
 		title?: string
 		buttons?: [string, string]
 	}) => Promise<boolean>
+	cliPending: () => Promise<unknown[]>
+	onCliCommand: (cb: (cmd: unknown) => void) => () => void
 	appInfo: () => Promise<{
 		name: string
 		version: string
@@ -191,6 +193,8 @@ const api: TermApi = {
 	agentWhich: binary => ipcRenderer.invoke('agent:which', {binary}),
 	dialogSaveText: opts => ipcRenderer.invoke('dialog:saveText', opts),
 	dialogConfirm: opts => ipcRenderer.invoke('dialog:confirm', opts),
+	cliPending: () => ipcRenderer.invoke('cli:pending'),
+	onCliCommand: cb => sub('cli:command', cb as never),
 	appInfo: () => ipcRenderer.invoke('app:info'),
 	openExternal: url => ipcRenderer.invoke('shell:openExternal', {url}),
 	openPath: filePath => ipcRenderer.invoke('shell:openPath', {path: filePath}),

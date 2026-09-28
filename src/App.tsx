@@ -41,6 +41,7 @@ import {
 	isElectron,
 	termApi,
 	type AppSettings,
+	type CliCommand,
 	type GitStatus,
 	type OpencodeStatus,
 	type QuickCommand,
@@ -788,6 +789,7 @@ export default function App() {
 			tabId: string,
 			targetPaneId: string | undefined,
 			insert: (root: PaneNode, paneId: string, leaf: PaneLeaf) => PaneNode,
+			opts?: {cwd?: string; profileId?: string},
 		) => {
 			const tab = tabsRef.current.find(t => t.id === tabId)
 			if (!tab) return
@@ -797,9 +799,11 @@ export default function App() {
 			const newLeaf: PaneLeaf = {
 				kind: 'leaf',
 				paneId: newPaneId(),
-				cwd: await livePaneCwd(tab, paneId),
+				cwd: opts?.cwd || (await livePaneCwd(tab, paneId)),
 				profileId:
-					target.profileId || settingsRef.current.terminal.defaultProfileId,
+					opts?.profileId ||
+					target.profileId ||
+					settingsRef.current.terminal.defaultProfileId,
 			}
 			setTabs(prev =>
 				prev.map(t =>
@@ -835,6 +839,38 @@ export default function App() {
 		},
 		[splitInto],
 	)
+
+	// wt-style CLI (`involvex-term sp|nt -d <dir>`) forwarded from main.
+	const runCli = useCallback(
+		(cmd: CliCommand) => {
+			const profiles = settingsRef.current.terminal.profiles
+			const want = cmd.profile?.toLowerCase()
+			const profileId = want
+				? profiles.find(
+						p => p.id.toLowerCase() === want || p.name.toLowerCase() === want,
+					)?.id
+				: undefined
+			if (cmd.kind === 'new-tab') {
+				addTab(cmd.dir, profileId)
+				return
+			}
+			void splitInto(
+				activeRef.current,
+				undefined,
+				(root, id, leaf) => splitLeaf(root, id, leaf, cmd.direction),
+				{cwd: cmd.dir, profileId},
+			)
+		},
+		[addTab, splitInto],
+	)
+
+	useEffect(() => {
+		const api = termApi()
+		if (!api || !bootstrapped) return
+		const off = api.onCliCommand(runCli)
+		void api.cliPending().then(list => list.forEach(runCli))
+		return off
+	}, [bootstrapped, runCli])
 
 	const splitPaneToward = useCallback(
 		(toward: PaneDirection, targetPaneId?: string) => {

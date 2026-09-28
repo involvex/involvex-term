@@ -21,6 +21,9 @@
 	"author": "involvex",
 	"type": "module",
 	"main": "dist-electron/main.js",
+	"workspaces": [
+		"packages/*"
+	],
 	"scripts": {
 		"build": "tsc && vite build && bun scripts/rebuild-pty.mjs && electron-builder --publish never && bun scripts/link-latest.mjs",
 		"build:electron": "tsc --project tsconfig.node.json && vite build",

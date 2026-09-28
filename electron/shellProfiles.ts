@@ -23,6 +23,23 @@ export const PWSH_OSC7_INIT =
 	"try{[Console]::Write([char]27+']7;file://localhost/'+[uri]::EscapeDataString($PWD.Path)+[char]7)}catch{};" +
 	"if($__it_pb){&$__it_pb}else{'PS '+$PWD.Path+'> '}}"
 
+/** cmd.exe: emit Windows Terminal OSC 9;9 (cwd) in every prompt. */
+export const CMD_OSC9_PROMPT = 'prompt $E]9;9;$P$E\\$P$G'
+
+/**
+ * WSL bash: PROMPT_COMMAND emits OSC 9;9 with the Windows-form path. The
+ * script travels base64-encoded so the wsl.exe command line needs no quoting.
+ */
+const WSL_OSC9_SCRIPT =
+	`PROMPT_COMMAND='printf "\\033]9;9;%s\\033\\\\" "$(wslpath -w "$PWD")"'; ` +
+	'export PROMPT_COMMAND'
+export const WSL_OSC9_ARGS = [
+	'-e',
+	'bash',
+	'-c',
+	`eval $(echo ${Buffer.from(WSL_OSC9_SCRIPT).toString('base64')}|base64 -d);exec bash -i`,
+]
+
 const WIN = process.platform === 'win32'
 const SYSTEM_ROOT = process.env['SystemRoot'] ?? 'C:\\Windows'
 
@@ -149,13 +166,18 @@ export function resolveProfile(profile: ShellProfile): {
 	if (profile.kind === 'cmd') {
 		const shell =
 			profile.command && exists(profile.command) ? profile.command : findCmd()
-		return {shell, args: extra, available: exists(shell)}
+		return {
+			shell,
+			args: extra.length ? extra : ['/k', CMD_OSC9_PROMPT],
+			available: exists(shell),
+		}
 	}
 	const shell =
 		profile.command && exists(profile.command) ? profile.command : findWsl()
+	const customCmd = extra.some(a => ['-e', '--exec', '--', '-u'].includes(a))
 	return {
 		shell: shell ?? findCmd(),
-		args: extra,
+		args: shell && !customCmd ? [...extra, ...WSL_OSC9_ARGS] : extra,
 		available: Boolean(shell),
 	}
 }

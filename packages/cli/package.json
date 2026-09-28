@@ -1,0 +1,34 @@
+{
+	"name": "@involvex/term",
+	"version": "0.1.0",
+	"description": "CLI for Involvex-Term: install the latest release and control the running window (sp, nt)",
+	"homepage": "https://github.com/involvex/involvex-term#readme",
+	"bugs": {
+		"url": "https://github.com/involvex/involvex-term/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/involvex/involvex-term.git",
+		"directory": "packages/cli"
+	},
+	"funding": {
+		"type": "github",
+		"url": "https://github.com/sponsors/involvex"
+	},
+	"license": "MIT",
+	"author": "involvex",
+	"type": "module",
+	"bin": {
+		"involvex-term": "bin/cli.mjs"
+	},
+	"files": [
+		"bin",
+		"README.md"
+	],
+	"engines": {
+		"node": ">=18"
+	},
+	"publishConfig": {
+		"access": "public"
+	}
+}
