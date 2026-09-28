@@ -37,6 +37,10 @@
 		"preview": "vite preview",
 		"rebuild": "bun scripts/rebuild-pty.mjs --force",
 		"release": "bun scripts/release.mjs",
+		"test": "bun test",
+		"test:coverage": "bun test --coverage",
+		"test:parallel": "bun test --parallel",
+		"test:watch": "bun test --watch",
 		"typecheck": "tsc --noEmit"
 	},
 	"prettier": "@involvex/prettier-config",
