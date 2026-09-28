@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0] - 2026-09-28
+
+### Added
+
+- GitHub gist settings sync and ConPTY SSH fixes
+
+### Fixed
+
+- bump action-gh-release for large asset uploads
+
+### Changed
+
+- funding
+
 All notable changes to this project are documented in this file.
 
 ## [0.5.1] - 2026-09-27
