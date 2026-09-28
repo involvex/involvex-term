@@ -11,6 +11,7 @@ Track progress by moving items into CHANGELOG when shipped.
 - Session restore, tray, quake dropdown
 - Git footer (branch, dirty, ahead/behind, stash) + live OSC7 cwd
 - OpenCode launch, PATH detect, footer status, click-to-continue
+- Agent-aware pane/tab labels from OpenCode session list (busy/idle cue)
 - CI (lint / tsc / format) + GitHub Releases (Windows NSIS, Linux AppImage)
 - Settings file (`~/.involvex-term/settings.json`), native confirm-on-close
 - Shell / profile picker, tab rename + drag-reorder, theme presets,
@@ -45,7 +46,8 @@ Shipped in tree (see CHANGELOG 0.2.0 unreleased):
 
 1. ~~Footer Git actions (branch menu, open in Explorer, copy remote)~~
 2. ~~OpenCode multi-session picker~~
-3. Optional AI-agnostic env hooks only (no competing chat UI)
+3. ~~Optional AI-agnostic env hooks only (no competing chat UI)~~
+4. ~~Agent-aware pane labels (session title on tab/pane chrome)~~
 
 ## Explicitly out of scope
 

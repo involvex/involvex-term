@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Agent-aware pane labels: tab + pane chrome show OpenCode session titles when
+  a pane matches a listed session (cwd or launch/continue binding); busy/idle
+  from recent `updated`; clears when the session leaves the list. Toggle:
+  Settings → Agent → Pane labels (`agent.showPaneLabels`, default on)
+- Optional AI-agnostic agent env hooks on PTY spawn (Settings → Agent):
+  `TERM_PROGRAM`, `INVOLVEX_TERM_*`, and `INVOLVEX_TERM_CONTEXT` JSON for
+  OpenCode / other agent CLIs — no in-app chat UI
+
 ## [0.6.0] - 2026-09-28
 
 ### Added

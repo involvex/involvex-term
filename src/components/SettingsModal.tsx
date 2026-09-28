@@ -1059,6 +1059,7 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 													...(settings.agent ?? {
 														activeId: 'opencode',
 														tools: defaultAgentTools(),
+														envHooks: {enabled: false, includeGit: true},
 													}),
 													activeId: e.target.value,
 													tools: settings.agent?.tools?.length
@@ -1106,6 +1107,12 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 														agent: {
 															activeId: settings.agent?.activeId || 'opencode',
 															tools,
+															envHooks: settings.agent?.envHooks ?? {
+																enabled: false,
+																includeGit: true,
+															},
+															showPaneLabels:
+																settings.agent?.showPaneLabels !== false,
 														},
 													})
 												}}
@@ -1127,6 +1134,12 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 														agent: {
 															activeId: settings.agent?.activeId || 'opencode',
 															tools,
+															envHooks: settings.agent?.envHooks ?? {
+																enabled: false,
+																includeGit: true,
+															},
+															showPaneLabels:
+																settings.agent?.showPaneLabels !== false,
 														},
 													})
 												}}
@@ -1152,6 +1165,12 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 														agent: {
 															activeId: settings.agent?.activeId || 'opencode',
 															tools,
+															envHooks: settings.agent?.envHooks ?? {
+																enabled: false,
+																includeGit: true,
+															},
+															showPaneLabels:
+																settings.agent?.showPaneLabels !== false,
 														},
 													})
 												}}
@@ -1167,12 +1186,104 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 											agent: {
 												activeId: 'opencode',
 												tools: defaultAgentTools(),
+												envHooks: settings.agent?.envHooks ?? {
+													enabled: false,
+													includeGit: true,
+												},
+												showPaneLabels:
+													settings.agent?.showPaneLabels !== false,
 											},
 										})
 									}
 								>
 									Reset agents to defaults
 								</button>
+
+								<h3 style={{marginTop: '1.25rem'}}>Pane labels</h3>
+								<p className="footer-dim">
+									When an OpenCode session matches a pane (by cwd or after
+									launch/continue), show the session title on the tab and a chip
+									on the pane. Labels clear when the session leaves the OpenCode
+									list. Busy vs idle uses recent session activity.
+								</p>
+								<label>
+									<input
+										type="checkbox"
+										checked={settings.agent?.showPaneLabels !== false}
+										onChange={e =>
+											set({
+												agent: {
+													activeId: settings.agent?.activeId || 'opencode',
+													tools: settings.agent?.tools?.length
+														? settings.agent.tools
+														: defaultAgentTools(),
+													envHooks: settings.agent?.envHooks ?? {
+														enabled: false,
+														includeGit: true,
+													},
+													showPaneLabels: e.target.checked,
+												},
+											})
+										}
+									/>{' '}
+									Show agent session titles on tabs and panes
+								</label>
+
+								<h3 style={{marginTop: '1.25rem'}}>Agent env hooks</h3>
+								<p className="footer-dim">
+									Opt-in environment variables injected into each new pane so
+									OpenCode or any other agent CLI can read session context. No
+									in-app chat UI — hooks only. New tabs/panes pick up changes;
+									existing shells keep their spawn-time env.
+								</p>
+								<label>
+									<input
+										type="checkbox"
+										checked={settings.agent?.envHooks?.enabled === true}
+										onChange={e =>
+											set({
+												agent: {
+													activeId: settings.agent?.activeId || 'opencode',
+													tools: settings.agent?.tools?.length
+														? settings.agent.tools
+														: defaultAgentTools(),
+													envHooks: {
+														enabled: e.target.checked,
+														includeGit:
+															settings.agent?.envHooks?.includeGit !== false,
+													},
+													showPaneLabels:
+														settings.agent?.showPaneLabels !== false,
+												},
+											})
+										}
+									/>{' '}
+									Inject session env on PTY spawn
+								</label>
+								<label>
+									<input
+										type="checkbox"
+										disabled={settings.agent?.envHooks?.enabled !== true}
+										checked={settings.agent?.envHooks?.includeGit !== false}
+										onChange={e =>
+											set({
+												agent: {
+													activeId: settings.agent?.activeId || 'opencode',
+													tools: settings.agent?.tools?.length
+														? settings.agent.tools
+														: defaultAgentTools(),
+													envHooks: {
+														enabled: settings.agent?.envHooks?.enabled === true,
+														includeGit: e.target.checked,
+													},
+													showPaneLabels:
+														settings.agent?.showPaneLabels !== false,
+												},
+											})
+										}
+									/>{' '}
+									Include git context (branch, dirty, ahead/behind, remote)
+								</label>
 							</section>
 						)}
 						{tab === 'sync' && (

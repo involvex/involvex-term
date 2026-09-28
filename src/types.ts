@@ -121,6 +121,13 @@ export interface AppSettings {
 	agent: {
 		activeId: string
 		tools: AgentTool[]
+		/** Optional AI-agnostic env injected on PTY spawn (no in-app chat). */
+		envHooks: {
+			enabled: boolean
+			includeGit: boolean
+		}
+		/** Show OpenCode session titles on tab/pane chrome (default on). */
+		showPaneLabels: boolean
 	}
 	startup: {
 		mode: 'session' | 'new'
