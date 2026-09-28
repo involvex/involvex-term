@@ -121,6 +121,11 @@ export interface AppSettings {
 	agent: {
 		activeId: string
 		tools: AgentTool[]
+		/** Optional AI-agnostic env injected on PTY spawn (no in-app chat). */
+		envHooks: {
+			enabled: boolean
+			includeGit: boolean
+		}
 	}
 	startup: {
 		mode: 'session' | 'new'

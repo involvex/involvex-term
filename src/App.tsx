@@ -119,6 +119,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 	agent: {
 		activeId: 'opencode',
 		tools: defaultAgentTools(),
+		envHooks: {enabled: false, includeGit: true},
 	},
 	startup: {mode: 'session', profileId: ''},
 	window: {

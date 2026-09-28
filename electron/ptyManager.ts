@@ -75,6 +75,22 @@ export function resolveShell(): {shell: string; args: string[]} {
 	return {shell: r.shell, args: r.args}
 }
 
+/**
+ * Never pass an invalid cwd to node-pty: Windows reports it as
+ * "Cannot create process, error code: 267" (ERROR_DIRECTORY).
+ */
+export function resolveSpawnCwd(cwd: string): string {
+	let home = cwd || os.homedir()
+	try {
+		if (!fs.existsSync(home) || !fs.statSync(home).isDirectory()) {
+			home = os.homedir()
+		}
+	} catch {
+		home = os.homedir()
+	}
+	return home
+}
+
 export function spawnPty(
 	id: string,
 	cwd: string,
@@ -84,6 +100,8 @@ export function spawnPty(
 		profileId?: string
 		profiles?: ShellProfile[]
 		defaultProfileId?: string
+		/** Extra env merged after TERM/COLORTERM (e.g. agent env hooks). */
+		extraEnv?: Record<string, string>
 	},
 ): PtyEntry {
 	const mod = lazyPty()
@@ -91,16 +109,7 @@ export function spawnPty(
 	const fallback = opts?.defaultProfileId || defaultProfileId(profiles)
 	const profile = pickProfile(profiles, opts?.profileId, fallback)
 	const {shell, args} = resolveProfile(profile)
-	// Never pass an invalid cwd to node-pty: Windows reports it as
-	// "Cannot create process, error code: 267" (ERROR_DIRECTORY).
-	let home = cwd || os.homedir()
-	try {
-		if (!fs.existsSync(home) || !fs.statSync(home).isDirectory()) {
-			home = os.homedir()
-		}
-	} catch {
-		home = os.homedir()
-	}
+	const home = resolveSpawnCwd(cwd)
 	if (!mod)
 		throw new Error(
 			'node-pty native module unavailable. Run: bun run rebuild (requires Python 3.11 + VS Build Tools).',
@@ -116,6 +125,7 @@ export function spawnPty(
 			: []
 		: args
 	const useConptyDll = ensureBundledConptyDll()
+	const extra = opts?.extraEnv ?? {}
 	const pty = mod.spawn(finalShell, finalArgs, {
 		name: 'xterm-256color',
 		cols: cols || 80,
@@ -129,6 +139,7 @@ export function spawnPty(
 			...process.env,
 			TERM: 'xterm-256color',
 			COLORTERM: 'truecolor',
+			...extra,
 		} as Record<string, string>,
 	})
 	const entry: PtyEntry = {id, pty, cwd: home, shell: finalShell}
