@@ -96,6 +96,7 @@ const PortableSchema = z.object({
 				includeGit: z.boolean(),
 			})
 			.optional(),
+		showPaneLabels: z.boolean().optional(),
 	}),
 	startup: z.object({
 		mode: z.enum(['session', 'new']),
@@ -303,6 +304,8 @@ export function mergePortable(
 			tools: portable.agent.tools,
 			envHooks: portable.agent.envHooks ??
 				local.agent.envHooks ?? {enabled: false, includeGit: true},
+			showPaneLabels:
+				portable.agent.showPaneLabels ?? local.agent.showPaneLabels ?? true,
 		},
 		startup: {
 			mode: portable.startup.mode,

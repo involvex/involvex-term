@@ -7,6 +7,12 @@ import SearchBar from './components/SearchBar'
 import SettingsModal from './components/SettingsModal'
 import StatusBar from './components/StatusBar'
 import TabBar, {type TabInfo} from './components/TabBar'
+import {
+	assignPaneAgentLabels,
+	pruneAgentBindings,
+	type PaneAgentInfo,
+	type PaneLaunchBinding,
+} from './lib/agentLabels'
 import {defaultAgentTools, resolveActiveAgent} from './lib/agents'
 import {matchHotkey} from './lib/hotkeys'
 import {
@@ -120,6 +126,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 		activeId: 'opencode',
 		tools: defaultAgentTools(),
 		envHooks: {enabled: false, includeGit: true},
+		showPaneLabels: true,
 	},
 	startup: {mode: 'session', profileId: ''},
 	window: {
@@ -176,16 +183,28 @@ export default function App() {
 	const [opencode, setOpencode] = useState<OpencodeStatus | null>(null)
 	const [agentAvailable, setAgentAvailable] = useState(true)
 	const [toast, setToast] = useState<string | null>(null)
+	/** paneId → launch/continue binding (cleared when session ends). */
+	const [agentBindings, setAgentBindings] = useState<
+		Record<string, PaneLaunchBinding>
+	>({})
+	/** Computed agent labels keyed by paneId. */
+	const [paneAgents, setPaneAgents] = useState<Record<string, PaneAgentInfo>>(
+		{},
+	)
 	// Latest-value refs for use inside IPC callbacks (synced in effects,
 	// never written during render).
 	const tabsRef = useRef(tabs)
 	const activeRef = useRef(activeId)
+	const agentBindingsRef = useRef(agentBindings)
 	useEffect(() => {
 		tabsRef.current = tabs
 	}, [tabs])
 	useEffect(() => {
 		activeRef.current = activeId
 	}, [activeId])
+	useEffect(() => {
+		agentBindingsRef.current = agentBindings
+	}, [agentBindings])
 	const settingsRef = useRef(settings)
 	useEffect(() => {
 		settingsRef.current = settings
@@ -196,6 +215,10 @@ export default function App() {
 		settings.agent?.tools,
 		settings.agent?.activeId,
 	)
+	const showPaneLabels = settings.agent?.showPaneLabels !== false
+	const pollOpencode =
+		activeAgent.sessionProvider === 'opencode' &&
+		(settings.footer.showOpencode || showPaneLabels)
 
 	// Detect active agent CLI on PATH.
 	useEffect(() => {
@@ -212,44 +235,115 @@ export default function App() {
 			.catch(() => setAgentAvailable(false))
 	}, [activeAgent.binary, activeAgent.sessionProvider])
 
-	// Poll OpenCode sessions when that provider is active + footer shown.
+	// Poll OpenCode sessions when footer OC is shown and/or pane labels are on.
 	useEffect(() => {
 		const api = termApi()
-		if (!api || !settings.footer.showOpencode) return
-		if (activeAgent.sessionProvider !== 'opencode') return
+		if (!api || !pollOpencode) return
 		let cancelled = false
-		const tick = () => {
-			api
-				.opencodeStatus(cwd || undefined)
-				.then(s => {
-					if (!cancelled) {
-						setOpencode(s)
-						setAgentAvailable(s.available)
+		const tick = async () => {
+			const tabsNow = tabsRef.current
+			const ids = tabsNow.flatMap(t => collectLeaves(t.root).map(l => l.paneId))
+			let cwds: Record<string, string> = {}
+			try {
+				if (ids.length > 0) {
+					for (const {id, cwd} of await api.ptyCwd(ids)) {
+						if (cwd) cwds[id] = cwd
 					}
+					// Fall back to leaf-stamped cwd from the split tree.
+					for (const t of tabsNow) {
+						for (const leaf of collectLeaves(t.root)) {
+							if (!cwds[leaf.paneId] && leaf.cwd) cwds[leaf.paneId] = leaf.cwd
+						}
+					}
+				}
+			} catch {
+				cwds = {}
+				for (const t of tabsNow) {
+					for (const leaf of collectLeaves(t.root)) {
+						if (leaf.cwd) cwds[leaf.paneId] = leaf.cwd
+					}
+				}
+			}
+			if (cancelled) return
+
+			const focusCwd =
+				(activeRef.current &&
+					tabsNow.find(t => t.id === activeRef.current)?.activePaneId &&
+					cwds[
+						tabsNow.find(t => t.id === activeRef.current)?.activePaneId || ''
+					]) ||
+				cwd ||
+				undefined
+
+			try {
+				const s = await api.opencodeStatus(focusCwd)
+				if (cancelled) return
+				setOpencode(s)
+				setAgentAvailable(s.available)
+
+				const paneIds = new Set(ids)
+				const pruned = pruneAgentBindings(
+					agentBindingsRef.current,
+					paneIds,
+					s.sessions ?? [],
+				)
+				if (
+					Object.keys(pruned).length !==
+						Object.keys(agentBindingsRef.current).length ||
+					Object.keys(pruned).some(
+						k => pruned[k] !== agentBindingsRef.current[k],
+					)
+				) {
+					setAgentBindings(pruned)
+					agentBindingsRef.current = pruned
+				}
+
+				if (showPaneLabels && s.available) {
+					const panes = ids.map(paneId => ({
+						paneId,
+						cwd: cwds[paneId],
+					}))
+					const assigned = assignPaneAgentLabels({
+						panes,
+						sessions: s.sessions ?? [],
+						bindings: pruned,
+						agentLabel: activeAgent.label,
+					})
+					const next: Record<string, PaneAgentInfo> = {}
+					for (const [id, info] of assigned) next[id] = info
+					setPaneAgents(next)
+				} else {
+					setPaneAgents({})
+				}
+			} catch {
+				if (cancelled) return
+				setOpencode({
+					available: false,
+					sessionCount: 0,
+					latest: null,
+					projectMatch: false,
+					sessions: [],
 				})
-				.catch(() => {
-					if (!cancelled)
-						setOpencode({
-							available: false,
-							sessionCount: 0,
-							latest: null,
-							projectMatch: false,
-							sessions: [],
-						})
-				})
+				setPaneAgents({})
+			}
 		}
-		tick()
+		void tick()
 		const ms = Math.max(5000, settings.footer.refreshMs || 1500)
-		const timer = setInterval(tick, ms)
+		const timer = setInterval(() => {
+			void tick()
+		}, ms)
 		return () => {
 			cancelled = true
 			clearInterval(timer)
 		}
 	}, [
 		cwd,
-		settings.footer.showOpencode,
+		pollOpencode,
+		showPaneLabels,
 		settings.footer.refreshMs,
 		activeAgent.sessionProvider,
+		activeAgent.label,
+		tabs,
 	])
 
 	/** Inject an agent CLI command into the focused pane. */
@@ -261,15 +355,41 @@ export default function App() {
 		if (!paneId) return
 		api.ptyWrite(paneId, '\x03')
 		setTimeout(() => api.ptyWrite(paneId, `${cmd}\r`), 50)
+		return paneId
 	}, [])
+
+	const bindAgentPane = useCallback(
+		(paneId: string | undefined, sessionId?: string) => {
+			if (!paneId) return
+			const agent = resolveActiveAgent(
+				settingsRef.current.agent?.tools,
+				settingsRef.current.agent?.activeId,
+			)
+			setAgentBindings(prev => {
+				const next = {
+					...prev,
+					[paneId]: {
+						sessionId,
+						agentLabel: agent.label,
+						agentName: agent.name,
+						launchedAt: Date.now(),
+					},
+				}
+				agentBindingsRef.current = next
+				return next
+			})
+		},
+		[],
+	)
 
 	const launchAgent = useCallback(() => {
 		const agent = resolveActiveAgent(
 			settingsRef.current.agent?.tools,
 			settingsRef.current.agent?.activeId,
 		)
-		writeAgentCmd(agent.command)
-	}, [writeAgentCmd])
+		const paneId = writeAgentCmd(agent.command)
+		bindAgentPane(paneId)
+	}, [writeAgentCmd, bindAgentPane])
 
 	const continueAgent = useCallback(
 		(sessionId?: string) => {
@@ -278,13 +398,16 @@ export default function App() {
 				settingsRef.current.agent?.activeId,
 			)
 			if (agent.sessionProvider === 'opencode' && sessionId) {
-				writeAgentCmd(`opencode -s ${sessionId}`)
+				const paneId = writeAgentCmd(`opencode -s ${sessionId}`)
+				bindAgentPane(paneId, sessionId)
 				return
 			}
-			if (agent.continueCommand) writeAgentCmd(agent.continueCommand)
-			else writeAgentCmd(agent.command)
+			const paneId = agent.continueCommand
+				? writeAgentCmd(agent.continueCommand)
+				: writeAgentCmd(agent.command)
+			bindAgentPane(paneId, sessionId)
 		},
-		[writeAgentCmd],
+		[writeAgentCmd, bindAgentPane],
 	)
 
 	const runSnippet = useCallback((command: string, sendEnter: boolean) => {
@@ -1184,6 +1307,7 @@ export default function App() {
 						agentLabel={activeAgent.label}
 						agentName={activeAgent.name}
 						agentAvailable={agentAvailable}
+						paneAgents={showPaneLabels ? paneAgents : {}}
 						onSelect={selectTab}
 						onClose={id => void closeTab(id)}
 						onNew={profileId => addTab(undefined, profileId)}
@@ -1224,6 +1348,7 @@ export default function App() {
 								completionBell={settings.terminal.completionBell}
 								scrollback={settings.terminal.scrollback}
 								scrollbar={settings.terminal.scrollbar}
+								paneAgents={showPaneLabels ? paneAgents : {}}
 								onFocusPane={paneId => focusPane(t.id, paneId)}
 								onResizeSplit={(splitId, ratio) =>
 									resizeSplit(t.id, splitId, ratio)

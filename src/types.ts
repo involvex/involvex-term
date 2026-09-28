@@ -126,6 +126,8 @@ export interface AppSettings {
 			enabled: boolean
 			includeGit: boolean
 		}
+		/** Show OpenCode session titles on tab/pane chrome (default on). */
+		showPaneLabels: boolean
 	}
 	startup: {
 		mode: 'session' | 'new'
