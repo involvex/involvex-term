@@ -1111,6 +1111,8 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 																enabled: false,
 																includeGit: true,
 															},
+															showPaneLabels:
+																settings.agent?.showPaneLabels !== false,
 														},
 													})
 												}}
@@ -1136,6 +1138,8 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 																enabled: false,
 																includeGit: true,
 															},
+															showPaneLabels:
+																settings.agent?.showPaneLabels !== false,
 														},
 													})
 												}}
@@ -1165,6 +1169,8 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 																enabled: false,
 																includeGit: true,
 															},
+															showPaneLabels:
+																settings.agent?.showPaneLabels !== false,
 														},
 													})
 												}}
@@ -1184,12 +1190,44 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 													enabled: false,
 													includeGit: true,
 												},
+												showPaneLabels:
+													settings.agent?.showPaneLabels !== false,
 											},
 										})
 									}
 								>
 									Reset agents to defaults
 								</button>
+
+								<h3 style={{marginTop: '1.25rem'}}>Pane labels</h3>
+								<p className="footer-dim">
+									When an OpenCode session matches a pane (by cwd or after
+									launch/continue), show the session title on the tab and a chip
+									on the pane. Labels clear when the session leaves the OpenCode
+									list. Busy vs idle uses recent session activity.
+								</p>
+								<label>
+									<input
+										type="checkbox"
+										checked={settings.agent?.showPaneLabels !== false}
+										onChange={e =>
+											set({
+												agent: {
+													activeId: settings.agent?.activeId || 'opencode',
+													tools: settings.agent?.tools?.length
+														? settings.agent.tools
+														: defaultAgentTools(),
+													envHooks: settings.agent?.envHooks ?? {
+														enabled: false,
+														includeGit: true,
+													},
+													showPaneLabels: e.target.checked,
+												},
+											})
+										}
+									/>{' '}
+									Show agent session titles on tabs and panes
+								</label>
 
 								<h3 style={{marginTop: '1.25rem'}}>Agent env hooks</h3>
 								<p className="footer-dim">
@@ -1214,6 +1252,8 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 														includeGit:
 															settings.agent?.envHooks?.includeGit !== false,
 													},
+													showPaneLabels:
+														settings.agent?.showPaneLabels !== false,
 												},
 											})
 										}
@@ -1236,6 +1276,8 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 														enabled: settings.agent?.envHooks?.enabled === true,
 														includeGit: e.target.checked,
 													},
+													showPaneLabels:
+														settings.agent?.showPaneLabels !== false,
 												},
 											})
 										}

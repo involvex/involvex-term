@@ -5,8 +5,9 @@ import {
 	type DragEvent,
 	type MouseEvent,
 } from 'react'
+import {shortAgentTitle, type PaneAgentInfo} from '../lib/agentLabels'
 import {TAB_COLORS} from '../lib/agents'
-import type {PaneNode} from '../lib/panes'
+import {collectLeaves, type PaneNode} from '../lib/panes'
 import type {QuickCommand, ShellProfile} from '../types'
 import TermContextMenu, {
 	type ContextMenuItem,
@@ -28,6 +29,20 @@ export interface TabInfo {
 	activePaneId: string
 }
 
+/** Prefer the focused pane's agent label; else first leaf with one. */
+function tabAgentLabel(
+	tab: TabInfo,
+	paneAgents: Record<string, PaneAgentInfo>,
+): PaneAgentInfo | undefined {
+	const focused = paneAgents[tab.activePaneId]
+	if (focused) return focused
+	for (const leaf of collectLeaves(tab.root)) {
+		const a = paneAgents[leaf.paneId]
+		if (a) return a
+	}
+	return undefined
+}
+
 interface Props {
 	tabs: TabInfo[]
 	activeId: string
@@ -37,6 +52,7 @@ interface Props {
 	agentLabel: string
 	agentName: string
 	agentAvailable: boolean
+	paneAgents?: Record<string, PaneAgentInfo>
 	onSelect: (id: string) => void
 	onClose: (id: string) => void
 	onNew: (profileId?: string) => void
@@ -63,6 +79,7 @@ export default function TabBar({
 	agentLabel,
 	agentName,
 	agentAvailable,
+	paneAgents = {},
 	onSelect,
 	onClose,
 	onNew,
@@ -199,118 +216,151 @@ export default function TabBar({
 			className="tabbar"
 			role="tablist"
 		>
-			{tabs.map((t, i) => (
-				<div
-					key={t.id}
-					role="tab"
-					aria-selected={t.id === activeId}
-					className={[
-						'tab',
-						t.id === activeId ? 'tab-active' : '',
-						t.pinned ? 'tab-pinned' : '',
-						t.color ? 'tab-colored' : '',
-					]
-						.filter(Boolean)
-						.join(' ')}
-					style={
-						t.color
-							? ({['--tab-accent' as string]: t.color} as CSSProperties)
-							: undefined
-					}
-					draggable={editingId !== t.id}
-					onDragStart={() => {
-						dragFrom.current = i
-					}}
-					onDragOver={e => {
-						e.preventDefault()
-					}}
-					onDrop={(e: DragEvent) => {
-						e.preventDefault()
-						const from = dragFrom.current
-						dragFrom.current = null
-						if (from == null || from === i) return
-						onReorder(from, i)
-					}}
-					onClick={() => {
-						if (editingId !== t.id) onSelect(t.id)
-					}}
-					onDoubleClick={e => {
-						e.stopPropagation()
-						startRename(t.id)
-					}}
-					onContextMenu={e => openTabMenu(e, t, i)}
-					onMouseDown={e => {
-						if (e.button === 1) {
-							e.preventDefault()
-							e.stopPropagation()
-							onClose(t.id)
+			{tabs.map((t, i) => {
+				const agent = tabAgentLabel(t, paneAgents)
+				const tipLines = [
+					t.customTitle
+						? `${t.customTitle}${t.pinned ? ' (pinned)' : ''}`
+						: `${t.cwd || t.title}${t.pinned ? ' (pinned)' : ''}`,
+					agent
+						? `${agent.agentLabel} · ${agent.title} (${agent.activity})`
+						: '',
+					t.customTitle ? t.cwd || '' : '',
+				].filter(Boolean)
+				return (
+					<div
+						key={t.id}
+						role="tab"
+						aria-selected={t.id === activeId}
+						className={[
+							'tab',
+							t.id === activeId ? 'tab-active' : '',
+							t.pinned ? 'tab-pinned' : '',
+							t.color ? 'tab-colored' : '',
+							agent ? 'tab-has-agent' : '',
+							agent?.activity === 'active' ? 'tab-agent-active' : '',
+						]
+							.filter(Boolean)
+							.join(' ')}
+						style={
+							t.color
+								? ({['--tab-accent' as string]: t.color} as CSSProperties)
+								: undefined
 						}
-					}}
-					onAuxClick={e => {
-						if (e.button === 1) {
-							e.preventDefault()
-							e.stopPropagation()
-							onClose(t.id)
-						}
-					}}
-					title={
-						t.customTitle
-							? `${t.customTitle}${t.pinned ? ' (pinned)' : ''}\n${t.cwd || ''}`
-							: `${t.cwd || t.title}${t.pinned ? ' (pinned)' : ''}`
-					}
-				>
-					{t.color && (
-						<span
-							className="tab-color-dot"
-							style={{background: t.color}}
-							aria-hidden
-						/>
-					)}
-					{t.pinned && (
-						<span
-							className="tab-pin"
-							aria-hidden
-						>
-							<svg
-								width="10"
-								height="10"
-								viewBox="0 0 16 16"
-								fill="currentColor"
-							>
-								<path d="M8 2.5 9.5 5H12l-2 2.2.8 3.8L8 9.5 5.2 11l.8-3.8L4 5h2.5L8 2.5zm0 8.2V14" />
-							</svg>
-						</span>
-					)}
-					<span className="tab-index">{i + 1}</span>
-					{editingId === t.id ? (
-						<input
-							className="tab-rename"
-							value={editValue}
-							autoFocus
-							onClick={e => e.stopPropagation()}
-							onChange={e => setEditValue(e.target.value)}
-							onBlur={() => commitRename(t.id)}
-							onKeyDown={e => {
-								if (e.key === 'Enter') commitRename(t.id)
-								if (e.key === 'Escape') setEditingId(null)
-							}}
-						/>
-					) : (
-						<span className="tab-title">{t.title}</span>
-					)}
-					<button
-						type="button"
-						className="tab-close"
-						aria-label={`Close tab ${t.title}`}
-						onClick={e => {
-							e.stopPropagation()
-							onClose(t.id)
+						draggable={editingId !== t.id}
+						onDragStart={() => {
+							dragFrom.current = i
 						}}
+						onDragOver={e => {
+							e.preventDefault()
+						}}
+						onDrop={(e: DragEvent) => {
+							e.preventDefault()
+							const from = dragFrom.current
+							dragFrom.current = null
+							if (from == null || from === i) return
+							onReorder(from, i)
+						}}
+						onClick={() => {
+							if (editingId !== t.id) onSelect(t.id)
+						}}
+						onDoubleClick={e => {
+							e.stopPropagation()
+							startRename(t.id)
+						}}
+						onContextMenu={e => openTabMenu(e, t, i)}
+						onMouseDown={e => {
+							if (e.button === 1) {
+								e.preventDefault()
+								e.stopPropagation()
+								onClose(t.id)
+							}
+						}}
+						onAuxClick={e => {
+							if (e.button === 1) {
+								e.preventDefault()
+								e.stopPropagation()
+								onClose(t.id)
+							}
+						}}
+						title={tipLines.join('\n')}
 					>
-						×
-					</button>
-				</div>
-			))}
+						{t.color && (
+							<span
+								className="tab-color-dot"
+								style={{background: t.color}}
+								aria-hidden
+							/>
+						)}
+						{t.pinned && (
+							<span
+								className="tab-pin"
+								aria-hidden
+							>
+								<svg
+									width="10"
+									height="10"
+									viewBox="0 0 16 16"
+									fill="currentColor"
+								>
+									<path d="M8 2.5 9.5 5H12l-2 2.2.8 3.8L8 9.5 5.2 11l.8-3.8L4 5h2.5L8 2.5zm0 8.2V14" />
+								</svg>
+							</span>
+						)}
+						<span className="tab-index">{i + 1}</span>
+						{editingId === t.id ? (
+							<input
+								className="tab-rename"
+								value={editValue}
+								autoFocus
+								onClick={e => e.stopPropagation()}
+								onChange={e => setEditValue(e.target.value)}
+								onBlur={() => commitRename(t.id)}
+								onKeyDown={e => {
+									if (e.key === 'Enter') commitRename(t.id)
+									if (e.key === 'Escape') setEditingId(null)
+								}}
+							/>
+						) : agent && !t.customTitle ? (
+							<span className="tab-title tab-title-agent">
+								<span
+									className={`tab-agent-mark${agent.activity === 'active' ? ' active' : ''}`}
+								>
+									{agent.agentLabel}
+								</span>
+								<span className="tab-agent-sep"> · </span>
+								<span className="tab-agent-session">
+									{shortAgentTitle(agent.title, 22)}
+								</span>
+							</span>
+						) : (
+							<>
+								<span className="tab-title">{t.title}</span>
+								{agent && (
+									<span
+										className={`tab-agent-badge${agent.activity === 'active' ? ' active' : ''}`}
+										title={`${agent.agentLabel} · ${agent.title}`}
+									>
+										{agent.agentLabel}
+										{agent.activity === 'active' ? ' ●' : ''}
+									</span>
+								)}
+							</>
+						)}
+						<button
+							type="button"
+							className="tab-close"
+							aria-label={`Close tab ${t.title}`}
+							onClick={e => {
+								e.stopPropagation()
+								onClose(t.id)
+							}}
+						>
+							×
+						</button>
+					</div>
+				)
+			})}
 			<div className="tab-new-wrap">
 				<button
 					type="button"

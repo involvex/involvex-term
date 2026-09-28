@@ -153,6 +153,11 @@ const AgentSchema = z.object({
 	tools: z.array(AgentToolSchema).default(defaultAgentTools()),
 	/** Optional env vars for agent CLIs (OpenCode, etc.) — no in-app chat. */
 	envHooks: EnvHooksSchema.prefault({}),
+	/**
+	 * Show OpenCode session title on tab/pane chrome when a pane's cwd
+	 * matches a listed session (or was launched/continued into that pane).
+	 */
+	showPaneLabels: z.boolean().default(true),
 })
 
 const StartupSchema = z.object({

@@ -34,6 +34,9 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
 - Export / import settings from Settings
 - Settings sync via private GitHub Gist (Device Code login; Push / Pull)
 - Footer Git menu (branch switch, Explorer, copy remote) + OpenCode session picker
+- **Agent-aware pane labels** — tabs/panes show OpenCode session titles when a
+  pane’s cwd matches a listed session (or after launch/continue); clear when
+  the session ends (Settings → Agent → Pane labels)
 
 ## Quickstart (Bun, PowerShell)
 
@@ -65,6 +68,23 @@ Install [OpenCode](https://opencode.ai) so `opencode` is on your PATH, then:
 
 involvex-term sends `opencode` (or `opencode -s <id>` / `opencode -c`) + Enter
 to the focused pane (after a soft interrupt).
+
+### Agent-aware pane labels
+
+When OpenCode is the active session provider, involvex-term polls
+`opencode session list` (same source as the footer OC widget) and matches
+sessions to panes by cwd. Launch/continue from the UI also binds the focused
+pane to that session.
+
+- **Tabs** show `OC · session title` (or keep a custom rename and add an `OC`
+  badge). Background tabs update too — not only the focused one.
+- **Split panes** get a corner chip with the same title. A green ● marks
+  recently updated (“busy”) sessions; older ones render as idle.
+- Labels **clear** when the session disappears from OpenCode’s list (or the
+  binding ages out). Toggle under **Settings → Agent → Pane labels**
+  (`agent.showPaneLabels`, default on).
+
+No in-app AI chat — labels only.
 
 ## Agent env hooks
 
@@ -141,7 +161,8 @@ Stored at `~/.involvex-term/settings.json` (zod-validated, watched live):
 	},
 	"agent": {
 		"activeId": "opencode",
-		"envHooks": {"enabled": false, "includeGit": true}
+		"envHooks": {"enabled": false, "includeGit": true},
+		"showPaneLabels": true
 	},
 	"window": {"acrylic": false},
 	"tabs": {"confirmClose": false, "restoreSession": true}

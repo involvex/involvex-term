@@ -1,4 +1,5 @@
 import {useEffect, useMemo, useRef, useState} from 'react'
+import {shortAgentTitle, type PaneAgentInfo} from '../lib/agentLabels'
 import {
 	collectLeaves,
 	findNeighborPane,
@@ -25,6 +26,7 @@ interface Props extends Theme {
 	completionBell?: boolean
 	scrollback?: number
 	scrollbar?: boolean
+	paneAgents?: Record<string, PaneAgentInfo>
 	onFocusPane: (paneId: string) => void
 	onResizeSplit: (splitId: string, ratio: number) => void
 	onBackgroundIdle?: (paneId: string) => void
@@ -63,6 +65,7 @@ export default function PaneLayout({
 	completionBell,
 	scrollback,
 	scrollbar,
+	paneAgents = {},
 	onFocusPane,
 	onResizeSplit,
 	onBackgroundIdle,
@@ -112,6 +115,7 @@ export default function PaneLayout({
 			{leaves.map(leaf => {
 				const a = areas.get(leaf.paneId)
 				const focused = leaf.paneId === activePaneId
+				const agent = paneAgents[leaf.paneId]
 				const paneMenu: TerminalPaneMenu | undefined = onPaneMenu
 					? {
 							paneCount: leaves.length,
@@ -141,6 +145,31 @@ export default function PaneLayout({
 								: undefined
 						}
 					>
+						{agent && (
+							<div
+								className={`pane-agent-chip${agent.activity === 'active' ? ' active' : ' idle'}${focused ? ' focused' : ''}`}
+								title={[
+									`${agent.agentLabel} · ${agent.title}`,
+									agent.directory,
+									agent.activity === 'active' ? 'busy' : 'idle',
+								]
+									.filter(Boolean)
+									.join('\n')}
+							>
+								<span className="pane-agent-mark">{agent.agentLabel}</span>
+								<span className="pane-agent-title">
+									{shortAgentTitle(agent.title, multi ? 24 : 36)}
+								</span>
+								{agent.activity === 'active' && (
+									<span
+										className="pane-agent-dot"
+										aria-hidden
+									>
+										●
+									</span>
+								)}
+							</div>
+						)}
 						<TerminalView
 							paneId={leaf.paneId}
 							tabActive={tabActive}
