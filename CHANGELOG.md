@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.8.0] - 2026-09-29
+
+### Added
+
+- explorer context menu + doctor CLI
+- multi-pane search, cross-tab pane drag-drop, native image paste
+
+### Fixed
+
+- Ctrl+V pastes clipboard 3x in terminal panes
+- harden CLI installer path handling
+
+### Changed
+
+- docs: community & contribution infrastructure
+- build(deps): bump actions/upload-pages-artifact from 4.0.0 to 5.0.0
+- build(deps): bump actions/setup-node from 4 to 7
+- build(deps): bump actions/deploy-pages from 4.0.0 to 5.0.1
+- build(deps): bump actions/setup-python from 5.0.0 to 7.0.0
+
 ## [0.7.0] - 2026-09-29
 
 ### Added
