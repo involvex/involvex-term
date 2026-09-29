@@ -26,6 +26,52 @@ interface Asset {
 	url: string
 }
 
+/**
+ * CodeQL js/command-line-injection hardening (alert #3).
+ * spawnSync(file, argsArray) runs without a shell, so `; & |` in a filename
+ * are literal — but an unsanitized remote asset name still allows path
+ * traversal out of os.tmpdir() (CWE-22) followed by write+exec. Hence the
+ * basename + allowlist + containment checks below.
+ */
+const SAFE_ASSET_NAME = /^[A-Za-z0-9._-]+\.(exe|AppImage)$/i
+const ALLOWED_ASSET_URL_PREFIXES = [
+	'https://github.com/involvex/involvex-term/releases/download/',
+	'https://objects.githubusercontent.com/',
+	'https://api.github.com/repos/involvex/involvex-term/',
+]
+
+function safeAssetName(
+	name: string,
+	platform: NodeJS.Platform = process.platform,
+): string {
+	const base = path.basename(name)
+	if (!SAFE_ASSET_NAME.test(base)) throw new Error(`Unsafe asset name: ${name}`)
+	if (platform === 'win32' && !/Windows.*Setup\.exe$/i.test(base)) {
+		throw new Error(`Unexpected Windows asset name: ${name}`)
+	}
+	if (platform !== 'win32' && !/\.AppImage$/i.test(base)) {
+		throw new Error(`Unexpected asset name: ${name}`)
+	}
+	return base
+}
+
+function assertAllowedAssetUrl(url: string): void {
+	if (!ALLOWED_ASSET_URL_PREFIXES.some(p => url.startsWith(p))) {
+		throw new Error(`Unexpected asset URL origin: ${url}`)
+	}
+}
+
+/** Resolve a temp path that is guaranteed to stay inside os.tmpdir(). */
+function resolveAssetTempPath(name: string): string {
+	const safe = safeAssetName(name)
+	const tmpDir = path.resolve(os.tmpdir())
+	const tmp = path.resolve(tmpDir, safe)
+	if (tmp !== tmpDir && !tmp.startsWith(tmpDir + path.sep)) {
+		throw new Error(`Asset path escapes temp dir: ${name}`)
+	}
+	return tmp
+}
+
 const HELP = `involvex-term ${pkg.version} — Involvex-Term CLI
 
 Usage:
@@ -125,10 +171,19 @@ async function latestAsset(): Promise<Asset> {
 	if (!pick) {
 		throw new Error(`No ${process.platform} asset in release ${rel.tag_name}`)
 	}
-	return {tag: rel.tag_name, name: pick.name, url: pick.browser_download_url}
+	if (typeof pick.name !== 'string' || !pick.name) {
+		throw new Error(`Invalid asset name in release ${rel.tag_name}`)
+	}
+	assertAllowedAssetUrl(pick.browser_download_url)
+	return {
+		tag: rel.tag_name,
+		name: safeAssetName(pick.name),
+		url: pick.browser_download_url,
+	}
 }
 
 async function download(url: string, dest: string): Promise<void> {
+	assertAllowedAssetUrl(url)
 	const res = await fetch(url, {headers: {'user-agent': 'involvex-term-cli'}})
 	if (!res.ok || !res.body) throw new Error(`Download failed: ${res.status}`)
 	await pipeline(
@@ -138,6 +193,8 @@ async function download(url: string, dest: string): Promise<void> {
 }
 
 function has(cmd: string): boolean {
+	// shell:WIN only to resolve .cmd shims on Windows; cmd is always the
+	// constant 'bun'|'npm' (never user input), args are constant.
 	return (
 		spawnSync(cmd, ['--version'], {stdio: 'ignore', shell: WIN}).status === 0
 	)
@@ -158,6 +215,7 @@ function runPm(pm: 'bun' | 'npm', kind: 'add' | 'remove'): void {
 			? [kind, '-g', PKG]
 			: [kind === 'add' ? 'install' : 'uninstall', '-g', PKG]
 	console.log(`> ${pm} ${args.join(' ')}`)
+	// pm is allowlisted to 'bun'|'npm' by parsePm, args are constants.
 	const r = spawnSync(pm, args, {stdio: 'inherit', shell: WIN})
 	if (r.status !== 0) {
 		console.warn(`Failed. Run manually: ${pm} ${args.join(' ')}`)
@@ -183,14 +241,16 @@ function isNewer(latest: string, current: string | undefined): boolean {
 
 async function installApp(asset: Asset): Promise<void> {
 	console.log(`Latest release ${asset.tag}: ${asset.name}`)
-	const tmp = path.join(os.tmpdir(), asset.name)
+	assertAllowedAssetUrl(asset.url)
+	const tmp = resolveAssetTempPath(asset.name)
 	console.log('Downloading…')
 	await download(asset.url, tmp)
 
 	let exe: string | undefined
 	if (WIN) {
 		console.log('Running installer (silent)…')
-		const r = spawnSync(tmp, ['/S'], {stdio: 'inherit'})
+		// Array form + shell:false: no cmd.exe metacharacter interpretation.
+		const r = spawnSync(tmp, ['/S'], {stdio: 'inherit', shell: false})
 		if (r.status !== 0) throw new Error(`Installer exited with ${r.status}`)
 		exe = defaultExeCandidates().find(p => fs.existsSync(p))
 	} else {
@@ -238,8 +298,13 @@ function uninstall(args: string[]): void {
 		const un = fs.readdirSync(dir).find(f => /^uninstall.*\.exe$/i.test(f))
 		if (un) {
 			console.log('Running uninstaller (silent)…')
+			// Basename + containment: dir listing must not escape the app dir.
+			const unPath = path.resolve(dir, path.basename(un))
+			if (unPath !== dir && !unPath.startsWith(dir + path.sep)) {
+				throw new Error(`Uninstaller path escapes app dir: ${un}`)
+			}
 			// `_?=dir` keeps the uninstaller in place so we can wait for it.
-			spawnSync(path.join(dir, un), ['/S', `_?=${dir}`], {stdio: 'inherit'})
+			spawnSync(unPath, ['/S', `_?=${dir}`], {stdio: 'inherit', shell: false})
 			fs.rmSync(dir, {recursive: true, force: true})
 		} else {
 			console.warn(`No uninstaller found in ${dir}; remove it manually.`)
