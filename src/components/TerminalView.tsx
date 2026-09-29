@@ -153,7 +153,15 @@ export default function TerminalView({
 			term.focus()
 			return true
 		}
+		// Single choke point for every paste gesture. Dedupe window collapses
+		// the duplicate deliveries of a single user gesture (xterm registers
+		// native `paste` listeners on BOTH its textarea and its element, so one
+		// native paste fires twice — plus our manual write that made three).
+		let lastPasteAt = 0
 		const pasteClipboard = (): void => {
+			const now = Date.now()
+			if (now - lastPasteAt < 100) return
+			lastPasteAt = now
 			term.focus()
 			if (api) {
 				void api
@@ -174,6 +182,11 @@ export default function TerminalView({
 
 		// Windows-Terminal style: Ctrl+C copies ONLY when text is selected
 		// (otherwise ^C still interrupts the shell), Ctrl+V pastes.
+		// NOTE: returning false alone does NOT stop Chromium's native paste
+		// into xterm's hidden textarea (which xterm then forwards via onData).
+		// preventDefault + stopPropagation are required so ONLY the manual
+		// pasteClipboard() write above reaches the pty — otherwise one Ctrl+V
+		// inserts the clipboard 3x (manual + 2x native via textarea+element).
 		term.attachCustomKeyEventHandler((ev: KeyboardEvent) => {
 			const key = ev.key.toLowerCase()
 			if (ev.ctrlKey && ev.shiftKey && key === 'c') {
@@ -181,6 +194,8 @@ export default function TerminalView({
 				return false
 			}
 			if (ev.ctrlKey && ev.shiftKey && key === 'v') {
+				ev.preventDefault()
+				ev.stopPropagation()
 				pasteClipboard()
 				return false
 			}
@@ -192,16 +207,34 @@ export default function TerminalView({
 				return true // no selection → send ^C to the shell
 			}
 			if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && key === 'v') {
+				ev.preventDefault()
+				ev.stopPropagation()
 				pasteClipboard()
 				return false
 			}
 			if (ev.key === 'Insert') {
+				ev.preventDefault()
+				ev.stopPropagation()
 				if (ev.shiftKey) pasteClipboard()
 				else copySelection()
 				return false
 			}
 			return true
 		})
+
+		// Capture-phase interceptor: runs before xterm's own bubble-phase
+		// `paste` listeners (textarea + element). Swallow the native event so
+		// xterm never forwards it via onData, and route it once through the
+		// guarded pasteClipboard() above. Covers paste paths that arrive as a
+		// DOM event instead of a key (e.g. Electron Edit-menu paste).
+		const onPasteDom = (e: Event) => {
+			e.preventDefault()
+			e.stopPropagation()
+			term.focus()
+			onFocusPane(paneId)
+			pasteClipboard()
+		}
+		el.addEventListener('paste', onPasteDom, true)
 
 		const onContextMenu = (e: MouseEvent) => {
 			e.preventDefault()
@@ -517,6 +550,7 @@ export default function TerminalView({
 			ro.disconnect()
 			el.removeEventListener('contextmenu', onContextMenu)
 			el.removeEventListener('mousedown', onMouseDown)
+			el.removeEventListener('paste', onPasteDom, true)
 			offData?.()
 			offExit?.()
 			unregisterSearch(paneId)
