@@ -77,6 +77,10 @@ Install [OpenCode](https://opencode.ai) so `opencode` is on your PATH, then:
 involvex-term sends `opencode` (or `opencode -s <id>` / `opencode -c`) + Enter
 to the focused pane (after a soft interrupt).
 
+![involvex-term split view: PowerShell on the left, OpenCode agent on the right with OC badge and Git footer](docs/img/agent-split.png)
+
+_Shell + OpenCode side by side — launch from the tab bar, continue from the footer OC widget._
+
 ### Agent-aware pane labels
 
 When OpenCode is the active session provider, involvex-term polls
@@ -91,6 +95,10 @@ pane to that session.
 - Labels **clear** when the session disappears from OpenCode’s list (or the
   binding ages out). Toggle under **Settings → Agent → Pane labels**
   (`agent.showPaneLabels`, default on).
+
+![Chrome preview of agent-aware tab titles and pane chips for OpenCode sessions](docs/img/agent-labels-chrome-preview.png)
+
+_Pane labels: session title on tabs + chips on splits._
 
 No in-app AI chat — labels only.
 
@@ -225,3 +233,11 @@ beyond (Git + OpenCode differentiators).
 ## License
 
 [MIT](LICENSE)
+
+## Community
+
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [New issue](https://github.com/involvex/involvex-term/issues/new/choose)
+- [Roadmap](ROADMAP.md)

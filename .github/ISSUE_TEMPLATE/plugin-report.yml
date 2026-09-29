@@ -1,0 +1,28 @@
+name: Plugin report
+description: Report a problem with a local plugin
+body:
+  - type: input
+    id: plugin
+    attributes:
+      label: Plugin name + install method
+      placeholder: my-plugin (copied) or (symlinked)
+    validations:
+      required: true
+  - type: textarea
+    id: listing
+    attributes:
+      label: Plugins-dir listing
+      description: Output of dir listing of `~/.involvex-term/plugins/<name>/`
+  - type: dropdown
+    id: without-plugins
+    attributes:
+      label: Reproduces with plugins disabled?
+      options:
+        - yes
+        - no
+    validations:
+      required: true
+  - type: textarea
+    id: errors
+    attributes:
+      label: Settings → Plugins → Errors content

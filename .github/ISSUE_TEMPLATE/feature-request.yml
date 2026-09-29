@@ -1,0 +1,25 @@
+name: Feature request
+description: Suggest an idea for involvex-term
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem being solved
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+  - type: dropdown
+    id: roadmap
+    attributes:
+      label: ROADMAP fit
+      options:
+        - Windows Terminal parity / Git + OpenCode differentiator
+        - new idea
+        - explicitly out-of-scope — I checked
+  - type: textarea
+    id: mockups
+    attributes:
+      label: UI mockups or screenshots

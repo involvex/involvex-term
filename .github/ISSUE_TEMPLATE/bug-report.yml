@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a reproducible problem
+body:
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      placeholder: 0.7.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux
+    validations:
+      required: true
+  - type: dropdown
+    id: shell
+    attributes:
+      label: Shell
+      options:
+        - pwsh
+        - Windows PowerShell
+        - cmd
+        - WSL
+        - bash
+        - zsh
+    validations:
+      required: true
+  - type: checkboxes
+    id: plugins
+    attributes:
+      label: Plugins enabled?
+      options:
+        - label: I have local plugins enabled
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected vs actual
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / check output
