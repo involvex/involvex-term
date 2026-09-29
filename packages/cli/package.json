@@ -1,7 +1,7 @@
 {
 	"name": "@involvex/term",
 	"version": "0.1.0",
-	"description": "CLI for Involvex-Term: install the latest release and control the running window (sp, nt)",
+	"description": "CLI for Involvex-Term: install/upgrade the latest release and control the running window (sp, nt)",
 	"homepage": "https://github.com/involvex/involvex-term#readme",
 	"bugs": {
 		"url": "https://github.com/involvex/involvex-term/issues"
@@ -19,12 +19,16 @@
 	"author": "involvex",
 	"type": "module",
 	"bin": {
-		"involvex-term": "bin/cli.mjs"
+		"involvex-term": "dist/cli.js"
 	},
 	"files": [
-		"bin",
+		"dist",
 		"README.md"
 	],
+	"scripts": {
+		"build": "bun build src/cli.ts --target node --outfile dist/cli.js",
+		"prepublishOnly": "bun run build"
+	},
 	"engines": {
 		"node": ">=18"
 	},

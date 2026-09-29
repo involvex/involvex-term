@@ -7,7 +7,13 @@ import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
 	{
-		ignores: ['dist/**', 'dist-electron/**', 'release/**', 'build/**'],
+		ignores: [
+			'dist/**',
+			'dist-electron/**',
+			'release/**',
+			'build/**',
+			'packages/*/dist/**',
+		],
 	},
 	js.configs.recommended,
 	...tseslint.configs.recommended,
@@ -24,7 +30,7 @@ export default tseslint.config(
 		},
 	},
 	{
-		files: ['electron/**/*.ts', 'scripts/**/*.mjs', 'packages/**/*.mjs'],
+		files: ['electron/**/*.ts', 'scripts/**/*.mjs', 'packages/**/src/*.ts'],
 		languageOptions: {globals: globals.node},
 	},
 )
