@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.0] - 2026-09-29
+
+### Added
+
+- local plugin system (SDK, example, docs) + CLI README polish
+
+### Changed
+
+- chore: bun.lock — register packages/sdk workspace
+
 ## [0.6.1] - 2026-09-29
 
 ### Added
