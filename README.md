@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/involvex/involvex-term/actions/workflows/ci.yml/badge.svg)](https://github.com/involvex/involvex-term/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-4ec9b0)](https://involvex.github.io/involvex-term/)
+[![npm CLI](https://img.shields.io/npm/v/%40involvex%2Fterm?label=%40involvex%2Fterm)](https://www.npmjs.com/package/@involvex/term)
 
 Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.js + node-pty.
 
@@ -37,6 +38,13 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
 - **Agent-aware pane labels** — tabs/panes show OpenCode session titles when a
   pane’s cwd matches a listed session (or after launch/continue); clear when
   the session ends (Settings → Agent → Pane labels)
+- **CLI** ([`@involvex/term`](https://www.npmjs.com/package/@involvex/term)) —
+  `bunx @involvex/term install`, then `involvex-term sp -d .` / `nt` split or
+  open a tab in the running window, wt-style; also `upgrade` / `uninstall`
+- **Local plugins** (opt-in, off by default) — command-palette commands,
+  status-bar text, and read-only pty hooks from
+  `~/.involvex-term/plugins/<name>/`; see [`PLUGINS.md`](PLUGINS.md) and the
+  type-only [`@involvex/term-sdk`](https://www.npmjs.com/package/@involvex/term-sdk)
 
 ## Quickstart (Bun, PowerShell)
 

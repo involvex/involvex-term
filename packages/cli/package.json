@@ -2,6 +2,18 @@
 	"name": "@involvex/term",
 	"version": "0.1.0",
 	"description": "CLI for Involvex-Term: install/upgrade the latest release and control the running window (sp, nt)",
+	"keywords": [
+		"involvex-term",
+		"terminal",
+		"cli",
+		"electron",
+		"windows-terminal",
+		"git",
+		"xterm",
+		"pty",
+		"wt",
+		"installer"
+	],
 	"homepage": "https://github.com/involvex/involvex-term#readme",
 	"bugs": {
 		"url": "https://github.com/involvex/involvex-term/issues"

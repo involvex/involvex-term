@@ -624,6 +624,7 @@ export default function StatusBar({
 	onOpencodeNew,
 	onGitRefreshed,
 	onToast,
+	pluginSegments = [],
 }: {
 	git: GitStatus | null
 	sys: SysStats | null
@@ -635,6 +636,7 @@ export default function StatusBar({
 	onOpencodeNew?: () => void
 	onGitRefreshed?: (s: GitStatus) => void
 	onToast?: (msg: string) => void
+	pluginSegments?: Array<{id: string; text: string; title?: string}>
 }) {
 	const order = footerOrder(settings)
 	const activeAgent = resolveActiveAgent(
@@ -768,6 +770,19 @@ export default function StatusBar({
 			<div className="statusbar-modules">
 				{order.map((m, i) => renderModule(m, i))}
 			</div>
+			{pluginSegments.length > 0 && (
+				<div className="statusbar-plugins">
+					{pluginSegments.map(seg => (
+						<span
+							key={seg.id}
+							className="footer-item footer-dim statusbar-plugin-segment"
+							title={seg.title}
+						>
+							{seg.text}
+						</span>
+					))}
+				</div>
+			)}
 			{editMode && (
 				<button
 					type="button"

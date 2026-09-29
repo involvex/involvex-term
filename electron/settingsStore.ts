@@ -160,6 +160,11 @@ const AgentSchema = z.object({
 	showPaneLabels: z.boolean().default(true),
 })
 
+const PluginsSchema = z.object({
+	/** Load local plugins from ~/.involvex-term/plugins (opt-in, off by default). */
+	enabled: z.boolean().default(false),
+})
+
 const StartupSchema = z.object({
 	/**
 	 * session = restore previous tabs when tabs.restoreSession is true
@@ -204,6 +209,7 @@ export const SettingsSchema = z.object({
 	tabs: TabsSchema.prefault({}),
 	terminal: TerminalSchema.prefault({}),
 	agent: AgentSchema.prefault({}),
+	plugins: PluginsSchema.prefault({}),
 	startup: StartupSchema.prefault({}),
 	window: WindowSchema.prefault({}),
 	tray: TraySchema.prefault({}),

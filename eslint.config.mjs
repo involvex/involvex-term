@@ -30,7 +30,12 @@ export default tseslint.config(
 		},
 	},
 	{
-		files: ['electron/**/*.ts', 'scripts/**/*.mjs', 'packages/**/src/*.ts'],
+		files: [
+			'electron/**/*.ts',
+			'scripts/**/*.mjs',
+			'packages/**/src/*.ts',
+			'examples/**/*.mjs',
+		],
 		languageOptions: {globals: globals.node},
 	},
 )

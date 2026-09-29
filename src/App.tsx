@@ -44,6 +44,8 @@ import {
 	type CliCommand,
 	type GitStatus,
 	type OpencodeStatus,
+	type PluginCommand,
+	type PluginStatusBarSegment,
 	type QuickCommand,
 	type SysStats,
 	type UpdateStatus,
@@ -142,6 +144,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 		checkUpdatesOnStartup: true,
 	},
 	tray: {enabled: true, minimizeToTray: true, closeToTray: true},
+	plugins: {enabled: false},
 	quake: {
 		enabled: false,
 		hotkey: 'Alt+`',
@@ -179,6 +182,10 @@ export default function App() {
 	const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
 	const [showSettings, setShowSettings] = useState(false)
 	const [showAbout, setShowAbout] = useState(false)
+	const [pluginCommands, setPluginCommands] = useState<PluginCommand[]>([])
+	const [pluginStatusBar, setPluginStatusBar] = useState<
+		PluginStatusBarSegment[]
+	>([])
 	const [git, setGit] = useState<GitStatus | null>(null)
 	const [sys, setSys] = useState<SysStats | null>(null)
 	const [cwd, setCwd] = useState('')
@@ -872,6 +879,20 @@ export default function App() {
 		return off
 	}, [bootstrapped, runCli])
 
+	// Local plugins (~/.involvex-term/plugins, opt-in): commands + status bar.
+	useEffect(() => {
+		const api = termApi()
+		if (!api || !bootstrapped) return
+		void api.pluginList().then(r => {
+			setPluginCommands(r.commands)
+			setPluginStatusBar(r.statusBar)
+		})
+		return api.onPluginChanged(msg => {
+			setPluginCommands(msg.commands)
+			setPluginStatusBar(msg.statusBar)
+		})
+	}, [bootstrapped])
+
 	const splitPaneToward = useCallback(
 		(toward: PaneDirection, targetPaneId?: string) => {
 			void splitInto(activeRef.current, targetPaneId, (root, id, leaf) =>
@@ -1321,6 +1342,12 @@ export default function App() {
 			hint: t.cwd,
 			run: () => selectTab(t.id),
 		})),
+		...pluginCommands.map(c => ({
+			id: `plugin:${c.id}`,
+			title: c.title,
+			hint: c.hint,
+			run: () => void termApi()?.runPluginCommand(c.id),
+		})),
 	]
 
 	return (
@@ -1435,6 +1462,7 @@ export default function App() {
 							setGit(s)
 							if (s.cwd) setCwd(s.cwd)
 						}}
+						pluginSegments={pluginStatusBar}
 						onToast={msg => {
 							setToast(msg)
 							window.setTimeout(() => setToast(null), 2800)

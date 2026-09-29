@@ -26,6 +26,19 @@ import {
 import {buildMenu} from './hotkeys.js'
 import {getOpencodeStatus, opencodeAvailable} from './opencodeEngine.js'
 import {
+	initPluginHost,
+	loadPlugins,
+	notifyPtyData,
+	notifyPtyExit,
+	notifyPtySpawn,
+	pluginCommandList,
+	PLUGINS_DIR,
+	pluginStatus,
+	pluginStatusBarList,
+	runPluginCommand,
+	unloadPlugins,
+} from './pluginManager.js'
+import {
 	getPty,
 	killPty,
 	resolveSpawnCwd,
@@ -298,11 +311,14 @@ function registerIpc() {
 					scheduleGitRefresh(tabId, newCwd)
 				})
 				win?.webContents.send(`pty:data-${id}`, cleaned)
+				notifyPtyData(id, cleaned)
 			})
 			entry.pty.onExit(() => {
 				win?.webContents.send(`pty:exit-${id}`)
+				notifyPtyExit(id)
 			})
 			scheduleGitRefresh(id, entry.cwd)
+			notifyPtySpawn({paneId: id, cwd: entry.cwd, shell: entry.shell})
 			return {id, cwd: entry.cwd, shell: entry.shell}
 		},
 	)
@@ -568,13 +584,37 @@ function registerIpc() {
 
 	ipcMain.handle('settings:get', () => settings)
 	ipcMain.handle('settings:set', async (_e, next: typeof settings) => {
+		const pluginsToggled = next.plugins?.enabled !== settings.plugins?.enabled
 		settings = saveSettings(next)
 		bumpLocalUpdatedAt()
+		if (pluginsToggled) await applyPluginsEnabled()
 		if (win) {
 			await applyLoadedSettings()
 		}
 		return settings
 	})
+
+	ipcMain.handle('plugin:list', () => ({
+		commands: pluginCommandList(),
+		statusBar: pluginStatusBarList(),
+		status: pluginStatus(settings.plugins.enabled),
+	}))
+	ipcMain.handle('plugin:runCommand', (_e, {id}: {id: string}) =>
+		runPluginCommand(id),
+	)
+	ipcMain.handle('plugin:openDir', async () => {
+		fs.mkdirSync(PLUGINS_DIR, {recursive: true})
+		return shell.openPath(PLUGINS_DIR)
+	})
+	ipcMain.handle('plugin:reload', async () => {
+		if (settings.plugins.enabled) await loadPlugins(app.getVersion())
+		return pluginStatus(settings.plugins.enabled)
+	})
+}
+
+async function applyPluginsEnabled(): Promise<void> {
+	if (settings.plugins.enabled) await loadPlugins(app.getVersion())
+	else await unloadPlugins()
 }
 
 /** Windows 11 mica/acrylic on the frame (title bar). Needs restart for some hosts. */
@@ -679,6 +719,20 @@ function createWindow() {
 		settings = saveSettings(merged)
 		await applyLoadedSettings()
 	})
+	initPluginHost({
+		settingsSnapshot: () => ({
+			version: app.getVersion(),
+			theme: {bg: settings.theme.bg, fg: settings.theme.fg},
+		}),
+		onChanged: () => {
+			if (!win || win.isDestroyed()) return
+			win.webContents.send('plugin:changed', {
+				commands: pluginCommandList(),
+				statusBar: pluginStatusBarList(),
+			})
+		},
+	})
+	if (settings.plugins.enabled) void loadPlugins(app.getVersion())
 }
 
 function quitApp(): void {
@@ -690,6 +744,7 @@ function quitApp(): void {
 
 app.on('will-quit', () => {
 	unregisterQuake()
+	void unloadPlugins()
 })
 
 app.on('window-all-closed', () => {

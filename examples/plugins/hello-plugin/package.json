@@ -1,0 +1,7 @@
+{
+	"name": "hello-plugin",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Example Involvex-Term plugin: a command, a status-bar clock, and a pty spawn counter",
+	"main": "index.mjs"
+}

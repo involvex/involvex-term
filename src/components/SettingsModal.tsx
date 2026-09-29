@@ -333,6 +333,7 @@ const SETTINGS_TABS = [
 	{id: 'status', label: 'Status bar'},
 	{id: 'window', label: 'Window'},
 	{id: 'agent', label: 'Agent'},
+	{id: 'plugins', label: 'Plugins'},
 	{id: 'sync', label: 'Sync & data'},
 ] as const
 type SettingsTabId = (typeof SETTINGS_TABS)[number]['id']
@@ -340,6 +341,25 @@ type SettingsTabId = (typeof SETTINGS_TABS)[number]['id']
 export default function SettingsModal({settings, onChange, onClose}: Props) {
 	const [tab, setTab] = useState<SettingsTabId>('appearance')
 	const set = (patch: Partial<AppSettings>) => onChange({...settings, ...patch})
+	const [pluginStatus, setPluginStatus] = useState<{
+		dir: string
+		enabled: boolean
+		loaded: Array<{name: string; commands: string[]}>
+		errors: Array<{name: string; error: string}>
+	} | null>(null)
+
+	useEffect(() => {
+		if (tab !== 'plugins') return
+		let cancelled = false
+		void termApi()
+			?.pluginList()
+			.then(r => {
+				if (!cancelled) setPluginStatus(r.status)
+			})
+		return () => {
+			cancelled = true
+		}
+	}, [tab, settings.plugins?.enabled])
 	return (
 		<div
 			className="modal-backdrop"
@@ -1284,6 +1304,99 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 									/>{' '}
 									Include git context (branch, dirty, ahead/behind, remote)
 								</label>
+							</section>
+						)}
+						{tab === 'plugins' && (
+							<section>
+								<h3>Local plugins</h3>
+								<p className="footer-dim">
+									Load Node scripts from{' '}
+									<code>~/.involvex-term/plugins/&lt;name&gt;/index.mjs</code>{' '}
+									to add command-palette commands and status-bar text. Plugins
+									run with full Node access in the main process — only enable
+									ones you wrote or trust. See the{' '}
+									<a
+										href="#"
+										onClick={e => {
+											e.preventDefault()
+											void termApi()?.openExternal(
+												'https://github.com/involvex/involvex-term/blob/main/PLUGINS.md',
+											)
+										}}
+									>
+										plugin API docs
+									</a>
+									.
+								</p>
+								<label className="wide">
+									<span>Enable plugins</span>
+									<input
+										type="checkbox"
+										checked={settings.plugins?.enabled === true}
+										onChange={e =>
+											set({
+												plugins: {enabled: e.target.checked},
+											})
+										}
+									/>
+								</label>
+								<div className="settings-btn-row">
+									<button
+										type="button"
+										className="settings-btn"
+										onClick={() => void termApi()?.pluginOpenDir()}
+									>
+										Open plugins folder
+									</button>
+									<button
+										type="button"
+										className="settings-btn"
+										disabled={!settings.plugins?.enabled}
+										onClick={() =>
+											void termApi()
+												?.pluginReload()
+												.then(s => setPluginStatus(s as typeof pluginStatus))
+										}
+									>
+										Reload plugins
+									</button>
+								</div>
+								{pluginStatus && (
+									<>
+										<h3>Loaded ({pluginStatus.loaded.length})</h3>
+										{pluginStatus.loaded.length === 0 ? (
+											<p className="footer-dim">No plugins loaded.</p>
+										) : (
+											<ul className="plugin-list">
+												{pluginStatus.loaded.map(p => (
+													<li key={p.name}>
+														<strong>{p.name}</strong>
+														{p.commands.length > 0 && (
+															<span className="footer-dim">
+																{' '}
+																· {p.commands.length} command
+																{p.commands.length === 1 ? '' : 's'}
+															</span>
+														)}
+													</li>
+												))}
+											</ul>
+										)}
+										{pluginStatus.errors.length > 0 && (
+											<>
+												<h3>Errors</h3>
+												<ul className="plugin-list plugin-list-errors">
+													{pluginStatus.errors.map(e => (
+														<li key={e.name}>
+															<strong>{e.name}</strong>:{' '}
+															<span className="footer-dim">{e.error}</span>
+														</li>
+													))}
+												</ul>
+											</>
+										)}
+									</>
+								)}
 							</section>
 						)}
 						{tab === 'sync' && (

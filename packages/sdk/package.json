@@ -1,0 +1,37 @@
+{
+	"name": "@involvex/term-sdk",
+	"version": "0.1.0",
+	"description": "Type-only SDK for writing Involvex-Term plugins (commands, status bar, pty hooks)",
+	"keywords": [
+		"involvex-term",
+		"terminal",
+		"plugin",
+		"sdk",
+		"electron",
+		"xterm"
+	],
+	"homepage": "https://github.com/involvex/involvex-term/blob/main/PLUGINS.md",
+	"bugs": {
+		"url": "https://github.com/involvex/involvex-term/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/involvex/involvex-term.git",
+		"directory": "packages/sdk"
+	},
+	"funding": {
+		"type": "github",
+		"url": "https://github.com/sponsors/involvex"
+	},
+	"license": "MIT",
+	"author": "involvex",
+	"type": "module",
+	"types": "index.d.ts",
+	"files": [
+		"index.d.ts",
+		"README.md"
+	],
+	"publishConfig": {
+		"access": "public"
+	}
+}

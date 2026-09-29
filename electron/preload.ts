@@ -72,6 +72,25 @@ export interface TermApi {
 		title?: string
 		buttons?: [string, string]
 	}) => Promise<boolean>
+	pluginList: () => Promise<{
+		commands: Array<{id: string; title: string; hint?: string}>
+		statusBar: Array<{id: string; text: string; title?: string}>
+		status: {
+			dir: string
+			enabled: boolean
+			loaded: Array<{name: string; commands: string[]}>
+			errors: Array<{name: string; error: string}>
+		}
+	}>
+	onPluginChanged: (
+		cb: (msg: {
+			commands: Array<{id: string; title: string; hint?: string}>
+			statusBar: Array<{id: string; text: string; title?: string}>
+		}) => void,
+	) => () => void
+	runPluginCommand: (id: string) => Promise<boolean>
+	pluginOpenDir: () => Promise<string>
+	pluginReload: () => Promise<unknown>
 	cliPending: () => Promise<unknown[]>
 	onCliCommand: (cb: (cmd: unknown) => void) => () => void
 	appInfo: () => Promise<{
@@ -193,6 +212,11 @@ const api: TermApi = {
 	agentWhich: binary => ipcRenderer.invoke('agent:which', {binary}),
 	dialogSaveText: opts => ipcRenderer.invoke('dialog:saveText', opts),
 	dialogConfirm: opts => ipcRenderer.invoke('dialog:confirm', opts),
+	pluginList: () => ipcRenderer.invoke('plugin:list'),
+	onPluginChanged: cb => sub('plugin:changed', cb as never),
+	runPluginCommand: id => ipcRenderer.invoke('plugin:runCommand', {id}),
+	pluginOpenDir: () => ipcRenderer.invoke('plugin:openDir'),
+	pluginReload: () => ipcRenderer.invoke('plugin:reload'),
 	cliPending: () => ipcRenderer.invoke('cli:pending'),
 	onCliCommand: cb => sub('cli:command', cb as never),
 	appInfo: () => ipcRenderer.invoke('app:info'),

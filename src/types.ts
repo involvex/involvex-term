@@ -129,6 +129,8 @@ export interface AppSettings {
 		/** Show OpenCode session titles on tab/pane chrome (default on). */
 		showPaneLabels: boolean
 	}
+	/** Local plugins loaded from ~/.involvex-term/plugins (opt-in). */
+	plugins: {enabled: boolean}
 	startup: {
 		mode: 'session' | 'new'
 		profileId: string
@@ -186,6 +188,32 @@ export type CliCommand =
 			profile?: string
 	  }
 	| {kind: 'new-tab'; dir?: string; profile?: string}
+
+export interface PluginCommand {
+	id: string
+	title: string
+	hint?: string
+}
+export interface PluginStatusBarSegment {
+	id: string
+	text: string
+	title?: string
+}
+export interface PluginStatus {
+	dir: string
+	enabled: boolean
+	loaded: Array<{name: string; commands: string[]}>
+	errors: Array<{name: string; error: string}>
+}
+export interface PluginListResult {
+	commands: PluginCommand[]
+	statusBar: PluginStatusBarSegment[]
+	status: PluginStatus
+}
+export interface PluginChangedMsg {
+	commands: PluginCommand[]
+	statusBar: PluginStatusBarSegment[]
+}
 
 export interface AppInfo {
 	name: string
@@ -251,6 +279,11 @@ export interface TermApiShape {
 		title?: string
 		buttons?: [string, string]
 	}) => Promise<boolean>
+	pluginList: () => Promise<PluginListResult>
+	onPluginChanged: (cb: (msg: PluginChangedMsg) => void) => () => void
+	runPluginCommand: (id: string) => Promise<boolean>
+	pluginOpenDir: () => Promise<string>
+	pluginReload: () => Promise<unknown>
 	cliPending: () => Promise<CliCommand[]>
 	onCliCommand: (cb: (cmd: CliCommand) => void) => () => void
 	appInfo: () => Promise<AppInfo>
