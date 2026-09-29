@@ -7,7 +7,13 @@ import {
 } from 'react'
 import {shortAgentTitle, type PaneAgentInfo} from '../lib/agentLabels'
 import {TAB_COLORS} from '../lib/agents'
-import {collectLeaves, type PaneNode} from '../lib/panes'
+import {
+	collectLeaves,
+	PANE_DRAG_MIME,
+	type PaneDragPayload,
+	type PaneInsertPosition,
+	type PaneNode,
+} from '../lib/panes'
 import type {QuickCommand, ShellProfile} from '../types'
 import TermContextMenu, {
 	type ContextMenuItem,
@@ -58,6 +64,12 @@ interface Props {
 	onNew: (profileId?: string) => void
 	onRename: (id: string, title: string) => void
 	onReorder: (fromIndex: number, toIndex: number) => void
+	onMovePaneToTab: (
+		paneId: string,
+		fromTabId: string,
+		toTabId: string,
+		position: PaneInsertPosition,
+	) => void
 	onTogglePin: (id: string) => void
 	onSetColor: (id: string, color: string | undefined) => void
 	onDuplicate: (id: string) => void
@@ -85,6 +97,7 @@ export default function TabBar({
 	onNew,
 	onRename,
 	onReorder,
+	onMovePaneToTab,
 	onTogglePin,
 	onSetColor,
 	onDuplicate,
@@ -100,7 +113,50 @@ export default function TabBar({
 	const [editValue, setEditValue] = useState('')
 	const [menuOpen, setMenuOpen] = useState(false)
 	const [ctxMenu, setCtxMenu] = useState<TermContextMenuState | null>(null)
+	const [dropTabId, setDropTabId] = useState<string | null>(null)
 	const dragFrom = useRef<number | null>(null)
+
+	const hasPaneDrag = (e: DragEvent) =>
+		Array.from(e.dataTransfer.types).includes(PANE_DRAG_MIME)
+
+	/** Edge of the tab the pointer is over — decides the split direction. */
+	const dropPosition = (e: DragEvent): PaneInsertPosition => {
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+		if (rect.width <= 0 || rect.height <= 0) return 'right'
+		const dx = (e.clientX - rect.left) / rect.width
+		const dy = (e.clientY - rect.top) / rect.height
+		if (dx < 0.25) return 'left'
+		if (dx > 0.75) return 'right'
+		if (dy < 0.3) return 'top'
+		if (dy > 0.7) return 'bottom'
+		return 'right'
+	}
+
+	const dropPaneOnTab = (e: DragEvent, toTabId: string) => {
+		let payload: PaneDragPayload | null = null
+		try {
+			const raw = e.dataTransfer.getData(PANE_DRAG_MIME)
+			const parsed: unknown = raw ? JSON.parse(raw) : null
+			if (
+				parsed &&
+				typeof parsed === 'object' &&
+				(parsed as {type?: unknown}).type === 'pane' &&
+				typeof (parsed as {paneId?: unknown}).paneId === 'string' &&
+				typeof (parsed as {sourceTabId?: unknown}).sourceTabId === 'string'
+			) {
+				payload = parsed as PaneDragPayload
+			}
+		} catch {
+			payload = null
+		}
+		if (!payload || payload.sourceTabId === toTabId) return
+		onMovePaneToTab(
+			payload.paneId,
+			payload.sourceTabId,
+			toTabId,
+			dropPosition(e),
+		)
+	}
 
 	const commitRename = (id: string) => {
 		const v = editValue.trim()
@@ -239,6 +295,7 @@ export default function TabBar({
 							t.color ? 'tab-colored' : '',
 							agent ? 'tab-has-agent' : '',
 							agent?.activity === 'active' ? 'tab-agent-active' : '',
+							dropTabId === t.id ? 'tab-drop-target' : '',
 						]
 							.filter(Boolean)
 							.join(' ')}
@@ -251,11 +308,27 @@ export default function TabBar({
 						onDragStart={() => {
 							dragFrom.current = i
 						}}
+						onDragEnd={() => {
+							dragFrom.current = null
+							setDropTabId(null)
+						}}
 						onDragOver={e => {
 							e.preventDefault()
+							if (hasPaneDrag(e)) {
+								e.dataTransfer.dropEffect = 'move'
+								if (dropTabId !== t.id) setDropTabId(t.id)
+							}
+						}}
+						onDragLeave={() => {
+							if (dropTabId === t.id) setDropTabId(null)
 						}}
 						onDrop={(e: DragEvent) => {
 							e.preventDefault()
+							setDropTabId(null)
+							if (hasPaneDrag(e)) {
+								dropPaneOnTab(e, t.id)
+								return
+							}
 							const from = dragFrom.current
 							dragFrom.current = null
 							if (from == null || from === i) return

@@ -4,8 +4,10 @@ import {
 	collectLeaves,
 	findNeighborPane,
 	layoutPanes,
+	PANE_DRAG_MIME,
 	splitBoundaries,
 	type PaneDirection,
+	type PaneDragPayload,
 	type PaneNode,
 	type SplitDir,
 } from '../lib/panes'
@@ -20,6 +22,8 @@ interface Theme {
 
 interface Props extends Theme {
 	root: PaneNode
+	/** Owning tab id (used as the drag source for cross-tab pane moves). */
+	tabId: string
 	/** False when another tab is showing (whole layout hidden). */
 	tabActive: boolean
 	activePaneId: string
@@ -30,10 +34,13 @@ interface Props extends Theme {
 	onFocusPane: (paneId: string) => void
 	onResizeSplit: (splitId: string, ratio: number) => void
 	onBackgroundIdle?: (paneId: string) => void
+	onToast?: (msg: string) => void
 	onPaneMenu?: {
 		onFind: (paneId: string) => void
 		onSplitToward: (paneId: string, toward: PaneDirection) => void
 		onSwap: (paneId: string, toward: PaneDirection) => void
+		onMoveToTab: (paneId: string, toTabId: string) => void
+		moveTargets: {id: string; title: string}[]
 		onClosePane: (paneId: string) => void
 		onCloseOtherPanes: (paneId: string) => void
 		onDuplicateTab: (paneId: string) => void
@@ -56,6 +63,7 @@ interface Drag {
  */
 export default function PaneLayout({
 	root,
+	tabId,
 	tabActive,
 	activePaneId,
 	fontFamily,
@@ -69,6 +77,7 @@ export default function PaneLayout({
 	onFocusPane,
 	onResizeSplit,
 	onBackgroundIdle,
+	onToast,
 	onPaneMenu,
 }: Props) {
 	const leaves = useMemo(() => collectLeaves(root), [root])
@@ -125,6 +134,9 @@ export default function PaneLayout({
 							onSplitToward: toward =>
 								onPaneMenu.onSplitToward(leaf.paneId, toward),
 							onSwap: toward => onPaneMenu.onSwap(leaf.paneId, toward),
+							moveTargets: onPaneMenu.moveTargets,
+							onMoveToTab: toTabId =>
+								onPaneMenu.onMoveToTab(leaf.paneId, toTabId),
 							onClosePane: () => onPaneMenu.onClosePane(leaf.paneId),
 							onCloseOtherPanes: () =>
 								onPaneMenu.onCloseOtherPanes(leaf.paneId),
@@ -145,6 +157,28 @@ export default function PaneLayout({
 								: undefined
 						}
 					>
+						{multi && tabActive && (
+							<div
+								className="pane-drag-handle"
+								title="Drag to move this pane to another tab"
+								draggable
+								onDragStart={e => {
+									e.stopPropagation()
+									const payload: PaneDragPayload = {
+										type: 'pane',
+										paneId: leaf.paneId,
+										sourceTabId: tabId,
+									}
+									e.dataTransfer.setData(
+										PANE_DRAG_MIME,
+										JSON.stringify(payload),
+									)
+									e.dataTransfer.effectAllowed = 'move'
+								}}
+							>
+								⠿
+							</div>
+						)}
 						{agent && (
 							<div
 								className={`pane-agent-chip${agent.activity === 'active' ? ' active' : ' idle'}${focused ? ' focused' : ''}`}
@@ -185,6 +219,7 @@ export default function PaneLayout({
 							scrollbar={scrollbar}
 							onFocusPane={onFocusPane}
 							onBackgroundIdle={onBackgroundIdle}
+							onToast={onToast}
 							paneMenu={paneMenu}
 						/>
 					</div>

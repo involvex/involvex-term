@@ -581,6 +581,18 @@ function registerIpc() {
 		clipboard.writeText(text ?? '')
 	})
 	ipcMain.handle('clipboard:read', () => clipboard.readText())
+	// Image paste probe: foreground TUIs with native image paste (e.g.
+	// opencode) read the clipboard themselves when they see the Ctrl+V
+	// keypress — the emulator only needs to forward it, so this reports
+	// image presence without staging any files.
+	ipcMain.handle('clipboard:has-image', async () => {
+		try {
+			const items = await clipboard.read()
+			return items.some(item => item.types.some(t => t.startsWith('image/')))
+		} catch {
+			return false
+		}
+	})
 
 	ipcMain.handle('settings:get', () => settings)
 	ipcMain.handle('settings:set', async (_e, next: typeof settings) => {

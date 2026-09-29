@@ -712,6 +712,11 @@ body {
 	text-align: right;
 }
 
+.search-pane-indicator {
+	color: #4ec9b0;
+	white-space: nowrap;
+}
+
 /* Split panes: flat grid, one cell block per leaf (stable keys keep
    surviving terminals mounted when siblings open/close). */
 .pane-grid {
@@ -737,6 +742,42 @@ body {
 .split-leaf.focused {
 	outline: 1px solid #4ec9b0;
 	outline-offset: -1px;
+}
+
+.pane-drag-handle {
+	position: absolute;
+	top: 4px;
+	left: 6px;
+	z-index: 5;
+	padding: 0 6px;
+	border-radius: 4px;
+	font-size: 11px;
+	line-height: 1.6;
+	cursor: grab;
+	user-select: none;
+	background: rgba(30, 30, 30, 0.88);
+	border: 1px solid #3c3c3c;
+	color: #888888;
+	opacity: 0;
+}
+
+.split-leaf:hover .pane-drag-handle,
+.split-leaf.focused .pane-drag-handle {
+	opacity: 0.85;
+}
+
+.pane-drag-handle:hover {
+	color: #4ec9b0;
+	border-color: #4ec9b0;
+}
+
+.pane-drag-handle:active {
+	cursor: grabbing;
+}
+
+.tab-drop-target {
+	outline: 2px dashed #4ec9b0;
+	outline-offset: -2px;
 }
 
 .pane-agent-chip {

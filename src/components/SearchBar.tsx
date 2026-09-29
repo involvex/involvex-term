@@ -1,75 +1,150 @@
-import {useEffect, useRef, useState} from 'react'
+import {useEffect, useMemo, useRef, useState} from 'react'
 import {focusTerm} from '../lib/focusTerm'
-import {getSearch} from '../lib/searchRegistry'
+import type {PaneNode} from '../lib/panes'
+import {getSearchesForRoot} from '../lib/searchRegistry'
 
 interface Props {
-	tabId: string
+	root: PaneNode
+	activePaneId: string
 	bg: string
 	fg: string
 	onClose: () => void
+	onFocusPane: (paneId: string) => void
 }
 
-export default function SearchBar({tabId, bg, fg, onClose}: Props) {
+interface PaneMatch {
+	index: number
+	count: number
+}
+
+export default function SearchBar({
+	root,
+	activePaneId,
+	bg,
+	fg,
+	onClose,
+	onFocusPane,
+}: Props) {
 	const [query, setQuery] = useState('')
 	const [caseSensitive, setCaseSensitive] = useState(false)
 	const [useRegex, setUseRegex] = useState(false)
-	const [match, setMatch] = useState<{index: number; count: number} | null>(
-		null,
-	)
+	const [matches, setMatches] = useState<Record<string, PaneMatch>>({})
 	const inputRef = useRef<HTMLInputElement>(null)
+
+	const paneSearches = useMemo(() => getSearchesForRoot(root), [root])
+	const paneIdsKey = paneSearches.map(p => p.paneId).join(',')
+
+	// Start on the focused pane. The bar unmounts on tab switch/close, so
+	// the initial index never goes stale while it is open.
+	const [paneIndex, setPaneIndex] = useState(() => {
+		const i = getSearchesForRoot(root).findIndex(p => p.paneId === activePaneId)
+		return i >= 0 ? i : 0
+	})
 
 	useEffect(() => {
 		inputRef.current?.focus()
 		inputRef.current?.select()
 	}, [])
 
+	// Subscribe to result changes on every pane's addon.
 	useEffect(() => {
-		const addon = getSearch(tabId)
-		if (!addon) return
-		const d = addon.onDidChangeResults(r =>
-			setMatch({index: r.resultIndex, count: r.resultCount}),
+		const disposables = paneSearches.map(({paneId, addon}) =>
+			addon.onDidChangeResults(r =>
+				setMatches(prev => {
+					const cur = prev[paneId]
+					if (cur && cur.index === r.resultIndex && cur.count === r.resultCount)
+						return prev
+					return {
+						...prev,
+						[paneId]: {index: r.resultIndex, count: r.resultCount},
+					}
+				}),
+			),
 		)
-		return () => d.dispose()
-	}, [tabId])
+		return () => {
+			for (const d of disposables) d.dispose()
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [paneIdsKey])
 
-	const go = (dir: 1 | -1) => {
-		const addon = getSearch(tabId)
-		const q = inputRef.current?.value ?? query
-		if (!addon || !q) return
-		try {
-			if (dir > 0) addon.findNext(q, {caseSensitive, regex: useRegex})
-			else addon.findPrevious(q, {caseSensitive, regex: useRegex})
-		} catch {
-			setMatch({index: -1, count: 0})
+	const applyQuery = (q: string, cs: boolean, rx: boolean) => {
+		if (!q) {
+			for (const {addon} of paneSearches) addon.clearDecorations()
+			setMatches({})
+			return
+		}
+		for (const {paneId, addon} of paneSearches) {
+			try {
+				addon.findNext(q, {caseSensitive: cs, regex: rx, incremental: true})
+			} catch {
+				setMatches(prev => ({...prev, [paneId]: {index: -1, count: 0}}))
+			}
 		}
 	}
 
-	const applyQuery = (q: string, cs: boolean, rx: boolean) => {
-		const addon = getSearch(tabId)
-		if (!addon) return
-		if (!q) {
-			addon.clearDecorations()
-			return
-		}
+	const current = paneSearches[paneIndex]
+
+	const go = (dir: 1 | -1) => {
+		const q = inputRef.current?.value ?? query
+		if (!current || !q) return
 		try {
-			addon.findNext(q, {caseSensitive: cs, regex: rx, incremental: true})
+			if (dir > 0) current.addon.findNext(q, {caseSensitive, regex: useRegex})
+			else current.addon.findPrevious(q, {caseSensitive, regex: useRegex})
 		} catch {
-			setMatch({index: -1, count: 0})
+			setMatches(prev => ({...prev, [current.paneId]: {index: -1, count: 0}}))
+		}
+	}
+
+	/** Jump to the next/prev pane that has at least one match. */
+	const jumpPane = (dir: 1 | -1) => {
+		if (paneSearches.length <= 1) return
+		const q = inputRef.current?.value ?? query
+		if (!q) return
+		for (let step = 1; step <= paneSearches.length; step++) {
+			const i =
+				(paneIndex + dir * step + paneSearches.length * step) %
+				paneSearches.length
+			const target = paneSearches[i]
+			if (!target) continue
+			const m = matches[target.paneId]
+			if (m && m.count > 0) {
+				setPaneIndex(i)
+				onFocusPane(target.paneId)
+				try {
+					target.addon.findNext(q, {caseSensitive, regex: useRegex})
+				} catch {
+					/* noop */
+				}
+				return
+			}
 		}
 	}
 
 	const close = () => {
-		getSearch(tabId)?.clearDecorations()
+		for (const {addon} of paneSearches) addon.clearDecorations()
+		setMatches({})
 		onClose()
-		focusTerm(tabId)
+		focusTerm(current?.paneId ?? activePaneId)
 	}
 
+	const panesWithHits = paneSearches.filter(
+		p => (matches[p.paneId]?.count ?? 0) > 0,
+	).length
+	const cur = current ? matches[current.paneId] : undefined
 	const counter =
-		!query || !match
+		!query || !current
 			? '–'
-			: match.count === 0
-				? '0/0'
-				: `${match.index + 1}/${match.count}`
+			: !cur
+				? `…`
+				: cur.count === 0
+					? '0/0'
+					: `${cur.index + 1}/${cur.count}`
+	const paneCounter =
+		paneSearches.length <= 1
+			? ''
+			: !query
+				? `${paneIndex + 1}/${paneSearches.length}`
+				: `${paneIndex + 1}/${paneSearches.length} · ${panesWithHits} hit${panesWithHits === 1 ? '' : 's'}`
 
 	return (
 		<div
@@ -80,7 +155,9 @@ export default function SearchBar({tabId, bg, fg, onClose}: Props) {
 				ref={inputRef}
 				type="text"
 				value={query}
-				placeholder="Find in terminal"
+				placeholder={
+					paneSearches.length > 1 ? 'Find in all panes' : 'Find in terminal'
+				}
 				aria-label="Find in terminal"
 				onChange={e => {
 					const q = e.target.value
@@ -90,13 +167,22 @@ export default function SearchBar({tabId, bg, fg, onClose}: Props) {
 				onKeyDown={e => {
 					if (e.key === 'Enter') {
 						e.preventDefault()
-						go(e.shiftKey ? -1 : 1)
+						if (e.altKey) jumpPane(e.shiftKey ? -1 : 1)
+						else go(e.shiftKey ? -1 : 1)
 					} else if (e.key === 'Escape') {
 						e.preventDefault()
 						close()
 					}
 				}}
 			/>
+			{paneCounter ? (
+				<span
+					className="footer-dim search-count search-pane-indicator"
+					title="Current pane / total panes"
+				>
+					{paneCounter}
+				</span>
+			) : null}
 			<span
 				className="footer-dim search-count"
 				title="Current match / total"
@@ -119,6 +205,26 @@ export default function SearchBar({tabId, bg, fg, onClose}: Props) {
 			>
 				↓
 			</button>
+			{paneSearches.length > 1 ? (
+				<>
+					<button
+						type="button"
+						title="Previous pane with matches (Shift+Alt+Enter)"
+						onClick={() => jumpPane(-1)}
+						aria-label="Previous pane with matches"
+					>
+						‹
+					</button>
+					<button
+						type="button"
+						title="Next pane with matches (Alt+Enter)"
+						onClick={() => jumpPane(1)}
+						aria-label="Next pane with matches"
+					>
+						›
+					</button>
+				</>
+			) : null}
 			<button
 				type="button"
 				title="Match case"

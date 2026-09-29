@@ -22,6 +22,7 @@ import {
 	findLeaf,
 	findNeighborPane,
 	firstLeaf,
+	insertPaneIntoTree,
 	keepOnlyPane,
 	mapLeafCwd,
 	newPaneId,
@@ -32,6 +33,7 @@ import {
 	swapPanes,
 	updateSplitRatio,
 	type PaneDirection,
+	type PaneInsertPosition,
 	type PaneLeaf,
 	type PaneNode,
 	type SplitDir,
@@ -775,6 +777,53 @@ export default function App() {
 		})
 	}, [])
 
+	// Move a pane from one tab to another (drag-drop or context menu).
+	// The pane keeps its paneId, so its TerminalView stays mounted and the
+	// shell survives the move — no pty is killed here.
+	const movePaneToTab = useCallback(
+		(
+			paneId: string,
+			fromTabId: string,
+			toTabId: string,
+			position: PaneInsertPosition = 'right',
+		) => {
+			if (fromTabId === toTabId) return
+			const source = tabsRef.current.find(t => t.id === fromTabId)
+			const target = tabsRef.current.find(t => t.id === toTabId)
+			if (!source || !target) return
+			const leaf = findLeaf(source.root, paneId)
+			if (!leaf) return
+			if (countLeaves(source.root) <= 1) return
+			const moved: PaneLeaf = {...leaf}
+			setTabs(prev =>
+				prev.map(t => {
+					if (t.id === fromTabId) {
+						const root = removeLeaf(t.root, paneId)
+						if (!root) return t
+						return {
+							...t,
+							root,
+							activePaneId:
+								paneId === t.activePaneId
+									? firstLeaf(root).paneId
+									: t.activePaneId,
+						}
+					}
+					if (t.id === toTabId) {
+						return {
+							...t,
+							root: insertPaneIntoTree(t.root, moved, position),
+							activePaneId: paneId,
+						}
+					}
+					return t
+				}),
+			)
+			setActiveId(toTabId)
+		},
+		[],
+	)
+
 	const showCompletionToast = useCallback((paneId: string) => {
 		if (!settingsRef.current.terminal.completionBell) return
 		const tab = tabsRef.current.find(t => findLeaf(t.root, paneId))
@@ -1374,6 +1423,7 @@ export default function App() {
 						onNew={profileId => addTab(undefined, profileId)}
 						onRename={renameTab}
 						onReorder={reorderTabs}
+						onMovePaneToTab={movePaneToTab}
 						onTogglePin={togglePinTab}
 						onSetColor={setTabColor}
 						onDuplicate={id => void duplicateTab(id)}
@@ -1390,16 +1440,19 @@ export default function App() {
 					<div className="terminals">
 						{searchOpen && activeTab && (
 							<SearchBar
-								tabId={activeTab.activePaneId}
+								root={activeTab.root}
+								activePaneId={activeTab.activePaneId}
 								bg={settings.theme.bg}
 								fg={settings.theme.fg}
 								onClose={() => setSearchOpen(false)}
+								onFocusPane={paneId => focusPane(activeTab.id, paneId)}
 							/>
 						)}
 						{tabs.map(t => (
 							<PaneLayout
 								key={t.id}
 								root={t.root}
+								tabId={t.id}
 								tabActive={t.id === activeTab?.id}
 								activePaneId={t.activePaneId}
 								fontFamily={effectiveFontFamily(settings.theme)}
@@ -1415,6 +1468,10 @@ export default function App() {
 									resizeSplit(t.id, splitId, ratio)
 								}
 								onBackgroundIdle={showCompletionToast}
+								onToast={msg => {
+									setToast(msg)
+									window.setTimeout(() => setToast(null), 2800)
+								}}
 								onPaneMenu={{
 									onFind: paneId => {
 										focusPane(t.id, paneId)
@@ -1428,6 +1485,16 @@ export default function App() {
 										focusPane(t.id, paneId)
 										swapPane(toward, paneId)
 									},
+									onMoveToTab: (paneId, toTabId) => {
+										focusPane(t.id, paneId)
+										movePaneToTab(paneId, t.id, toTabId, 'right')
+									},
+									moveTargets: tabs
+										.filter(x => x.id !== t.id)
+										.map(x => ({
+											id: x.id,
+											title: x.customTitle || x.title,
+										})),
 									onClosePane: paneId => {
 										focusPane(t.id, paneId)
 										closePane(paneId)

@@ -261,6 +261,7 @@ export interface TermApiShape {
 	sessionSaveSync: (state: SessionState) => void
 	clipboardWrite: (text: string) => Promise<void>
 	clipboardRead: () => Promise<string>
+	clipboardHasImage: () => Promise<boolean>
 	settingsGet: () => Promise<AppSettings>
 	settingsSet: (next: AppSettings) => Promise<AppSettings>
 	onSettingsChanged: (cb: (s: AppSettings) => void) => () => void

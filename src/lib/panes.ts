@@ -303,6 +303,44 @@ export function removeLeaf(node: PaneNode, paneId: string): PaneNode | null {
 	return node
 }
 
+/** MIME type for cross-tab pane drag payloads (see PaneDragPayload). */
+export const PANE_DRAG_MIME = 'application/x-involvex-pane'
+
+/** HTML5 drag payload when a pane header is dropped onto another tab. */
+export interface PaneDragPayload {
+	type: 'pane'
+	paneId: string
+	sourceTabId: string
+}
+
+export type PaneInsertPosition = 'left' | 'right' | 'top' | 'bottom' | 'center'
+
+/**
+ * Insert an existing pane leaf into a target tree by wrapping the whole
+ * target root in a new split. Wrapping (instead of splicing into a nested
+ * split) keeps the target layout intact and never orphans a leaf, so no
+ * pty is leaked. The moved pane keeps its paneId, so its TerminalView
+ * stays mounted and its shell survives the move.
+ */
+export function insertPaneIntoTree(
+	root: PaneNode,
+	leaf: PaneLeaf,
+	position: PaneInsertPosition = 'right',
+): PaneNode {
+	const dir: SplitDir =
+		position === 'top' || position === 'bottom' ? 'horizontal' : 'vertical'
+	const placeNew: 'before' | 'after' =
+		position === 'left' || position === 'top' ? 'before' : 'after'
+	return {
+		kind: 'split',
+		id: newSplitId(),
+		dir,
+		ratio: 0.5,
+		first: placeNew === 'before' ? {...leaf} : root,
+		second: placeNew === 'before' ? root : {...leaf},
+	}
+}
+
 /** Set a split's ratio (clamped), preserving everything else. */
 export function updateSplitRatio(
 	node: PaneNode,

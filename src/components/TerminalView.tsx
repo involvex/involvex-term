@@ -31,6 +31,8 @@ export interface TerminalPaneMenu {
 	onSplitToward: (toward: PaneDirection) => void
 	onSwap: (toward: PaneDirection) => void
 	canSwap: (toward: PaneDirection) => boolean
+	moveTargets?: {id: string; title: string}[]
+	onMoveToTab?: (toTabId: string) => void
 	onClosePane: () => void
 	onCloseOtherPanes: () => void
 	onDuplicateTab: () => void
@@ -55,6 +57,7 @@ interface Props {
 	scrollbar?: boolean
 	onFocusPane: (paneId: string) => void
 	onBackgroundIdle?: (paneId: string) => void
+	onToast?: (msg: string) => void
 	paneMenu?: TerminalPaneMenu
 }
 
@@ -63,6 +66,33 @@ function truncateHint(s: string, max = 42): string {
 	if (t.length <= max) return t
 	return `${t.slice(0, max - 1)}…`
 }
+
+// Single choke point for every paste gesture. One user action can be
+// delivered several times (xterm key handler + native paste event, menu
+// roundtrips, remounted effects), so a per-pane module-level gate collapses
+// duplicates even across effect closures and delivery delays. Deliberate
+// repeat pastes still work — just not within the gate window.
+const lastPasteByPane = new Map<string, number>()
+const PASTE_GATE_MS = 500
+
+function claimPaste(paneId: string): boolean {
+	const now = Date.now()
+	if (now - (lastPasteByPane.get(paneId) ?? 0) < PASTE_GATE_MS) return false
+	lastPasteByPane.set(paneId, now)
+	return true
+}
+
+// On Windows the Win key sets metaKey — Win+V / Win+C are system shortcuts
+// (clipboard history) and must not be hijacked for terminal paste/copy.
+// On macOS metaKey is Cmd, which stays a paste modifier.
+const IS_WINDOWS =
+	typeof navigator !== 'undefined' &&
+	/win/i.test(
+		(navigator as Navigator & {userAgentData?: {platform?: string}})
+			.userAgentData?.platform ??
+			navigator.platform ??
+			'',
+	)
 
 export default function TerminalView({
 	paneId,
@@ -79,8 +109,10 @@ export default function TerminalView({
 	scrollbar = true,
 	onFocusPane,
 	onBackgroundIdle,
+	onToast,
 	paneMenu,
 }: Props) {
+	const toastRef = useRef(onToast)
 	const containerRef = useRef<HTMLDivElement>(null)
 	const termRef = useRef<Terminal | null>(null)
 	const fitRef = useRef<FitAddon | null>(null)
@@ -104,6 +136,10 @@ export default function TerminalView({
 	useEffect(() => {
 		paneMenuRef.current = paneMenu
 	}, [paneMenu])
+
+	useEffect(() => {
+		toastRef.current = onToast
+	}, [onToast])
 
 	useEffect(() => {
 		const el = containerRef.current
@@ -153,28 +189,52 @@ export default function TerminalView({
 			term.focus()
 			return true
 		}
-		// Single choke point for every paste gesture. Dedupe window collapses
-		// the duplicate deliveries of a single user gesture (xterm registers
-		// native `paste` listeners on BOTH its textarea and its element, so one
-		// native paste fires twice — plus our manual write that made three).
-		let lastPasteAt = 0
+		// Single choke point for every paste gesture (see claimPaste).
 		const pasteClipboard = (): void => {
-			const now = Date.now()
-			if (now - lastPasteAt < 100) return
-			lastPasteAt = now
+			if (!claimPaste(paneId)) return
 			term.focus()
 			if (api) {
 				void api
 					.clipboardRead()
-					.then(text => {
-						if (text) api.ptyWrite(paneId, text)
+					.then(async text => {
+						if (text) {
+							api.ptyWrite(paneId, text)
+							return
+						}
+						// No text — if the clipboard holds an image, forward the
+						// keypress (SYN) instead of swallowing it. Foreground TUIs
+						// with native image paste (e.g. opencode) probe the
+						// clipboard themselves on Ctrl+V and attach the image;
+						// dumping a temp path here would only get in their way
+						// (plain shells safely ignore SYN).
+						try {
+							if (await api.clipboardHasImage()) api.ptyWrite(paneId, '\x16')
+						} catch {
+							/* noop */
+						}
 					})
 					.catch(() => undefined)
 			} else {
-				void navigator.clipboard
-					?.readText()
+				const clip = navigator.clipboard
+				if (!clip) return
+				void clip
+					.readText()
 					.then(text => {
-						if (text) term.paste(text)
+						if (text) {
+							term.paste(text)
+							return
+						}
+						// Web preview has no temp dir to stage images into.
+						if (typeof clip.read !== 'function') return
+						return clip.read().then(items => {
+							if (
+								items.some(item => item.types.some(t => t.startsWith('image/')))
+							) {
+								toastRef.current?.(
+									'Clipboard holds an image — terminals accept text only',
+								)
+							}
+						})
 					})
 					.catch(() => undefined)
 			}
@@ -189,6 +249,9 @@ export default function TerminalView({
 		// inserts the clipboard 3x (manual + 2x native via textarea+element).
 		term.attachCustomKeyEventHandler((ev: KeyboardEvent) => {
 			const key = ev.key.toLowerCase()
+			// Ctrl on all platforms; Cmd (metaKey) only off Windows, where the
+			// Win key would otherwise hijack system shortcuts like Win+V.
+			const modKey = ev.ctrlKey || (ev.metaKey && !IS_WINDOWS)
 			if (ev.ctrlKey && ev.shiftKey && key === 'c') {
 				copySelection()
 				return false
@@ -199,14 +262,14 @@ export default function TerminalView({
 				pasteClipboard()
 				return false
 			}
-			if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && key === 'c') {
+			if (modKey && !ev.altKey && key === 'c') {
 				if (term.hasSelection()) {
 					copySelection()
 					return false
 				}
 				return true // no selection → send ^C to the shell
 			}
-			if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && key === 'v') {
+			if (modKey && !ev.altKey && key === 'v') {
 				ev.preventDefault()
 				ev.stopPropagation()
 				pasteClipboard()
@@ -302,6 +365,24 @@ export default function TerminalView({
 						run: () => menuActions.onSwap(d.id),
 					})),
 				})
+				if (
+					menuActions.onMoveToTab &&
+					menuActions.moveTargets &&
+					menuActions.moveTargets.length > 0
+				) {
+					const targets = menuActions.moveTargets
+					const moveTo = menuActions.onMoveToTab
+					items.push({
+						id: 'move-pane',
+						label: 'Move pane to tab',
+						icon: 'move',
+						children: targets.map(t => ({
+							id: `move-${t.id}`,
+							label: t.title,
+							run: () => moveTo(t.id),
+						})),
+					})
+				}
 				items.push({
 					id: 'close-other',
 					label: 'Close other panes',

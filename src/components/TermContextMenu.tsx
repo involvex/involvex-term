@@ -7,6 +7,7 @@ export type ContextMenuIcon =
 	| 'duplicate'
 	| 'split'
 	| 'swap'
+	| 'move'
 	| 'close-other'
 	| 'close-pane'
 	| 'close-tab'
@@ -71,6 +72,12 @@ function MenuIcon({name}: {name: ContextMenuIcon}) {
 			return (
 				<svg {...common}>
 					<path d="M3 5.5h7.5l-1.4-1.4.7-.7 2.6 2.6-2.6 2.6-.7-.7L10.5 7.5H3v-2zm10 5H5.5l1.4 1.4-.7.7-2.6-2.6 2.6-2.6.7.7L5.5 8.5H13v2z" />
+				</svg>
+			)
+		case 'move':
+			return (
+				<svg {...common}>
+					<path d="M9 2.5 11.5 5H9.5v3h3V6.5l2.5 2.5-2.5 2.5V10h-3v3H9.5L7 10.5 9 8V6.5H6v3H4.5L2 7l2.5-2.5V6h3V3h1.5z" />
 				</svg>
 			)
 		case 'close-other':

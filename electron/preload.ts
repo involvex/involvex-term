@@ -36,6 +36,7 @@ export interface TermApi {
 	sessionSaveSync: (state: unknown) => void
 	clipboardWrite: (text: string) => Promise<void>
 	clipboardRead: () => Promise<string>
+	clipboardHasImage: () => Promise<boolean>
 	settingsGet: () => Promise<unknown>
 	settingsSet: (next: unknown) => Promise<unknown>
 	onSettingsChanged: (cb: (s: unknown) => void) => () => void
@@ -203,6 +204,7 @@ const api: TermApi = {
 	sessionSaveSync: state => ipcRenderer.send('session:save', state),
 	clipboardWrite: text => ipcRenderer.invoke('clipboard:write', {text}),
 	clipboardRead: () => ipcRenderer.invoke('clipboard:read'),
+	clipboardHasImage: () => ipcRenderer.invoke('clipboard:has-image'),
 	settingsGet: () => ipcRenderer.invoke('settings:get'),
 	settingsSet: next => ipcRenderer.invoke('settings:set', next),
 	onSettingsChanged: cb => sub('settings:changed', cb as never),
