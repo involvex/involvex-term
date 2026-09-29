@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.6.1] - 2026-09-29
+
+### Added
+
+- TypeScript CLI built with bun --target node, upgrade/uninstall, npm publish CI
+- @involvex/term CLI, wt-style sp/nt, cmd/WSL cwd, chunk-safe OSC
+- split panes inherit live cwd, About menu
+- add comprehensive unit test suite using bun test
+- agent-aware pane labels from OpenCode sessions
+- optional AI-agnostic agent env hooks on PTY spawn
+
+### Changed
+
+- docs: show agent integration on GitHub Pages
+- style(updater): convert CRLF line endings to LF
+- chore: normalize line endings in updater module
+- docs: expand v0.6.0 changelog
+
 All notable changes to this project are documented in this file.
 
 ## [Unreleased]
