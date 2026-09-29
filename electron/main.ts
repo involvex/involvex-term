@@ -495,6 +495,23 @@ function registerIpc() {
 		if (!target) return
 		shell.showItemInFolder(target)
 	})
+	ipcMain.handle(
+		'shell:contextMenu',
+		(_e, {action}: {action: 'status' | 'install' | 'uninstall'}) => {
+			// Lazy import keeps startup fast on non-Windows platforms.
+			return import('./contextMenu.js').then(m => {
+				const exe = app.isPackaged ? process.execPath : null
+				if (action === 'status') return m.contextMenuStatus(exe)
+				if (action === 'install') {
+					if (!exe) throw new Error('Only available in packaged builds.')
+					m.installContextMenu(exe)
+					return m.contextMenuStatus(exe)
+				}
+				m.uninstallContextMenu()
+				return m.contextMenuStatus(exe)
+			})
+		},
+	)
 
 	ipcMain.handle('settings:export', async () => {
 		if (!win || win.isDestroyed()) return {ok: false, error: 'no window'}

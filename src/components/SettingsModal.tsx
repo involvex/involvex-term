@@ -326,6 +326,95 @@ function SyncSection({
 	)
 }
 
+function ExplorerSection() {
+	const api = termApi()
+	const [status, setStatus] = useState<{
+		supported: boolean
+		installed: boolean
+		exe: string | null
+	} | null>(null)
+	const [busy, setBusy] = useState(false)
+	const [message, setMessage] = useState<string | null>(null)
+
+	useEffect(() => {
+		let cancelled = false
+		void api
+			?.contextMenu('status')
+			.then(s => {
+				if (!cancelled) setStatus(s)
+			})
+			.catch(() => {
+				if (!cancelled)
+					setStatus({supported: false, installed: false, exe: null})
+			})
+		return () => {
+			cancelled = true
+		}
+	}, [api])
+
+	const run = async (action: 'install' | 'uninstall') => {
+		setBusy(true)
+		setMessage(null)
+		try {
+			const next = await api?.contextMenu(action)
+			if (next) setStatus(next)
+			setMessage(action === 'install' ? 'Installed' : 'Removed')
+		} catch (e) {
+			setMessage(e instanceof Error ? e.message : String(e))
+		} finally {
+			setBusy(false)
+		}
+	}
+
+	return (
+		<section>
+			<h3>Windows Explorer context menu</h3>
+			{status === null ? (
+				<p className="footer-dim">Checking…</p>
+			) : !status.supported ? (
+				<p className="footer-dim">
+					Available in packaged Windows builds. In dev or on other platforms use{' '}
+					<code>involvex-term context-menu install</code>.
+				</p>
+			) : (
+				<>
+					<p className="footer-dim">
+						{status.installed
+							? '“Open in involvex-term” is registered for folders, folder backgrounds, and drives.'
+							: 'Not registered. Adds “Open in involvex-term” for folders, folder backgrounds, and drives.'}
+					</p>
+					<p className="footer-dim">
+						On Windows 11 the entry appears under “Show more options”. No admin
+						rights needed (per-user registration).
+					</p>
+					{message && <p className="footer-dim">{message}</p>}
+					<div className="settings-btn-row">
+						{!status.installed ? (
+							<button
+								type="button"
+								className="settings-btn"
+								disabled={busy}
+								onClick={() => void run('install')}
+							>
+								Install Explorer entry
+							</button>
+						) : (
+							<button
+								type="button"
+								className="settings-btn"
+								disabled={busy}
+								onClick={() => void run('uninstall')}
+							>
+								Remove Explorer entry
+							</button>
+						)}
+					</div>
+				</>
+			)}
+		</section>
+	)
+}
+
 const SETTINGS_TABS = [
 	{id: 'appearance', label: 'Appearance'},
 	{id: 'terminal', label: 'Terminal'},
@@ -1644,6 +1733,8 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 										Window size & position restore automatically on launch.
 									</p>
 								</section>
+
+								<ExplorerSection />
 
 								<section>
 									<h3>Quake dropdown (global hotkey)</h3>

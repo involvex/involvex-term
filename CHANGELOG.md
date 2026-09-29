@@ -34,6 +34,13 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- Windows Explorer “Open in involvex-term” (folders, folder backgrounds,
+  drives; per-user HKCU, no admin; NSIS setup registers it, Settings →
+  Window toggles it, `involvex-term context-menu install|uninstall|status`
+  covers portable installs; Win11 shows it under “Show more options”)
+- `involvex-term doctor [--fix] [--json] [--verbose]` — checks app install,
+  config dir, settings.json validity, shells, opencode on PATH, context-menu
+  state, GitHub reachability, and disk space; `--fix` covers safe fixes only
 - Agent-aware pane labels: tab + pane chrome show OpenCode session titles when
   a pane matches a listed session (cwd or launch/continue binding); busy/idle
   from recent `updated`; clears when the session leaves the list. Toggle:

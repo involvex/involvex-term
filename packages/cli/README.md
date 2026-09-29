@@ -30,6 +30,8 @@ involvex-term nt -d C:\repos    # new tab (alias: st)
 | `nt [-d <dir>] [-p <profile>]` (alias `st`)          | Open a new tab                                                 |
 | `start`                                              | Launch the app                                                 |
 | `path`                                               | Print the resolved app executable path                         |
+| `context-menu install\|uninstall\|status`            | Manage Explorer “Open in involvex-term” (Windows, per-user)    |
+| `doctor [--fix] [--json] [--verbose]`                | Check for common issues (app, settings, shells, PATH, network) |
 | `--version`, `--help`                                | Self-explanatory                                               |
 
 `install` runs the Windows NSIS installer silently (or places the AppImage
@@ -42,6 +44,20 @@ Settings in `~/.involvex-term/settings.json` survive `uninstall`.
 single-instance channel; if the app isn't running it starts and applies the
 command once ready. Relative `-d` paths are resolved against the CLI's own
 current directory.
+
+`context-menu install` registers “Open in involvex-term” for folders, folder
+backgrounds, and drives (HKCU — no admin needed). The NSIS installer does this
+automatically; use the CLI for portable installs or repair. On Windows 11 the
+entry appears under “Show more options” (modern top-level menu needs MSIX
+packaging, tracked as a follow-up). `context-menu status` exits non-zero when
+not (fully) installed, so it is script-friendly.
+
+`doctor` checks the app install, `~/.involvex-term` config, `settings.json`
+validity, shell availability, `opencode` on PATH, context-menu state,
+GitHub reachability, and disk space. Exit code is `1` when a check fails.
+`--fix` performs only safe fixes (create the config dir, clear a stale exe
+pointer in `cli.json`); corrupt `settings.json` is never overwritten.
+`--json` emits machine-readable output for scripting/CI.
 
 ## Links
 

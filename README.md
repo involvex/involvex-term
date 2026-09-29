@@ -40,7 +40,13 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
   the session ends (Settings → Agent → Pane labels)
 - **CLI** ([`@involvex/term`](https://www.npmjs.com/package/@involvex/term)) —
   `bunx @involvex/term install`, then `involvex-term sp -d .` / `nt` split or
-  open a tab in the running window, wt-style; also `upgrade` / `uninstall`
+  open a tab in the running window, wt-style; also `upgrade` / `uninstall`,
+  `context-menu` (Explorer “Open in involvex-term”) and `doctor` (common-issue
+  checks with `--fix` / `--json`)
+- **Explorer context menu** — “Open in involvex-term” for folders, folder
+  backgrounds, and drives (per-user, no admin; installed by setup, toggle in
+  Settings → Window, or `involvex-term context-menu install`; on Windows 11 it
+  lives under “Show more options”)
 - **Local plugins** (opt-in, off by default) — command-palette commands,
   status-bar text, and read-only pty hooks from
   `~/.involvex-term/plugins/<name>/`; see [`PLUGINS.md`](PLUGINS.md) and the

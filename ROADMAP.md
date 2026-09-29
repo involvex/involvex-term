@@ -12,6 +12,8 @@ Track progress by moving items into CHANGELOG when shipped.
 - Git footer (branch, dirty, ahead/behind, stash) + live OSC7 cwd
 - OpenCode launch, PATH detect, footer status, click-to-continue
 - Agent-aware pane/tab labels from OpenCode session list (busy/idle cue)
+- Explorer “Open in involvex-term” (classic HKCU verbs; Win11 modern top-level
+  via MSIX tracked as follow-up) + `involvex-term doctor` common-issue checks
 - CI (lint / tsc / format) + GitHub Releases (Windows NSIS, Linux AppImage)
 - Settings file (`~/.involvex-term/settings.json`), native confirm-on-close
 - Shell / profile picker, tab rename + drag-reorder, theme presets,

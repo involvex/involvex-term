@@ -83,6 +83,8 @@ Usage:
   involvex-term nt|st [-d <dir>] [-p <profile>]        Open a new tab
   involvex-term start                                  Launch the app
   involvex-term path                                   Print the resolved app path
+  involvex-term context-menu install|uninstall|status  Manage Explorer "Open in involvex-term" (Windows)
+  involvex-term doctor [--fix] [--json] [--verbose]    Check for common issues
   involvex-term --version | --help
 
 Env: INVOLVEX_TERM_EXE overrides the app executable path.`
@@ -348,6 +350,78 @@ async function main(): Promise<void> {
 		case 'path':
 			console.log(resolveExe() ?? '(not installed)')
 			return
+		case 'context-menu': {
+			const {install, uninstall, getStatus} = await import('./contextMenu.js')
+			const sub = rest[0]
+			if (sub === 'status') {
+				const st = getStatus(resolveExe())
+				if (!st.supported) {
+					console.log('Explorer context menu: unsupported (Windows-only)')
+					return
+				}
+				console.log(st.installed ? 'installed' : 'not installed')
+				for (const r of st.roots) {
+					console.log(
+						`  ${r.installed ? '✓' : '✗'} ${r.key}${r.command ? '' : ' (missing)'}`,
+					)
+				}
+				if (!st.installed) process.exitCode = 1
+				return
+			}
+			if (sub === 'install') {
+				const exe = resolveExe()
+				if (!exe) {
+					console.error(
+						'Involvex-Term is not installed. Run: bunx @involvex/term install',
+					)
+					process.exitCode = 1
+					return
+				}
+				install(exe)
+				console.log(
+					'Explorer context menu installed (folder · background · drive).',
+				)
+				console.log('On Windows 11 it appears under “Show more options”.')
+				return
+			}
+			if (sub === 'uninstall') {
+				uninstall()
+				console.log('Explorer context menu removed.')
+				return
+			}
+			console.error(`Unknown context-menu command: ${sub ?? ''}\n\n${HELP}`)
+			process.exitCode = 1
+			return
+		}
+		case 'doctor': {
+			const {runDoctor, formatDoctor, doctorFailed} =
+				await import('./doctor.js')
+			const {getStatus} = await import('./contextMenu.js')
+			const fix = rest.includes('--fix')
+			const json = rest.includes('--json')
+			const verbose = rest.includes('--verbose')
+			const checks = await runDoctor(
+				{fix, verbose},
+				{
+					resolveExe,
+					readConfig,
+					writeConfig,
+					contextMenuStatus: () => {
+						const st = getStatus(resolveExe())
+						return st.supported
+							? {supported: true, installed: st.installed}
+							: null
+					},
+				},
+			)
+			if (json) {
+				console.log(JSON.stringify({version: pkg.version, checks}, null, 2))
+			} else {
+				console.log(formatDoctor(checks, verbose))
+			}
+			if (doctorFailed(checks)) process.exitCode = 1
+			return
+		}
 	}
 	const exe = resolveExe()
 	if (!exe) {

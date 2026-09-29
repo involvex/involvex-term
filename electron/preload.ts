@@ -105,6 +105,12 @@ export interface TermApi {
 	openExternal: (url: string) => Promise<void>
 	openPath: (filePath: string) => Promise<string>
 	showItemInFolder: (filePath: string) => Promise<void>
+	contextMenu: (action: 'status' | 'install' | 'uninstall') => Promise<{
+		supported: boolean
+		installed: boolean
+		exe: string | null
+		roots: Array<{key: string; installed: boolean; command: string | null}>
+	}>
 	settingsExport: () => Promise<{ok: boolean; path?: string; error?: string}>
 	settingsImport: () => Promise<{
 		ok: boolean
@@ -226,6 +232,7 @@ const api: TermApi = {
 	openPath: filePath => ipcRenderer.invoke('shell:openPath', {path: filePath}),
 	showItemInFolder: filePath =>
 		ipcRenderer.invoke('shell:showItemInFolder', {path: filePath}),
+	contextMenu: action => ipcRenderer.invoke('shell:contextMenu', {action}),
 	settingsExport: () => ipcRenderer.invoke('settings:export'),
 	settingsImport: () => ipcRenderer.invoke('settings:import'),
 	syncStatus: () => ipcRenderer.invoke('sync:status'),

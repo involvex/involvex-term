@@ -291,6 +291,12 @@ export interface TermApiShape {
 	openExternal: (url: string) => Promise<void>
 	openPath: (filePath: string) => Promise<string>
 	showItemInFolder: (filePath: string) => Promise<void>
+	contextMenu: (action: 'status' | 'install' | 'uninstall') => Promise<{
+		supported: boolean
+		installed: boolean
+		exe: string | null
+		roots: Array<{key: string; installed: boolean; command: string | null}>
+	}>
 	settingsExport: () => Promise<{ok: boolean; path?: string; error?: string}>
 	settingsImport: () => Promise<{
 		ok: boolean
