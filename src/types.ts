@@ -338,6 +338,7 @@ export interface TermApiShape {
 	updateInstall: () => Promise<void>
 	updateStatus: () => Promise<UpdateStatus>
 	onUpdateStatus: (cb: (s: UpdateStatus) => void) => () => void
+	windowToggleApp: () => void
 }
 
 declare global {

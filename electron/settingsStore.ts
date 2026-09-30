@@ -55,6 +55,7 @@ const HotkeysSchema = z.record(z.string(), z.string()).default({
 	'prev-mark': 'Ctrl+Shift+Up',
 	'next-mark': 'Ctrl+Shift+Down',
 	'check-updates': 'Ctrl+Shift+U',
+	'toggle-app': 'Ctrl+`',
 })
 
 const TabsSchema = z.object({

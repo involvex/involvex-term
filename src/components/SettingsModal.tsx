@@ -36,6 +36,7 @@ const HOTKEY_ACTIONS: Array<{id: string; label: string}> = [
 	{id: 'prev-mark', label: 'Previous mark'},
 	{id: 'next-mark', label: 'Next mark'},
 	{id: 'check-updates', label: 'Check for updates'},
+	{id: 'toggle-app', label: 'Toggle app visibility'},
 ]
 
 function formatPressed(e: KeyboardEvent): string | null {

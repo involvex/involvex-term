@@ -176,6 +176,7 @@ export interface TermApi {
 	updateInstall: () => Promise<void>
 	updateStatus: () => Promise<unknown>
 	onUpdateStatus: (cb: (s: unknown) => void) => () => void
+	windowToggleApp: () => void
 }
 
 function sub(channel: string, cb: (...a: never[]) => void): () => void {
@@ -248,6 +249,7 @@ const api: TermApi = {
 	updateInstall: () => ipcRenderer.invoke('update:install'),
 	updateStatus: () => ipcRenderer.invoke('update:status'),
 	onUpdateStatus: cb => sub('update:status', cb as never),
+	windowToggleApp: () => ipcRenderer.invoke('window:toggle-app'),
 }
 
 contextBridge.exposeInMainWorld('termApi', api)

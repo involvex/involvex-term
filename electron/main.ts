@@ -49,7 +49,9 @@ import {
 	handleQuakeBlur,
 	isQuakeActive,
 	registerQuake,
+	registerToggleApp,
 	unregisterQuake,
+	unregisterToggleApp,
 } from './quake.js'
 import {
 	loadSession,
@@ -639,6 +641,20 @@ function registerIpc() {
 		if (settings.plugins.enabled) await loadPlugins(app.getVersion())
 		return pluginStatus(settings.plugins.enabled)
 	})
+	ipcMain.handle('window:toggle-app', () => {
+		if (!win || win.isDestroyed()) return
+		if (win.isVisible()) {
+			if (!win.isMaximized()) win.hide()
+		} else {
+			try {
+				if (win.isMaximized()) win.unmaximize()
+				win.show()
+				win.focus()
+			} catch {
+				/* noop */
+			}
+		}
+	})
 }
 
 async function applyPluginsEnabled(): Promise<void> {
@@ -666,6 +682,7 @@ function watchSettingsFile() {
 				if (win) void buildMenu(win, settings).catch(() => undefined)
 				if (win) setupTray(win, iconPath(), settings, quitApp)
 				if (win) registerQuake(win, () => settings)
+				if (win) registerToggleApp(win, () => settings)
 				startSysLoop()
 			} catch {
 				/* noop */
@@ -740,6 +757,7 @@ function createWindow() {
 	void buildMenu(win, settings).catch(() => undefined)
 	setupTray(win, iconPath(), settings, quitApp)
 	registerQuake(win, () => settings)
+	registerToggleApp(win, () => settings)
 	bindUpdaterWindow(win)
 	startSysLoop()
 	if (settings.window.checkUpdatesOnStartup) scheduleStartupUpdateCheck()
@@ -768,11 +786,13 @@ function quitApp(): void {
 	isQuitting = true
 	destroyTray()
 	unregisterQuake()
+	unregisterToggleApp()
 	app.quit()
 }
 
 app.on('will-quit', () => {
 	unregisterQuake()
+	unregisterToggleApp()
 	void unloadPlugins()
 })
 

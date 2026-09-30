@@ -139,12 +139,28 @@ function ContextMenuRow({
 }) {
 	const [open, setOpen] = useState(false)
 	const rowRef = useRef<HTMLDivElement>(null)
+	const submenuRef = useRef<HTMLDivElement | null>(null)
 	const hasChildren = Boolean(item.children?.length)
+	// Timeout ref for delayed closing
+	const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const CLOSE_DELAY = 150
+
+	useEffect(() => {
+		return () => {
+			if (closeTimeoutRef.current) {
+				clearTimeout(closeTimeoutRef.current)
+				closeTimeoutRef.current = null
+			}
+		}
+	}, [])
 
 	useEffect(() => {
 		if (!open) return
 		const onDown = (e: MouseEvent) => {
 			if (rowRef.current && !rowRef.current.contains(e.target as Node)) {
+				const target = e.target as Node
+				// Allow clicks on the submenu itself
+				if (submenuRef.current && submenuRef.current.contains(target)) return
 				setOpen(false)
 			}
 		}
@@ -152,14 +168,33 @@ function ContextMenuRow({
 		return () => window.removeEventListener('mousedown', onDown, true)
 	}, [open])
 
+	const clearPendingClose = () => {
+		if (closeTimeoutRef.current) {
+			clearTimeout(closeTimeoutRef.current)
+			closeTimeoutRef.current = null
+		}
+	}
+
+	// Handle mouse enter/leave for parent items with children
+	const handleMouseEnter = () => {
+		if (hasChildren && !item.disabled) {
+			clearPendingClose()
+			setOpen(true)
+		}
+	}
+
+	const handleMouseLeave = () => {
+		if (!hasChildren) return
+		clearPendingClose()
+		closeTimeoutRef.current = setTimeout(() => setOpen(false), CLOSE_DELAY)
+	}
+
 	return (
 		<div
 			ref={rowRef}
 			className="term-context-row"
-			onMouseEnter={() => {
-				if (hasChildren && !item.disabled) setOpen(true)
-			}}
-			onMouseLeave={() => setOpen(false)}
+			onMouseEnter={handleMouseEnter}
+			onMouseLeave={handleMouseLeave}
 		>
 			<button
 				type="button"
@@ -200,6 +235,7 @@ function ContextMenuRow({
 			</button>
 			{hasChildren && open && !item.disabled ? (
 				<div
+					ref={submenuRef}
 					className="term-context-submenu"
 					style={{marginLeft: depth > 0 ? 0 : undefined}}
 					role="menu"

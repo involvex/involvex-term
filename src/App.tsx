@@ -93,6 +93,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 		'prev-mark': 'Ctrl+Shift+Up',
 		'next-mark': 'Ctrl+Shift+Down',
 		'check-updates': 'Ctrl+Shift+U',
+		'toggle-app': 'Ctrl+`',
 	},
 	tabs: {confirmClose: false, restoreSession: true},
 	terminal: {
@@ -1147,6 +1148,9 @@ export default function App() {
 			} else if (hit('settings', 'Ctrl+,')) {
 				e.preventDefault()
 				setShowSettings(true)
+			} else if (hit('toggle-app', 'Ctrl+`')) {
+				e.preventDefault()
+				termApi()?.windowToggleApp()
 			} else if ((e.ctrlKey || e.metaKey) && /^[1-9]$/.test(e.key)) {
 				const key = e.key
 				const i = Number(key) - 1

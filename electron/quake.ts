@@ -14,6 +14,8 @@ let returnState: {
 } | null = null
 let registeredAccel: string | null = null
 let lastFailKey: string | null = null
+// Toggle-app hotkey registration tracking
+let toggleRegisteredAccel: string | null = null
 
 export function isQuakeActive(): boolean {
 	return quakeActive
@@ -192,4 +194,81 @@ export function unregisterQuake(): void {
 	}
 	quakeActive = false
 	returnState = null
+}
+
+function toggleApp(win: BrowserWindow, getSettings: () => AppSettings): void {
+	const hk = getSettings().hotkeys as Record<string, string>
+	const wanted = hk['toggle-app'] || 'Ctrl+`'
+	const toAccel = (h: string): string =>
+		h
+			.trim()
+			.replace(/Ctrl\+/gi, 'CommandOrControl+')
+			.replace(/Cmd\+/gi, 'CommandOrControl+')
+			.replace(/Alt\+/gi, 'Alt+')
+			.replace(/Shift\+/gi, 'Shift+')
+			.replace(/Win\+/gi, 'Super+')
+			.replace(/Meta\+/gi, 'Super+')
+
+	const base = toAccel(wanted)
+	const candidates = [base]
+	candidates.push(base.replace(/\+`$/, '+Grave'))
+	candidates.push(base.replace(/\+`$/, '+Oem_3'))
+	candidates.push('Ctrl+`')
+
+	for (const accel of candidates) {
+		try {
+			if (
+				globalShortcut.register(accel, () => {
+					if (win.isVisible()) {
+						if (!win.isMaximized()) win.hide()
+					} else {
+						try {
+							if (win.isMaximized()) win.unmaximize()
+							win.show()
+							win.focus()
+						} catch {
+							/* noop */
+						}
+					}
+				})
+			) {
+				toggleRegisteredAccel = accel
+				return
+			}
+		} catch {
+			/* try next */
+		}
+	}
+}
+
+let toggleAccelRegistered = false
+
+export function registerToggleApp(
+	win: BrowserWindow,
+	getSettings: () => AppSettings,
+): void {
+	if (toggleAccelRegistered) {
+		if (toggleRegisteredAccel) {
+			try {
+				globalShortcut.unregister(toggleRegisteredAccel)
+			} catch {
+				/* noop */
+			}
+			toggleRegisteredAccel = null
+		}
+	}
+	toggleAccelRegistered = true
+	toggleApp(win, getSettings)
+}
+
+export function unregisterToggleApp(): void {
+	if (toggleRegisteredAccel) {
+		try {
+			globalShortcut.unregister(toggleRegisteredAccel)
+		} catch {
+			/* noop */
+		}
+		toggleRegisteredAccel = null
+	}
+	toggleAccelRegistered = false
 }
