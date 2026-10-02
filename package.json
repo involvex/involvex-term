@@ -1,6 +1,6 @@
 {
 	"name": "involvex-term",
-	"version": "0.8.2",
+	"version": "0.8.3",
 	"private": true,
 	"description": "Minimalist dark Git-aware terminal (Electron + xterm.js + node-pty)",
 	"homepage": "https://github.com/involvex/involvex-term#readme",

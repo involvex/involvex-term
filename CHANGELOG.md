@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.3] - 2026-10-02
+
+### Fixed
+
+- stable spawn geometry and guarded ConPTY resize for pwsh7
+
+### Changed
+
+- perf: cut hot-path process spawns and renderer re-render cost
+
 ## [0.8.2] - 2026-10-02
 
 ### Added
