@@ -861,6 +861,23 @@ export default function App() {
 		)
 	}, [])
 
+	// Title honesty: main resolves the spawn dir (saved cwd → startDir →
+	// home) and returns it. Apply it unless the user named the tab, so the
+	// display matches the real shell dir before the first OSC7 arrives.
+	const resolveTabCwd = useCallback(
+		(tabId: string, _paneId: string, cwd: string) => {
+			if (!cwd) return
+			setTabs(prev => {
+				const cur = prev.find(t => t.id === tabId)
+				if (!cur || cur.customTitle) return prev
+				const title = shortTitle(cwd, '')
+				if (cur.cwd === cwd && cur.title === title) return prev
+				return prev.map(t => (t.id === tabId ? {...t, cwd, title} : t))
+			})
+		},
+		[],
+	)
+
 	// Split a pane; the new pane inherits the target pane's live cwd/profile.
 	const splitInto = useCallback(
 		async (
@@ -1493,6 +1510,9 @@ export default function App() {
 									resizeSplit(t.id, splitId, ratio)
 								}
 								onBackgroundPrompt={showCompletionToast}
+								onResolvedCwd={(paneId, cwd) =>
+									resolveTabCwd(t.id, paneId, cwd)
+								}
 								onToast={msg => {
 									setToast(msg)
 									window.setTimeout(() => setToast(null), 2800)

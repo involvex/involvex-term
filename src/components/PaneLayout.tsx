@@ -34,6 +34,7 @@ interface Props extends Theme {
 	onFocusPane: (paneId: string) => void
 	onResizeSplit: (splitId: string, ratio: number) => void
 	onBackgroundPrompt?: (paneId: string) => void
+	onResolvedCwd?: (paneId: string, cwd: string) => void
 	onToast?: (msg: string) => void
 	onPaneMenu?: {
 		onFind: (paneId: string) => void
@@ -77,6 +78,7 @@ export default function PaneLayout({
 	onFocusPane,
 	onResizeSplit,
 	onBackgroundPrompt,
+	onResolvedCwd,
 	onToast,
 	onPaneMenu,
 }: Props) {
@@ -219,6 +221,7 @@ export default function PaneLayout({
 							scrollbar={scrollbar}
 							onFocusPane={onFocusPane}
 							onBackgroundPrompt={onBackgroundPrompt}
+							onResolvedCwd={onResolvedCwd}
 							onToast={onToast}
 							paneMenu={paneMenu}
 						/>

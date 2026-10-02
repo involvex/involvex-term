@@ -11,6 +11,12 @@ import {
 import type {PaneDirection} from '../lib/panes'
 import {registerSearch, unregisterSearch} from '../lib/searchRegistry'
 import {
+	SPAWN_FALLBACK_COLS,
+	SPAWN_FALLBACK_ROWS,
+	SPAWN_READY_TIMEOUT_MS,
+	isSpawnableGeometry,
+} from '../lib/spawnGeometry'
+import {
 	createMarkController,
 	registerTermActions,
 	unregisterTermActions,
@@ -61,6 +67,8 @@ interface Props {
 	scrollbar?: boolean
 	onFocusPane: (paneId: string) => void
 	onBackgroundPrompt?: (paneId: string) => void
+	/** Resolved spawn cwd from main (title honesty before first OSC7). */
+	onResolvedCwd?: (paneId: string, cwd: string) => void
 	onToast?: (msg: string) => void
 	paneMenu?: TerminalPaneMenu
 }
@@ -113,6 +121,7 @@ export default function TerminalView({
 	scrollbar = true,
 	onFocusPane,
 	onBackgroundPrompt,
+	onResolvedCwd,
 	onToast,
 	paneMenu,
 }: Props) {
@@ -126,6 +135,7 @@ export default function TerminalView({
 	const completionRef = useRef(createCompletionTracker())
 	const completionBellRef = useRef(completionBell)
 	const onBgPromptRef = useRef(onBackgroundPrompt)
+	const onResolvedCwdRef = useRef(onResolvedCwd)
 	const [ctxMenu, setCtxMenu] = useState<TermContextMenuState | null>(null)
 	const paneMenuRef = useRef(paneMenu)
 	const [menuTabActive, setMenuTabActive] = useState(tabActive)
@@ -142,7 +152,8 @@ export default function TerminalView({
 	useEffect(() => {
 		completionBellRef.current = completionBell
 		onBgPromptRef.current = onBackgroundPrompt
-	}, [completionBell, onBackgroundPrompt])
+		onResolvedCwdRef.current = onResolvedCwd
+	}, [completionBell, onBackgroundPrompt, onResolvedCwd])
 
 	useEffect(() => {
 		paneMenuRef.current = paneMenu
@@ -532,8 +543,33 @@ export default function TerminalView({
 		let offData: (() => void) | undefined
 		let offExit: (() => void) | undefined
 		let offPrompt: (() => void) | undefined
+		let readyTimer: ReturnType<typeof setTimeout> | null = null
+		let readyRo: ResizeObserver | null = null
 
-		const spawn = async () => {
+		/** Proposed dims only count once the container is really laid out. */
+		const measureSpawnGeometry = (): {cols: number; rows: number} | null => {
+			try {
+				const dims = fit.proposeDimensions()
+				if (dims && isSpawnableGeometry(dims.cols, dims.rows))
+					return {cols: dims.cols, rows: dims.rows}
+			} catch {
+				/* not measurable yet */
+			}
+			return null
+		}
+
+		const stopGate = () => {
+			if (readyTimer) {
+				clearTimeout(readyTimer)
+				readyTimer = null
+			}
+			if (readyRo) {
+				readyRo.disconnect()
+				readyRo = null
+			}
+		}
+
+		const spawn = async (cols: number, rows: number) => {
 			if (!api) {
 				term.writeln(
 					'\x1b[33mNot running in Electron — PTY unavailable.\x1b[0m',
@@ -542,21 +578,14 @@ export default function TerminalView({
 				return
 			}
 			try {
-				// Container may not be laid out yet — never spawn at FitAddon's
-				// 1×1 / 9×5 collapse (breaks PSReadLine + injects DA replies).
-				fit.fit()
-				let cols = term.cols
-				let rows = term.rows
-				if (cols < 40 || rows < 10) {
-					cols = 80
-					rows = 24
-					try {
-						term.resize(cols, rows)
-					} catch {
-						/* noop */
-					}
+				// Geometry was gated by the caller (measureSpawnGeometry or the
+				// 80x24 fallback) — ConPTY must match what PSReadLine sees.
+				try {
+					term.resize(cols, rows)
+				} catch {
+					/* noop */
 				}
-				await api.ptySpawn({
+				const spawned = await api.ptySpawn({
 					id: paneId,
 					cwd: initialCwd,
 					cols,
@@ -564,17 +593,41 @@ export default function TerminalView({
 					profileId,
 				})
 				if (initialCwd) api.ptySeedCwd(paneId, initialCwd)
+				// Main resolves the spawn dir (saved cwd → startDir → home);
+				// report it so the tab title matches the real shell dir
+				// before the first OSC7 arrives.
+				if (spawned?.cwd) onResolvedCwdRef.current?.(paneId, spawned.cwd)
 				// Refit once the pane has real geometry, then push to ConPTY.
 				requestAnimationFrame(() => {
+					if (disposed) return
 					try {
 						fit.fit()
-						if (term.cols >= 40 && term.rows >= 10) {
+						if (isSpawnableGeometry(term.cols, term.rows)) {
 							api.ptyResize(paneId, term.cols, term.rows)
 						}
 					} catch {
 						/* noop */
 					}
 				})
+				// Webfont load changes cell size post-fit: re-sync ConPTY once.
+				try {
+					const fontsReady = document?.fonts?.ready
+					if (fontsReady && typeof fontsReady.then === 'function') {
+						void fontsReady.then(() => {
+							if (disposed) return
+							try {
+								fit.fit()
+								if (isSpawnableGeometry(term.cols, term.rows)) {
+									api?.ptyResize(paneId, term.cols, term.rows)
+								}
+							} catch {
+								/* noop */
+							}
+						})
+					}
+				} catch {
+					/* fonts API unavailable */
+				}
 			} catch (err) {
 				term.writeln(`\x1b[31mPTY spawn failed: ${String(err)}\x1b[0m`)
 				term.writeln('If node-pty is missing, run: bun run rebuild')
@@ -646,7 +699,29 @@ export default function TerminalView({
 				api.ptyWrite(paneId, d)
 			})
 		}
-		void spawn()
+		// Wait for real layout before spawning: an immediate spawn renders
+		// the first prompt at collapsed geometry and PSReadLine wraps it.
+		// Hidden panes (inactive tabs) never measure up — the timeout covers
+		// them with the classic fallback; activation refits via `ro` below.
+		const tryGatedSpawn = (): boolean => {
+			if (disposed) return true
+			const g = measureSpawnGeometry()
+			if (!g) return false
+			stopGate()
+			void spawn(g.cols, g.rows)
+			return true
+		}
+		if (!tryGatedSpawn()) {
+			readyRo = new ResizeObserver(() => {
+				tryGatedSpawn()
+			})
+			readyRo.observe(el)
+			readyTimer = setTimeout(() => {
+				if (disposed) return
+				stopGate()
+				void spawn(SPAWN_FALLBACK_COLS, SPAWN_FALLBACK_ROWS)
+			}, SPAWN_READY_TIMEOUT_MS)
+		}
 
 		const ro = new ResizeObserver(() => {
 			if (!tabActiveRef.current) return
@@ -662,6 +737,7 @@ export default function TerminalView({
 		return () => {
 			disposed = true
 			void disposed
+			stopGate()
 			if (idleTimer.current) clearTimeout(idleTimer.current)
 			ro.disconnect()
 			el.removeEventListener('contextmenu', onContextMenu)
