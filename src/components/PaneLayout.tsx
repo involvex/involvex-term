@@ -33,7 +33,7 @@ interface Props extends Theme {
 	paneAgents?: Record<string, PaneAgentInfo>
 	onFocusPane: (paneId: string) => void
 	onResizeSplit: (splitId: string, ratio: number) => void
-	onBackgroundIdle?: (paneId: string) => void
+	onBackgroundPrompt?: (paneId: string) => void
 	onToast?: (msg: string) => void
 	onPaneMenu?: {
 		onFind: (paneId: string) => void
@@ -76,7 +76,7 @@ export default function PaneLayout({
 	paneAgents = {},
 	onFocusPane,
 	onResizeSplit,
-	onBackgroundIdle,
+	onBackgroundPrompt,
 	onToast,
 	onPaneMenu,
 }: Props) {
@@ -218,7 +218,7 @@ export default function PaneLayout({
 							scrollback={scrollback}
 							scrollbar={scrollbar}
 							onFocusPane={onFocusPane}
-							onBackgroundIdle={onBackgroundIdle}
+							onBackgroundPrompt={onBackgroundPrompt}
 							onToast={onToast}
 							paneMenu={paneMenu}
 						/>

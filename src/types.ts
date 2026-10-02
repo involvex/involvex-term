@@ -238,6 +238,11 @@ export interface TermApiShape {
 	ptySeedCwd: (id: string, cwd: string) => void
 	onPtyData: (id: string, cb: (data: string) => void) => () => void
 	onPtyExit: (id: string, cb: () => void) => () => void
+	/** Fresh shell prompt detected via OSC 7/633/9;9 (cwd sequences). */
+	onPtyPrompt: (
+		id: string,
+		cb: (info: {hadOutput: boolean}) => void,
+	) => () => void
 	gitGet: (cwd: string) => Promise<GitStatus>
 	gitBranches: (cwd: string) => Promise<BranchList>
 	gitCheckout: (

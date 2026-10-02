@@ -308,11 +308,20 @@ function registerIpc() {
 				extraEnv,
 			})
 			entry.pty.onData((data: string) => {
+				// sniffCwd's onChange fires per chunk that carried a prompt OSC
+				// (7/633/9;9) — the renderer's completion signal. Same-cwd
+				// re-prompts fire too, which is exactly what we want.
+				let sawPrompt = false
 				const cleaned = sniffCwd(id, data, (tabId, newCwd) => {
+					sawPrompt = true
 					setCwd(tabId, newCwd)
 					scheduleGitRefresh(tabId, newCwd)
 				})
 				win?.webContents.send(`pty:data-${id}`, cleaned)
+				if (sawPrompt)
+					win?.webContents.send(`pty:prompt-${id}`, {
+						hadOutput: cleaned.trim().length > 0,
+					})
 				notifyPtyData(id, cleaned)
 			})
 			entry.pty.onExit(() => {

@@ -4,6 +4,10 @@ import {WebLinksAddon} from '@xterm/addon-web-links'
 import {Terminal} from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import {useEffect, useRef, useState} from 'react'
+import {
+	COMPLETION_IDLE_MS,
+	createCompletionTracker,
+} from '../lib/completionToast'
 import type {PaneDirection} from '../lib/panes'
 import {registerSearch, unregisterSearch} from '../lib/searchRegistry'
 import {
@@ -56,7 +60,7 @@ interface Props {
 	scrollback?: number
 	scrollbar?: boolean
 	onFocusPane: (paneId: string) => void
-	onBackgroundIdle?: (paneId: string) => void
+	onBackgroundPrompt?: (paneId: string) => void
 	onToast?: (msg: string) => void
 	paneMenu?: TerminalPaneMenu
 }
@@ -108,7 +112,7 @@ export default function TerminalView({
 	scrollback = 5000,
 	scrollbar = true,
 	onFocusPane,
-	onBackgroundIdle,
+	onBackgroundPrompt,
 	onToast,
 	paneMenu,
 }: Props) {
@@ -119,7 +123,9 @@ export default function TerminalView({
 	const focusedRef = useRef(focused)
 	const tabActiveRef = useRef(tabActive)
 	const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-	const hadBgOutput = useRef(false)
+	const completionRef = useRef(createCompletionTracker())
+	const completionBellRef = useRef(completionBell)
+	const onBgPromptRef = useRef(onBackgroundPrompt)
 	const [ctxMenu, setCtxMenu] = useState<TermContextMenuState | null>(null)
 	const paneMenuRef = useRef(paneMenu)
 	const [menuTabActive, setMenuTabActive] = useState(tabActive)
@@ -132,6 +138,11 @@ export default function TerminalView({
 		focusedRef.current = focused
 		tabActiveRef.current = tabActive
 	}, [focused, tabActive])
+
+	useEffect(() => {
+		completionBellRef.current = completionBell
+		onBgPromptRef.current = onBackgroundPrompt
+	}, [completionBell, onBackgroundPrompt])
 
 	useEffect(() => {
 		paneMenuRef.current = paneMenu
@@ -520,6 +531,7 @@ export default function TerminalView({
 		let disposed = false
 		let offData: (() => void) | undefined
 		let offExit: (() => void) | undefined
+		let offPrompt: (() => void) | undefined
 
 		const spawn = async () => {
 			if (!api) {
@@ -570,29 +582,52 @@ export default function TerminalView({
 			}
 			offData = api.onPtyData(paneId, data => {
 				term.write(data)
-				if (!completionBell || !onBackgroundIdle) return
+				if (!completionBellRef.current || !onBgPromptRef.current) return
 				const bgPane = !tabActiveRef.current || !focusedRef.current
 				if (!bgPane) {
-					hadBgOutput.current = false
+					completionRef.current.noteForeground()
 					if (idleTimer.current) clearTimeout(idleTimer.current)
 					return
 				}
-				if (data.includes('\x07')) {
-					onBackgroundIdle(paneId)
+				// Prompt-anchored completion: a toast fires only when background
+				// output is followed by a fresh prompt (see onPtyPrompt below).
+				// BELs and bursty-but-unfinished output just arm the tracker.
+				const r = completionRef.current.data(
+					true,
+					data.trim().length > 0,
+					Date.now(),
+				)
+				if (r.shouldToast) {
+					onBgPromptRef.current(paneId)
 					return
 				}
-				if (data.trim().length === 0) return
-				hadBgOutput.current = true
-				if (idleTimer.current) clearTimeout(idleTimer.current)
-				idleTimer.current = setTimeout(() => {
-					if (
-						hadBgOutput.current &&
-						(!tabActiveRef.current || !focusedRef.current)
-					) {
-						hadBgOutput.current = false
-						onBackgroundIdle(paneId)
-					}
-				}, 1200)
+				// Legacy idle fallback, armed only for panes that never emitted
+				// a prompt OSC (plain shells without cwd hooks).
+				if (r.armIdle) {
+					if (idleTimer.current) clearTimeout(idleTimer.current)
+					idleTimer.current = setTimeout(() => {
+						if (
+							completionRef.current.idleExpired(
+								!tabActiveRef.current || !focusedRef.current,
+								Date.now(),
+							)
+						) {
+							onBgPromptRef.current?.(paneId)
+						}
+					}, COMPLETION_IDLE_MS)
+				}
+			})
+			offPrompt = api.onPtyPrompt(paneId, info => {
+				if (!completionBellRef.current || !onBgPromptRef.current) return
+				if (
+					completionRef.current.prompt(
+						!tabActiveRef.current || !focusedRef.current,
+						info.hadOutput,
+						Date.now(),
+					)
+				) {
+					onBgPromptRef.current(paneId)
+				}
 			})
 			offExit = api.onPtyExit(paneId, () =>
 				term.writeln('\r\n\x1b[90m[process exited]\x1b[0m'),
@@ -634,6 +669,7 @@ export default function TerminalView({
 			el.removeEventListener('paste', onPasteDom, true)
 			offData?.()
 			offExit?.()
+			offPrompt?.()
 			unregisterSearch(paneId)
 			unregisterTermActions(paneId)
 			marks.dispose()

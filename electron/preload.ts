@@ -14,6 +14,10 @@ export interface TermApi {
 	ptySeedCwd: (id: string, cwd: string) => void
 	onPtyData: (id: string, cb: (data: string) => void) => () => void
 	onPtyExit: (id: string, cb: () => void) => () => void
+	onPtyPrompt: (
+		id: string,
+		cb: (info: {hadOutput: boolean}) => void,
+	) => () => void
 	gitGet: (cwd: string) => Promise<unknown>
 	gitBranches: (cwd: string) => Promise<unknown>
 	gitCheckout: (
@@ -195,6 +199,7 @@ const api: TermApi = {
 	ptySeedCwd: (id, cwd) => ipcRenderer.send('pty:cwd-seed', {id, cwd}),
 	onPtyData: (id, cb) => sub(`pty:data-${id}`, cb as never),
 	onPtyExit: (id, cb) => sub(`pty:exit-${id}`, cb as never),
+	onPtyPrompt: (id, cb) => sub(`pty:prompt-${id}`, cb as never),
 	gitGet: cwd => ipcRenderer.invoke('git:get', {cwd}),
 	gitBranches: cwd => ipcRenderer.invoke('git:branches', {cwd}),
 	gitCheckout: (cwd, branch) =>

@@ -223,6 +223,7 @@ export default function App() {
 	useEffect(() => {
 		settingsRef.current = settings
 	}, [settings])
+	const toastTimer = useRef<number | null>(null)
 
 	const activeTab = tabs.find(t => t.id === activeId) || tabs[0]
 	const activeAgent = resolveActiveAgent(
@@ -830,7 +831,8 @@ export default function App() {
 		const tab = tabsRef.current.find(t => findLeaf(t.root, paneId))
 		const label = tab?.title || 'Background pane'
 		setToast(`${label} finished`)
-		window.setTimeout(() => setToast(null), 2800)
+		if (toastTimer.current) clearTimeout(toastTimer.current)
+		toastTimer.current = window.setTimeout(() => setToast(null), 2800)
 	}, [])
 
 	// Focus a pane within its tab.
@@ -1471,7 +1473,7 @@ export default function App() {
 								onResizeSplit={(splitId, ratio) =>
 									resizeSplit(t.id, splitId, ratio)
 								}
-								onBackgroundIdle={showCompletionToast}
+								onBackgroundPrompt={showCompletionToast}
 								onToast={msg => {
 									setToast(msg)
 									window.setTimeout(() => setToast(null), 2800)
