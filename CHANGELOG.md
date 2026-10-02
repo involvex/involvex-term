@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.2] - 2026-10-02
+
+### Added
+
+- background app-update notifications
+
+### Changed
+
+- build: integrate CLI compilation into the main build
+
 ## [0.8.1] - 2026-10-02
 
 ### Added
