@@ -169,8 +169,10 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 let win: BrowserWindow | null = null
 let settings = loadSettings()
 let sysTimer: NodeJS.Timeout | null = null
-const gitWatchers = new Map<string, FSWatcher>()
-let pendingGitRefresh: NodeJS.Timeout | null = null
+/** One chokidar watcher per repo root, shared by every pane inside it. */
+const gitWatchers = new Map<string, {watcher: FSWatcher; panes: Set<string>}>()
+/** Debounced git refresh per pane (a global timer starved all but one). */
+const pendingGitRefresh = new Map<string, NodeJS.Timeout>()
 
 async function refreshGitForTab(tabId: string, cwd: string) {
 	if (!win) return
@@ -181,19 +183,41 @@ async function refreshGitForTab(tabId: string, cwd: string) {
 }
 
 function scheduleGitRefresh(tabId: string, cwd: string) {
-	if (pendingGitRefresh) clearTimeout(pendingGitRefresh)
-	pendingGitRefresh = setTimeout(() => void refreshGitForTab(tabId, cwd), 250)
+	const prev = pendingGitRefresh.get(tabId)
+	if (prev) clearTimeout(prev)
+	pendingGitRefresh.set(
+		tabId,
+		setTimeout(() => {
+			pendingGitRefresh.delete(tabId)
+			void refreshGitForTab(tabId, cwd)
+		}, 250),
+	)
 }
 
-function ensureGitWatcher(tabId: string, repoRoot: string | null) {
-	const prev = gitWatchers.get(tabId)
-	const prevRoot = (prev as unknown as {__root?: string} | undefined)?.__root
-	if (prev && prevRoot === (repoRoot ?? '')) return
-	if (prev) {
-		void prev.close().catch(() => undefined)
-		gitWatchers.delete(tabId)
+function releaseGitWatcher(paneId: string) {
+	for (const [root, entry] of gitWatchers) {
+		if (!entry.panes.delete(paneId)) continue
+		if (entry.panes.size === 0) {
+			void entry.watcher.close().catch(() => undefined)
+			gitWatchers.delete(root)
+		}
+		break
+	}
+}
+
+function ensureGitWatcher(paneId: string, repoRoot: string | null) {
+	for (const [root, entry] of gitWatchers) {
+		if (!entry.panes.has(paneId)) continue
+		if (root === (repoRoot ?? '')) return
+		releaseGitWatcher(paneId)
+		break
 	}
 	if (!repoRoot) return
+	const existing = gitWatchers.get(repoRoot)
+	if (existing) {
+		existing.panes.add(paneId)
+		return
+	}
 	try {
 		const watcher = chokidar.watch(
 			[
@@ -206,13 +230,15 @@ function ensureGitWatcher(tabId: string, repoRoot: string | null) {
 				depth: 4,
 			},
 		)
-		;(watcher as unknown as {__root?: string}).__root = repoRoot
+		const panes = new Set([paneId])
 		watcher.on('all', () => {
 			invalidateGitCache(repoRoot)
-			const entry = getPty(tabId)
-			if (entry) void refreshGitForTab(tabId, entry.cwd)
+			for (const id of panes) {
+				const entry = getPty(id)
+				if (entry) scheduleGitRefresh(id, entry.cwd)
+			}
 		})
-		gitWatchers.set(tabId, watcher)
+		gitWatchers.set(repoRoot, {watcher, panes})
 	} catch {
 		/* watcher optional */
 	}
@@ -350,11 +376,12 @@ function registerIpc() {
 	ipcMain.on('pty:kill', (_e, {id}: {id: string}) => {
 		killPty(id)
 		clearCwdPending(id)
-		const w = gitWatchers.get(id)
-		if (w) {
-			void w.close().catch(() => undefined)
-			gitWatchers.delete(id)
+		const pending = pendingGitRefresh.get(id)
+		if (pending) {
+			clearTimeout(pending)
+			pendingGitRefresh.delete(id)
 		}
+		releaseGitWatcher(id)
 	})
 	ipcMain.on('pty:cwd-seed', (_e, {id, cwd}: {id: string; cwd: string}) => {
 		setCwd(id, cwd)

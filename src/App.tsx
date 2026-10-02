@@ -224,6 +224,10 @@ export default function App() {
 		settingsRef.current = settings
 	}, [settings])
 	const toastTimer = useRef<number | null>(null)
+	const cwdRef = useRef(cwd)
+	useEffect(() => {
+		cwdRef.current = cwd
+	}, [cwd])
 
 	const activeTab = tabs.find(t => t.id === activeId) || tabs[0]
 	const activeAgent = resolveActiveAgent(
@@ -251,95 +255,107 @@ export default function App() {
 	}, [activeAgent.binary, activeAgent.sessionProvider])
 
 	// Poll OpenCode sessions when footer OC is shown and/or pane labels are on.
+	// Interval-only: this must NOT re-fire on tabs/cwd changes, or every
+	// prompt's git refresh cascades into an immediate `opencode session list`
+	// CLI spawn. Overlapping ticks are skipped (the CLI takes seconds).
 	useEffect(() => {
 		const api = termApi()
 		if (!api || !pollOpencode) return
 		let cancelled = false
+		let inFlight = false
 		const tick = async () => {
-			const tabsNow = tabsRef.current
-			const ids = tabsNow.flatMap(t => collectLeaves(t.root).map(l => l.paneId))
-			let cwds: Record<string, string> = {}
+			if (inFlight) return
+			inFlight = true
 			try {
-				if (ids.length > 0) {
-					for (const {id, cwd} of await api.ptyCwd(ids)) {
-						if (cwd) cwds[id] = cwd
+				const tabsNow = tabsRef.current
+				const ids = tabsNow.flatMap(t =>
+					collectLeaves(t.root).map(l => l.paneId),
+				)
+				let cwds: Record<string, string> = {}
+				try {
+					if (ids.length > 0) {
+						for (const {id, cwd} of await api.ptyCwd(ids)) {
+							if (cwd) cwds[id] = cwd
+						}
+						// Fall back to leaf-stamped cwd from the split tree.
+						for (const t of tabsNow) {
+							for (const leaf of collectLeaves(t.root)) {
+								if (!cwds[leaf.paneId] && leaf.cwd) cwds[leaf.paneId] = leaf.cwd
+							}
+						}
 					}
-					// Fall back to leaf-stamped cwd from the split tree.
+				} catch {
+					cwds = {}
 					for (const t of tabsNow) {
 						for (const leaf of collectLeaves(t.root)) {
-							if (!cwds[leaf.paneId] && leaf.cwd) cwds[leaf.paneId] = leaf.cwd
+							if (leaf.cwd) cwds[leaf.paneId] = leaf.cwd
 						}
 					}
 				}
-			} catch {
-				cwds = {}
-				for (const t of tabsNow) {
-					for (const leaf of collectLeaves(t.root)) {
-						if (leaf.cwd) cwds[leaf.paneId] = leaf.cwd
-					}
-				}
-			}
-			if (cancelled) return
-
-			const focusCwd =
-				(activeRef.current &&
-					tabsNow.find(t => t.id === activeRef.current)?.activePaneId &&
-					cwds[
-						tabsNow.find(t => t.id === activeRef.current)?.activePaneId || ''
-					]) ||
-				cwd ||
-				undefined
-
-			try {
-				const s = await api.opencodeStatus(focusCwd)
 				if (cancelled) return
-				setOpencode(s)
-				setAgentAvailable(s.available)
 
-				const paneIds = new Set(ids)
-				const pruned = pruneAgentBindings(
-					agentBindingsRef.current,
-					paneIds,
-					s.sessions ?? [],
-				)
-				if (
-					Object.keys(pruned).length !==
-						Object.keys(agentBindingsRef.current).length ||
-					Object.keys(pruned).some(
-						k => pruned[k] !== agentBindingsRef.current[k],
+				const focusCwd =
+					(activeRef.current &&
+						tabsNow.find(t => t.id === activeRef.current)?.activePaneId &&
+						cwds[
+							tabsNow.find(t => t.id === activeRef.current)?.activePaneId || ''
+						]) ||
+					cwdRef.current ||
+					undefined
+
+				try {
+					const s = await api.opencodeStatus(focusCwd)
+					if (cancelled) return
+					setOpencode(s)
+					setAgentAvailable(s.available)
+
+					const paneIds = new Set(ids)
+					const pruned = pruneAgentBindings(
+						agentBindingsRef.current,
+						paneIds,
+						s.sessions ?? [],
 					)
-				) {
-					setAgentBindings(pruned)
-					agentBindingsRef.current = pruned
-				}
+					if (
+						Object.keys(pruned).length !==
+							Object.keys(agentBindingsRef.current).length ||
+						Object.keys(pruned).some(
+							k => pruned[k] !== agentBindingsRef.current[k],
+						)
+					) {
+						setAgentBindings(pruned)
+						agentBindingsRef.current = pruned
+					}
 
-				if (showPaneLabels && s.available) {
-					const panes = ids.map(paneId => ({
-						paneId,
-						cwd: cwds[paneId],
-					}))
-					const assigned = assignPaneAgentLabels({
-						panes,
-						sessions: s.sessions ?? [],
-						bindings: pruned,
-						agentLabel: activeAgent.label,
+					if (showPaneLabels && s.available) {
+						const panes = ids.map(paneId => ({
+							paneId,
+							cwd: cwds[paneId],
+						}))
+						const assigned = assignPaneAgentLabels({
+							panes,
+							sessions: s.sessions ?? [],
+							bindings: pruned,
+							agentLabel: activeAgent.label,
+						})
+						const next: Record<string, PaneAgentInfo> = {}
+						for (const [id, info] of assigned) next[id] = info
+						setPaneAgents(next)
+					} else {
+						setPaneAgents({})
+					}
+				} catch {
+					if (cancelled) return
+					setOpencode({
+						available: false,
+						sessionCount: 0,
+						latest: null,
+						projectMatch: false,
+						sessions: [],
 					})
-					const next: Record<string, PaneAgentInfo> = {}
-					for (const [id, info] of assigned) next[id] = info
-					setPaneAgents(next)
-				} else {
 					setPaneAgents({})
 				}
-			} catch {
-				if (cancelled) return
-				setOpencode({
-					available: false,
-					sessionCount: 0,
-					latest: null,
-					projectMatch: false,
-					sessions: [],
-				})
-				setPaneAgents({})
+			} finally {
+				inFlight = false
 			}
 		}
 		void tick()
@@ -352,13 +368,11 @@ export default function App() {
 			clearInterval(timer)
 		}
 	}, [
-		cwd,
 		pollOpencode,
 		showPaneLabels,
 		settings.footer.refreshMs,
 		activeAgent.sessionProvider,
 		activeAgent.label,
-		tabs,
 	])
 
 	/** Inject an agent CLI command into the focused pane. */
@@ -583,16 +597,21 @@ export default function App() {
 		const off1 = api.onGitChangedFor(activePaneId, st => {
 			setGit(st as GitStatus)
 			setCwd((st as GitStatus).cwd || '')
-			setTabs(prev =>
-				prev.map(t => {
-					if (t.id !== activeId || t.customTitle) return t
-					return {
-						...t,
-						cwd: (st as GitStatus).cwd,
-						title: shortTitle((st as GitStatus).cwd, (st as GitStatus).branch),
-					}
-				}),
-			)
+			// Bail out when nothing visible changed: rebuilding `tabs`
+			// identity here re-fires the opencode poll + session persist
+			// effects, so an unconditional update turns every prompt's git
+			// refresh into a full update cascade.
+			setTabs(prev => {
+				const cur = prev.find(t => t.id === activeId)
+				if (!cur || cur.customTitle) return prev
+				const cwd = (st as GitStatus).cwd
+				const title = shortTitle(
+					(st as GitStatus).cwd,
+					(st as GitStatus).branch,
+				)
+				if (cur.cwd === cwd && cur.title === title) return prev
+				return prev.map(t => (t.id === activeId ? {...t, cwd, title} : t))
+			})
 		})
 		const off2 = api.onGitChanged(msg => {
 			const owner = tabsRef.current.find(t => findLeaf(t.root, msg.tabId))
