@@ -6,39 +6,64 @@ import type {SysStats} from './types.js'
 const require = createRequire(import.meta.url)
 
 let si: typeof import('systeminformation') | null = null
-try {
-	si = require('systeminformation') as typeof import('systeminformation')
-} catch {
-	si = null
+let siFailed = false
+function lazySi(): typeof import('systeminformation') | null {
+	if (si || siFailed) return si
+	try {
+		si = require('systeminformation') as typeof import('systeminformation')
+	} catch {
+		si = null
+		siFailed = true
+	}
+	return si
+}
+
+/** Cheap CPU% from os.cpus() deltas — avoids systeminformation's WMI/subprocess cost per tick. */
+let prevIdle = 0
+let prevTotal = 0
+function cpuFromOs(): number {
+	try {
+		const cpus = os.cpus()
+		if (cpus.length === 0) return 0
+		let idle = 0
+		let total = 0
+		for (const c of cpus) {
+			idle += c.times.idle
+			total +=
+				c.times.user + c.times.nice + c.times.sys + c.times.idle + c.times.irq
+		}
+		if (prevTotal > 0 && total > prevTotal) {
+			const pct = Math.round(
+				100 * (1 - (idle - prevIdle) / (total - prevTotal)),
+			)
+			prevIdle = idle
+			prevTotal = total
+			return Math.min(100, Math.max(0, pct))
+		}
+		prevIdle = idle
+		prevTotal = total
+		return 0
+	} catch {
+		return 0
+	}
 }
 
 export async function getSysStats(): Promise<SysStats> {
 	const total = os.totalmem()
 	const free = os.freemem()
 	const used = total - free
-	let cpuPercent: number
+	// Fast path: os.cpus() delta is microseconds vs. systeminformation's
+	// subprocess/WMI query every tick. Keep si as a periodic recalibrator.
+	let cpuPercent = cpuFromOs()
 	try {
-		if (si) {
-			const load = await si.currentLoad()
-			cpuPercent = Math.round(load.currentLoad ?? 0)
-		} else {
-			const cpus = os.cpus()
-			const idle = cpus.reduce((a, c) => a + c.times.idle, 0) / cpus.length
-			const tot =
-				cpus.reduce(
-					(a, c) =>
-						a +
-						c.times.user +
-						c.times.nice +
-						c.times.sys +
-						c.times.idle +
-						c.times.irq,
-					0,
-				) / cpus.length
-			cpuPercent = tot > 0 ? Math.round(100 - (100 * idle) / tot) : 0
+		const mod = lazySi()
+		if (mod && (prevTotal === 0 || Math.random() < 0.1)) {
+			const load = await mod.currentLoad()
+			const v = Math.round(load.currentLoad ?? NaN)
+			if (Number.isFinite(v)) cpuPercent = Math.min(100, Math.max(0, v))
 		}
 	} catch {
-		cpuPercent = 0
+		/* keep os.cpus() value */
 	}
 	const GB = 1024 ** 3
 	return {

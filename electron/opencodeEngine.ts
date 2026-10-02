@@ -50,15 +50,24 @@ function parseSessions(stdout: string): OpencodeSession[] {
 	}
 }
 
+let availCache: {at: number; value: boolean} | null = null
+const AVAIL_TTL_MS = 60_000
+let statusCache: {at: number; cwd: string; value: OpencodeStatus} | null = null
+const STATUS_TTL_MS = 4000
+
 async function opencodeAvailable(): Promise<boolean> {
+	const now = Date.now()
+	if (availCache && now - availCache.at < AVAIL_TTL_MS) return availCache.value
 	try {
 		if (process.platform === 'win32') {
 			await execFileAsync('where.exe', ['opencode'])
 		} else {
 			await execFileAsync('which', ['opencode'])
 		}
+		availCache = {at: now, value: true}
 		return true
 	} catch {
+		availCache = {at: now, value: false}
 		return false
 	}
 }
@@ -73,6 +82,14 @@ function sessionMatchesCwd(s: OpencodeSession, cwdN: string): boolean {
 
 /** List recent OpenCode sessions; optionally prefer ones under `cwd`. */
 export async function getOpencodeStatus(cwd?: string): Promise<OpencodeStatus> {
+	const now = Date.now()
+	const cwdKey = cwd ?? ''
+	if (
+		statusCache &&
+		now - statusCache.at < STATUS_TTL_MS &&
+		statusCache.cwd === cwdKey
+	)
+		return statusCache.value
 	const available = await opencodeAvailable()
 	if (!available) {
 		return {
@@ -99,13 +116,15 @@ export async function getOpencodeStatus(cwd?: string): Promise<OpencodeStatus> {
 			? sessions.find(s => sessionMatchesCwd(s, cwdN))
 			: undefined
 		const latest = match ?? sessions[0] ?? null
-		return {
+		const value = {
 			available: true,
 			sessionCount: sessions.length,
 			latest,
 			projectMatch: Boolean(match),
 			sessions,
 		}
+		statusCache = {at: Date.now(), cwd: cwdKey, value}
+		return value
 	} catch {
 		return {
 			available: true,

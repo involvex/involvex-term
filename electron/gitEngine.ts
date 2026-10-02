@@ -4,6 +4,16 @@ import {simpleGit} from 'simple-git'
 import type {GitStatus} from './types.js'
 
 const cache = new Map<string, {at: number; status: GitStatus}>()
+/** Cache repo-root lookups: findRepoRoot does sync fs walks on every call. */
+const repoRootCache = new Map<string, {at: number; root: string | null}>()
+const REPO_ROOT_TTL_MS = 5000
+const STATUS_TTL_MS = 1500
+
+function cachedRepoRoot(dir: string): string | null | undefined {
+	const hit = repoRootCache.get(dir)
+	if (hit && Date.now() - hit.at < REPO_ROOT_TTL_MS) return hit.root
+	return undefined
+}
 
 function findRepoRoot(start: string): string | null {
 	let dir = start
@@ -41,11 +51,15 @@ export async function getGitStatus(cwd: string): Promise<GitStatus> {
 	} catch {
 		return empty
 	}
-	const root = findRepoRoot(dir)
+	let root = cachedRepoRoot(dir)
+	if (root === undefined) {
+		root = findRepoRoot(dir)
+		repoRootCache.set(dir, {at: Date.now(), root})
+	}
 	if (!root) return {...empty, cwd: dir}
 
 	const cached = cache.get(root)
-	if (cached && Date.now() - cached.at < 400)
+	if (cached && Date.now() - cached.at < STATUS_TTL_MS)
 		return {...cached.status, cwd: dir}
 
 	try {
@@ -112,7 +126,11 @@ function resolveRepo(cwd: string): string | null {
 		if (!fs.existsSync(cwd)) return null
 		const st = fs.statSync(cwd)
 		const dir = st.isDirectory() ? cwd : path.dirname(cwd)
-		return findRepoRoot(dir)
+		const hit = cachedRepoRoot(dir)
+		if (hit !== undefined) return hit
+		const root = findRepoRoot(dir)
+		repoRootCache.set(dir, {at: Date.now(), root})
+		return root
 	} catch {
 		return null
 	}

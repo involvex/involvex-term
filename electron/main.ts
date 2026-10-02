@@ -173,13 +173,28 @@ let sysTimer: NodeJS.Timeout | null = null
 const gitWatchers = new Map<string, {watcher: FSWatcher; panes: Set<string>}>()
 /** Debounced git refresh per pane (a global timer starved all but one). */
 const pendingGitRefresh = new Map<string, NodeJS.Timeout>()
+/** Coalesce concurrent git refreshes for the same cwd (multi-pane repos). */
+const inFlightGit = new Map<string, Promise<void>>()
 
 async function refreshGitForTab(tabId: string, cwd: string) {
 	if (!win) return
-	const status = await getGitStatus(cwd)
-	win.webContents.send(`git:changed-${tabId}`, status)
-	win.webContents.send('git:changed', {tabId, ...status})
-	ensureGitWatcher(tabId, status.repoRoot)
+	const key = `${tabId}:${cwd}`
+	const existing = inFlightGit.get(key)
+	if (existing) {
+		await existing
+		return
+	}
+	const work = (async () => {
+		if (!win) return
+		const status = await getGitStatus(cwd)
+		win.webContents.send(`git:changed-${tabId}`, status)
+		win.webContents.send('git:changed', {tabId, ...status})
+		ensureGitWatcher(tabId, status.repoRoot)
+	})().finally(() => {
+		inFlightGit.delete(key)
+	})
+	inFlightGit.set(key, work)
+	await work
 }
 
 function scheduleGitRefresh(tabId: string, cwd: string) {
@@ -247,8 +262,14 @@ function ensureGitWatcher(paneId: string, repoRoot: string | null) {
 function startSysLoop() {
 	stopSysLoop()
 	const tick = async () => {
-		if (!win) return
+		if (!win || win.isDestroyed()) return
 		if (!settings.footer.showSys) return
+		// No point burning WMI/CPU queries while hidden or minimized.
+		try {
+			if (!win.isVisible() || win.isMinimized()) return
+		} catch {
+			/* ignore visibility probe failures */
+		}
 		try {
 			const stats = await getSysStats()
 			win.webContents.send('sys:tick', stats)

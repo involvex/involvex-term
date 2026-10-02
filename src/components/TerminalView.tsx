@@ -542,6 +542,8 @@ export default function TerminalView({
 		let disposed = false
 		let offData: (() => void) | undefined
 		let offExit: (() => void) | undefined
+		let writeQueue = ''
+		let writeScheduled = false
 		let offPrompt: (() => void) | undefined
 		let readyTimer: ReturnType<typeof setTimeout> | null = null
 		let readyRo: ResizeObserver | null = null
@@ -634,7 +636,27 @@ export default function TerminalView({
 				return
 			}
 			offData = api.onPtyData(paneId, data => {
-				term.write(data)
+				// Batch bursty pty output into one xterm write per frame.
+				writeQueue += data
+				if (!writeScheduled) {
+					writeScheduled = true
+					requestAnimationFrame(() => {
+						writeScheduled = false
+						if (disposed) {
+							writeQueue = ''
+							return
+						}
+						const chunk = writeQueue
+						writeQueue = ''
+						if (chunk) {
+							try {
+								term.write(chunk)
+							} catch {
+								/* noop */
+							}
+						}
+					})
+				}
 				if (!completionBellRef.current || !onBgPromptRef.current) return
 				const bgPane = !tabActiveRef.current || !focusedRef.current
 				if (!bgPane) {
@@ -723,14 +745,26 @@ export default function TerminalView({
 			}, SPAWN_READY_TIMEOUT_MS)
 		}
 
+		let resizeQueued = false
+		let lastCols = 0
+		let lastRows = 0
 		const ro = new ResizeObserver(() => {
-			if (!tabActiveRef.current) return
-			try {
-				fit.fit()
-				api?.ptyResize(paneId, term.cols, term.rows)
-			} catch {
-				/* noop */
-			}
+			if (!tabActiveRef.current || resizeQueued) return
+			resizeQueued = true
+			requestAnimationFrame(() => {
+				resizeQueued = false
+				if (disposed || !tabActiveRef.current) return
+				try {
+					fit.fit()
+					if (term.cols !== lastCols || term.rows !== lastRows) {
+						lastCols = term.cols
+						lastRows = term.rows
+						api?.ptyResize(paneId, term.cols, term.rows)
+					}
+				} catch {
+					/* noop */
+				}
+			})
 		})
 		ro.observe(el)
 

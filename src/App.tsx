@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useRef, useState} from 'react'
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import './App.css'
 import type {PaletteCommand} from './commands'
 import AboutModal from './components/AboutModal'
@@ -265,6 +265,7 @@ export default function App() {
 		let inFlight = false
 		const tick = async () => {
 			if (inFlight) return
+			if (typeof document !== 'undefined' && document.hidden) return
 			inFlight = true
 			try {
 				const tabsNow = tabsRef.current
@@ -1280,166 +1281,191 @@ export default function App() {
 		return () => window.removeEventListener('beforeunload', flush)
 	}, [])
 
-	const paletteCommands: PaletteCommand[] = [
-		{
-			id: 'cmd:new-tab',
-			title: 'New tab',
-			hint: 'Ctrl+Shift+T',
-			run: () => addTab(),
-		},
-		{
-			id: 'cmd:close-tab',
-			title: 'Close active tab',
-			hint: 'Ctrl+Shift+W',
-			run: () => {
-				if (activeRef.current) closeTab(activeRef.current)
+	const paletteCommands: PaletteCommand[] = useMemo(
+		() => [
+			{
+				id: 'cmd:new-tab',
+				title: 'New tab',
+				hint: 'Ctrl+Shift+T',
+				run: () => addTab(),
 			},
-		},
-		{
-			id: 'cmd:duplicate-tab',
-			title: 'Duplicate active tab',
-			hint: 'Ctrl+Shift+D',
-			run: () => {
-				if (activeRef.current) void duplicateTab(activeRef.current)
+			{
+				id: 'cmd:close-tab',
+				title: 'Close active tab',
+				hint: 'Ctrl+Shift+W',
+				run: () => {
+					if (activeRef.current) closeTab(activeRef.current)
+				},
 			},
-		},
-		{
-			id: 'cmd:find',
-			title: 'Find in terminal…',
-			hint: 'Ctrl+Shift+F',
-			run: () => setSearchOpen(true),
-		},
-		{
-			id: 'cmd:split-pane',
-			title: 'Split pane horizontally',
-			hint: settings.hotkeys['split-pane'] || 'Shift+Alt+D',
-			run: () => splitPane('horizontal'),
-		},
-		{
-			id: 'cmd:split-pane-vertical',
-			title: 'Split pane vertically',
-			hint: settings.hotkeys['split-pane-vertical'] || 'Shift+Alt+V',
-			run: () => splitPane('vertical'),
-		},
-		{
-			id: 'cmd:close-pane',
-			title: 'Close active pane',
-			hint: settings.hotkeys['close-pane'] || 'Shift+Alt+C',
-			run: () => closePane(),
-		},
-		{
-			id: 'cmd:settings',
-			title: 'Open settings',
-			hint: 'Ctrl+,',
-			run: () => setShowSettings(true),
-		},
-		{
-			id: 'cmd:opencode',
-			title: `Open ${activeAgent.name}`,
-			hint: agentAvailable ? 'Ctrl+Shift+O' : 'not found on PATH',
-			run: () => launchAgent(),
-		},
-		{
-			id: 'cmd:opencode-continue',
-			title: `Continue ${activeAgent.name}`,
-			hint:
-				activeAgent.sessionProvider === 'opencode' && opencode?.latest
-					? shortOcHint(opencode.latest.title)
-					: activeAgent.continueCommand || activeAgent.command,
-			run: () => continueAgent(opencode?.latest?.id),
-		},
-		{
-			id: 'cmd:clear-buffer',
-			title: 'Clear buffer',
-			hint: 'Ctrl+Shift+K',
-			run: () => activePaneActions()?.clearBuffer(),
-		},
-		{
-			id: 'cmd:mark-prompt',
-			title: 'Mark prompt',
-			hint: 'Ctrl+Shift+M',
-			run: () => activePaneActions()?.addMark(),
-		},
-		{
-			id: 'cmd:prev-mark',
-			title: 'Jump to previous mark',
-			hint: 'Ctrl+Shift+Up',
-			run: () => activePaneActions()?.jumpPrevMark(),
-		},
-		{
-			id: 'cmd:next-mark',
-			title: 'Jump to next mark',
-			hint: 'Ctrl+Shift+Down',
-			run: () => activePaneActions()?.jumpNextMark(),
-		},
-		{
-			id: 'cmd:check-updates',
-			title: 'Check for updates…',
-			hint: 'Ctrl+Shift+U',
-			run: () => void checkUpdates(),
-		},
-		{
-			id: 'cmd:about',
-			title: 'About Involvex-Term',
-			run: () => setShowAbout(true),
-		},
-		...settings.terminal.snippets.map(s => ({
-			id: `cmd:snippet-${s.id}`,
-			title: `Run: ${s.name}`,
-			hint: s.command,
-			run: () => runSnippet(s.command, s.sendEnter !== false),
-		})),
-		...settings.terminal.profiles.map(p => ({
-			id: `cmd:new-profile-${p.id}`,
-			title: `New tab: ${p.name}`,
-			hint: p.id === settings.terminal.defaultProfileId ? 'default' : p.kind,
-			run: () => addTab(undefined, p.id),
-		})),
-		{
-			id: 'cmd:toggle-git',
-			title: settings.footer.showGit ? 'Hide Git status' : 'Show Git status',
-			run: () =>
-				saveSettings({
-					...settings,
-					footer: {...settings.footer, showGit: !settings.footer.showGit},
-				}),
-		},
-		{
-			id: 'cmd:toggle-sys',
-			title: settings.footer.showSys ? 'Hide PC stats' : 'Show PC stats',
-			run: () =>
-				saveSettings({
-					...settings,
-					footer: {...settings.footer, showSys: !settings.footer.showSys},
-				}),
-		},
-		{
-			id: 'cmd:toggle-agent',
-			title: settings.footer.showOpencode
-				? `Hide ${activeAgent.name} status`
-				: `Show ${activeAgent.name} status`,
-			run: () =>
-				saveSettings({
-					...settings,
-					footer: {
-						...settings.footer,
-						showOpencode: !settings.footer.showOpencode,
-					},
-				}),
-		},
-		...tabs.map((t, i) => ({
-			id: `cmd:goto-${t.id}`,
-			title: `Go to tab ${i + 1}: ${t.title}`,
-			hint: t.cwd,
-			run: () => selectTab(t.id),
-		})),
-		...pluginCommands.map(c => ({
-			id: `plugin:${c.id}`,
-			title: c.title,
-			hint: c.hint,
-			run: () => void termApi()?.runPluginCommand(c.id),
-		})),
-	]
+			{
+				id: 'cmd:duplicate-tab',
+				title: 'Duplicate active tab',
+				hint: 'Ctrl+Shift+D',
+				run: () => {
+					if (activeRef.current) void duplicateTab(activeRef.current)
+				},
+			},
+			{
+				id: 'cmd:find',
+				title: 'Find in terminal…',
+				hint: 'Ctrl+Shift+F',
+				run: () => setSearchOpen(true),
+			},
+			{
+				id: 'cmd:split-pane',
+				title: 'Split pane horizontally',
+				hint: settings.hotkeys['split-pane'] || 'Shift+Alt+D',
+				run: () => splitPane('horizontal'),
+			},
+			{
+				id: 'cmd:split-pane-vertical',
+				title: 'Split pane vertically',
+				hint: settings.hotkeys['split-pane-vertical'] || 'Shift+Alt+V',
+				run: () => splitPane('vertical'),
+			},
+			{
+				id: 'cmd:close-pane',
+				title: 'Close active pane',
+				hint: settings.hotkeys['close-pane'] || 'Shift+Alt+C',
+				run: () => closePane(),
+			},
+			{
+				id: 'cmd:settings',
+				title: 'Open settings',
+				hint: 'Ctrl+,',
+				run: () => setShowSettings(true),
+			},
+			{
+				id: 'cmd:opencode',
+				title: `Open ${activeAgent.name}`,
+				hint: agentAvailable ? 'Ctrl+Shift+O' : 'not found on PATH',
+				run: () => launchAgent(),
+			},
+			{
+				id: 'cmd:opencode-continue',
+				title: `Continue ${activeAgent.name}`,
+				hint:
+					activeAgent.sessionProvider === 'opencode' && opencode?.latest
+						? shortOcHint(opencode.latest.title)
+						: activeAgent.continueCommand || activeAgent.command,
+				run: () => continueAgent(opencode?.latest?.id),
+			},
+			{
+				id: 'cmd:clear-buffer',
+				title: 'Clear buffer',
+				hint: 'Ctrl+Shift+K',
+				run: () => activePaneActions()?.clearBuffer(),
+			},
+			{
+				id: 'cmd:mark-prompt',
+				title: 'Mark prompt',
+				hint: 'Ctrl+Shift+M',
+				run: () => activePaneActions()?.addMark(),
+			},
+			{
+				id: 'cmd:prev-mark',
+				title: 'Jump to previous mark',
+				hint: 'Ctrl+Shift+Up',
+				run: () => activePaneActions()?.jumpPrevMark(),
+			},
+			{
+				id: 'cmd:next-mark',
+				title: 'Jump to next mark',
+				hint: 'Ctrl+Shift+Down',
+				run: () => activePaneActions()?.jumpNextMark(),
+			},
+			{
+				id: 'cmd:check-updates',
+				title: 'Check for updates…',
+				hint: 'Ctrl+Shift+U',
+				run: () => void checkUpdates(),
+			},
+			{
+				id: 'cmd:about',
+				title: 'About Involvex-Term',
+				run: () => setShowAbout(true),
+			},
+			...settings.terminal.snippets.map(s => ({
+				id: `cmd:snippet-${s.id}`,
+				title: `Run: ${s.name}`,
+				hint: s.command,
+				run: () => runSnippet(s.command, s.sendEnter !== false),
+			})),
+			...settings.terminal.profiles.map(p => ({
+				id: `cmd:new-profile-${p.id}`,
+				title: `New tab: ${p.name}`,
+				hint: p.id === settings.terminal.defaultProfileId ? 'default' : p.kind,
+				run: () => addTab(undefined, p.id),
+			})),
+			{
+				id: 'cmd:toggle-git',
+				title: settings.footer.showGit ? 'Hide Git status' : 'Show Git status',
+				run: () =>
+					saveSettings({
+						...settings,
+						footer: {...settings.footer, showGit: !settings.footer.showGit},
+					}),
+			},
+			{
+				id: 'cmd:toggle-sys',
+				title: settings.footer.showSys ? 'Hide PC stats' : 'Show PC stats',
+				run: () =>
+					saveSettings({
+						...settings,
+						footer: {...settings.footer, showSys: !settings.footer.showSys},
+					}),
+			},
+			{
+				id: 'cmd:toggle-agent',
+				title: settings.footer.showOpencode
+					? `Hide ${activeAgent.name} status`
+					: `Show ${activeAgent.name} status`,
+				run: () =>
+					saveSettings({
+						...settings,
+						footer: {
+							...settings.footer,
+							showOpencode: !settings.footer.showOpencode,
+						},
+					}),
+			},
+			...tabs.map((t, i) => ({
+				id: `cmd:goto-${t.id}`,
+				title: `Go to tab ${i + 1}: ${t.title}`,
+				hint: t.cwd,
+				run: () => selectTab(t.id),
+			})),
+			...pluginCommands.map(c => ({
+				id: `plugin:${c.id}`,
+				title: c.title,
+				hint: c.hint,
+				run: () => void termApi()?.runPluginCommand(c.id),
+			})),
+		],
+		[
+			addTab,
+			closeTab,
+			duplicateTab,
+			selectTab,
+			splitPane,
+			closePane,
+			launchAgent,
+			continueAgent,
+			activePaneActions,
+			checkUpdates,
+			runSnippet,
+			settings,
+			tabs,
+			pluginCommands,
+			opencode,
+			agentAvailable,
+			activeAgent.name,
+			activeAgent.sessionProvider,
+			activeAgent.continueCommand,
+			activeAgent.command,
+			saveSettings,
+		],
+	)
 
 	return (
 		<div
