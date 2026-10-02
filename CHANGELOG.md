@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.8.1] - 2026-10-02
+
+### Added
+
+- add toggle-app global hotkey for show/hide
+
+### Fixed
+
+- spawn on stable geometry + title from resolved cwd
+- prompt-anchored background completion toast
+- tab profile menu overlay
+
+### Changed
+
+- perf: break the per-prompt update cascade
+- build: update deps (electron 44.5.1, vite 8.3.2, others)
+- chore: remove redundant dev:electron script
+
 ## [0.8.0] - 2026-09-29
 
 ### Added
