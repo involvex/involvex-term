@@ -115,7 +115,7 @@ handle that case.
   **Settings → Plugins → Errors** — a broken plugin never crashes the app or
   blocks other plugins.
 - `api.log(...)` output goes to the main process console (the terminal you
-  launched the app from in dev, or `dev:electron`'s console).
+  launched the app from in dev, or `dev`'s console).
 - **Reload plugins** re-imports every plugin file with a cache-busting query
   string, so edits show up without restarting the app.
 

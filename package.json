@@ -29,7 +29,6 @@
 		"build:electron": "tsc --project tsconfig.node.json && vite build",
 		"build:release": "tsc && vite build && bun scripts/rebuild-pty.mjs && electron-builder --publish never",
 		"dev": "vite",
-		"dev:electron": "vite",
 		"format": "prettier . --write",
 		"format:check": "prettier . --check",
 		"postinstall": "bun scripts/patch-node-pty.mjs",

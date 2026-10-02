@@ -7,7 +7,7 @@ Dark theme `#1e1e1e / #cccccc`. Settings live at `~/.involvex-term/settings.json
 
 ```powershell
 bun install               # postinstall only applies the node-pty Spectre patch
-bun run dev:electron      # dev (vite + Electron)
+bun run dev                # dev (vite + Electron)
 bun run rebuild           # FORCE full node-pty rebuild (slow, rarely needed)
 bun run build             # tsc + vite + node-pty rebuild + electron-builder + link-latest
 bun run link:latest       # release/latest → current win-unpacked (junction)
@@ -91,7 +91,7 @@ Electron's ABI before a pane can spawn a shell. The rebuild script uses
 the first Python that can `import distutils.version`. On Ubuntu 24.04
 that is Python 3.12 when `python3-setuptools` is installed.
 
-`bun run dev:electron` starts Vite at `http://localhost:5173/` and opens
+`bun run dev` starts Vite at `http://localhost:5173/` and opens
 the Electron window. A display is required. The Linux shell profile is
 `$SHELL --login` (bash). OSC 7 cwd tracking is injected for PowerShell
 only, so the footer path and Git widget stay on the directory the pane

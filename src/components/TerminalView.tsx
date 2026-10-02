@@ -526,7 +526,7 @@ export default function TerminalView({
 				term.writeln(
 					'\x1b[33mNot running in Electron — PTY unavailable.\x1b[0m',
 				)
-				term.writeln('Run with: bun run dev:electron (vite + Electron).')
+				term.writeln('Run with: bun run dev (vite + Electron).')
 				return
 			}
 			try {

@@ -56,7 +56,7 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
 
 ```powershell
 bun install               # postinstall only applies the node-pty Spectre patch
-bun run dev:electron      # dev (vite + Electron)
+bun run dev                # dev (vite + Electron)
 bun run rebuild           # FORCE full node-pty rebuild (slow, rarely needed)
 bun run build             # tsc + vite + node-pty rebuild + electron-builder
                           # also refreshes release/latest → current win-unpacked

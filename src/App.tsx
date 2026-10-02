@@ -1517,7 +1517,7 @@ export default function App() {
 					{!isElectron() && (
 						<div className="web-warning">
 							Web preview — PTY/Git/Sys need Electron. Run{' '}
-							<code>bun run dev:electron</code>.
+							<code>bun run dev</code>.
 						</div>
 					)}
 					<StatusBar
