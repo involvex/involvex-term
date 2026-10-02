@@ -178,7 +178,10 @@ const inFlightGit = new Map<string, Promise<void>>()
 
 async function refreshGitForTab(tabId: string, cwd: string) {
 	if (!win) return
-	const key = `${tabId}:${cwd}`
+	// Coalesce by repo path, not pane id: 5 tabs × 3 panes in one repo
+	// must share a single git status instead of 15 concurrent git.exe
+	// storms that freeze the app.
+	const key = cwd.toLowerCase()
 	const existing = inFlightGit.get(key)
 	if (existing) {
 		await existing
@@ -186,7 +189,8 @@ async function refreshGitForTab(tabId: string, cwd: string) {
 	}
 	const work = (async () => {
 		if (!win) return
-		const status = await getGitStatus(cwd)
+		const status = await withTimeout(getGitStatus(cwd), 8000, null)
+		if (!status) return
 		win.webContents.send(`git:changed-${tabId}`, status)
 		win.webContents.send('git:changed', {tabId, ...status})
 		ensureGitWatcher(tabId, status.repoRoot)
@@ -195,6 +199,16 @@ async function refreshGitForTab(tabId: string, cwd: string) {
 	})
 	inFlightGit.set(key, work)
 	await work
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+	let timer: NodeJS.Timeout | null = null
+	const timeout = new Promise<T>(resolve => {
+		timer = setTimeout(() => resolve(fallback), ms)
+	})
+	return Promise.race([p, timeout]).finally(() => {
+		if (timer) clearTimeout(timer)
+	})
 }
 
 function scheduleGitRefresh(tabId: string, cwd: string) {
@@ -388,7 +402,11 @@ function registerIpc() {
 		'pty:resize',
 		(_e, {id, cols, rows}: {id: string; cols: number; rows: number}) => {
 			try {
-				getPty(id)?.pty.resize(Math.max(2, cols), Math.max(1, rows))
+				// Last line of defense: never shrink ConPTY into a collapsed
+				// transient (window animate, grid unmeasured). A tiny ConPTY
+				// rewraps the pwsh7 PSReadLine prompt mid-path and desyncs
+				// xterm rows so typing lands mid-screen.
+				getPty(id)?.pty.resize(Math.max(40, cols || 0), Math.max(10, rows || 0))
 			} catch {
 				/* noop */
 			}

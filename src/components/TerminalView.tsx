@@ -11,10 +11,15 @@ import {
 import type {PaneDirection} from '../lib/panes'
 import {registerSearch, unregisterSearch} from '../lib/searchRegistry'
 import {
+	RESIZE_DEBOUNCE_MS,
 	SPAWN_FALLBACK_COLS,
 	SPAWN_FALLBACK_ROWS,
+	SPAWN_POLL_MS,
 	SPAWN_READY_TIMEOUT_MS,
+	SPAWN_STABLE_SAMPLES,
 	isSpawnableGeometry,
+	isStableGeometry,
+	shouldSyncResize,
 } from '../lib/spawnGeometry'
 import {
 	createMarkController,
@@ -105,6 +110,9 @@ const IS_WINDOWS =
 			navigator.platform ??
 			'',
 	)
+
+/** Stagger slot for concurrent pty spawns (multi-tab thundering herd). */
+let globalSpawnSlot = 0
 
 export default function TerminalView({
 	paneId,
@@ -547,6 +555,12 @@ export default function TerminalView({
 		let offPrompt: (() => void) | undefined
 		let readyTimer: ReturnType<typeof setTimeout> | null = null
 		let readyRo: ResizeObserver | null = null
+		let readyPoll: ReturnType<typeof setInterval> | null = null
+		let lastProposal: {cols: number; rows: number} | null = null
+		let stableCount = 0
+		let spawned = false
+		let lastSent: {cols: number; rows: number} | null = null
+		let resizeDebounce: ReturnType<typeof setTimeout> | null = null
 
 		/** Proposed dims only count once the container is really laid out. */
 		const measureSpawnGeometry = (): {cols: number; rows: number} | null => {
@@ -565,13 +579,72 @@ export default function TerminalView({
 				clearTimeout(readyTimer)
 				readyTimer = null
 			}
+			if (readyPoll) {
+				clearInterval(readyPoll)
+				readyPoll = null
+			}
 			if (readyRo) {
 				readyRo.disconnect()
 				readyRo = null
 			}
 		}
 
+		/**
+		 * Single choke point for every fit → ConPTY sync. Never calls
+		 * fit.fit() on a collapsed container and never pushes <40x10
+		 * into ConPTY — a collapsed ConPTY rewraps the pwsh7 PSReadLine
+		 * prompt mid-path (vertical `PS D:\re / os\open …` fragments)
+		 * and desyncs xterm rows so typing lands mid-screen.
+		 */
+		const syncToPty = (reason: string): boolean => {
+			if (disposed) return false
+			if (!tabActiveRef.current) return false
+			let dims: {cols: number; rows: number} | null = null
+			try {
+				const p = fit.proposeDimensions()
+				if (p && isSpawnableGeometry(p.cols, p.rows))
+					dims = {cols: p.cols, rows: p.rows}
+			} catch {
+				return false
+			}
+			if (!dims) return false
+			if (!shouldSyncResize(dims.cols, dims.rows, lastSent)) return false
+			try {
+				fit.fit()
+			} catch {
+				return false
+			}
+			if (!shouldSyncResize(term.cols, term.rows, lastSent)) return false
+			lastSent = {cols: term.cols, rows: term.rows}
+			try {
+				api?.ptyResize(paneId, term.cols, term.rows)
+			} catch {
+				/* noop */
+			}
+			void reason
+			return true
+		}
+
+		const syncDebounced = (): void => {
+			if (resizeDebounce) clearTimeout(resizeDebounce)
+			resizeDebounce = setTimeout(() => {
+				resizeDebounce = null
+				syncToPty('resize')
+			}, RESIZE_DEBOUNCE_MS)
+		}
+
 		const spawn = async (cols: number, rows: number) => {
+			if (spawned) return
+			spawned = true
+			// Stagger concurrent spawns: 5 tabs × 3 panes = 15 pwsh7
+			// profiles + ConPTYs at once freezes the UI. Spread them.
+			try {
+				const slot = globalSpawnSlot++ % 5
+				if (slot > 0) await new Promise(r => setTimeout(r, slot * 150))
+				if (disposed) return
+			} catch {
+				/* noop */
+			}
 			if (!api) {
 				term.writeln(
 					'\x1b[33mNot running in Electron — PTY unavailable.\x1b[0m',
@@ -580,14 +653,15 @@ export default function TerminalView({
 				return
 			}
 			try {
-				// Geometry was gated by the caller (measureSpawnGeometry or the
+				// Geometry was gated by the caller (stable measure or the
 				// 80x24 fallback) — ConPTY must match what PSReadLine sees.
 				try {
 					term.resize(cols, rows)
 				} catch {
 					/* noop */
 				}
-				const spawned = await api.ptySpawn({
+				lastSent = {cols, rows}
+				const spawnedResult = await api.ptySpawn({
 					id: paneId,
 					cwd: initialCwd,
 					cols,
@@ -598,18 +672,13 @@ export default function TerminalView({
 				// Main resolves the spawn dir (saved cwd → startDir → home);
 				// report it so the tab title matches the real shell dir
 				// before the first OSC7 arrives.
-				if (spawned?.cwd) onResolvedCwdRef.current?.(paneId, spawned.cwd)
-				// Refit once the pane has real geometry, then push to ConPTY.
+				if (spawnedResult?.cwd)
+					onResolvedCwdRef.current?.(paneId, spawnedResult.cwd)
+				// Refit once the pane has real geometry, then push to ConPTY
+				// via the guarded sync (skips collapsed transients).
 				requestAnimationFrame(() => {
 					if (disposed) return
-					try {
-						fit.fit()
-						if (isSpawnableGeometry(term.cols, term.rows)) {
-							api.ptyResize(paneId, term.cols, term.rows)
-						}
-					} catch {
-						/* noop */
-					}
+					syncToPty('post-spawn')
 				})
 				// Webfont load changes cell size post-fit: re-sync ConPTY once.
 				try {
@@ -617,14 +686,7 @@ export default function TerminalView({
 					if (fontsReady && typeof fontsReady.then === 'function') {
 						void fontsReady.then(() => {
 							if (disposed) return
-							try {
-								fit.fit()
-								if (isSpawnableGeometry(term.cols, term.rows)) {
-									api?.ptyResize(paneId, term.cols, term.rows)
-								}
-							} catch {
-								/* noop */
-							}
+							syncToPty('fonts-ready')
 						})
 					}
 				} catch {
@@ -693,6 +755,11 @@ export default function TerminalView({
 				}
 			})
 			offPrompt = api.onPtyPrompt(paneId, info => {
+				// First prompt is the moment ConPTY + PSReadLine are truly
+				// alive: push the final stable size so a spawn→maximize
+				// delta re-renders the pwsh7 prompt at the right width
+				// instead of leaving it wrapped mid-path.
+				requestAnimationFrame(() => syncToPty('first-prompt'))
 				if (!completionBellRef.current || !onBgPromptRef.current) return
 				if (
 					completionRef.current.prompt(
@@ -721,14 +788,27 @@ export default function TerminalView({
 				api.ptyWrite(paneId, d)
 			})
 		}
-		// Wait for real layout before spawning: an immediate spawn renders
+		// Wait for stable layout before spawning: an immediate spawn renders
 		// the first prompt at collapsed geometry and PSReadLine wraps it.
-		// Hidden panes (inactive tabs) never measure up — the timeout covers
-		// them with the classic fallback; activation refits via `ro` below.
+		// Fresh launch restores/maximizes the window, so a single >=40x10
+		// reading is often an intermediate (1200px → maximized). Require
+		// N stable samples. Hidden panes (inactive tabs) never measure up —
+		// the timeout covers them with the classic fallback.
 		const tryGatedSpawn = (): boolean => {
-			if (disposed) return true
+			if (disposed || spawned) return true
 			const g = measureSpawnGeometry()
-			if (!g) return false
+			if (!g) {
+				lastProposal = null
+				stableCount = 0
+				return false
+			}
+			if (lastProposal && isStableGeometry(lastProposal, g)) {
+				stableCount += 1
+			} else {
+				stableCount = 1
+			}
+			lastProposal = g
+			if (stableCount < SPAWN_STABLE_SAMPLES) return false
 			stopGate()
 			void spawn(g.cols, g.rows)
 			return true
@@ -738,33 +818,25 @@ export default function TerminalView({
 				tryGatedSpawn()
 			})
 			readyRo.observe(el)
+			readyPoll = setInterval(() => {
+				tryGatedSpawn()
+			}, SPAWN_POLL_MS)
 			readyTimer = setTimeout(() => {
-				if (disposed) return
+				if (disposed || spawned) return
 				stopGate()
-				void spawn(SPAWN_FALLBACK_COLS, SPAWN_FALLBACK_ROWS)
+				const g = measureSpawnGeometry() ?? {
+					cols: SPAWN_FALLBACK_COLS,
+					rows: SPAWN_FALLBACK_ROWS,
+				}
+				void spawn(g.cols, g.rows)
 			}, SPAWN_READY_TIMEOUT_MS)
 		}
 
-		let resizeQueued = false
-		let lastCols = 0
-		let lastRows = 0
 		const ro = new ResizeObserver(() => {
-			if (!tabActiveRef.current || resizeQueued) return
-			resizeQueued = true
-			requestAnimationFrame(() => {
-				resizeQueued = false
-				if (disposed || !tabActiveRef.current) return
-				try {
-					fit.fit()
-					if (term.cols !== lastCols || term.rows !== lastRows) {
-						lastCols = term.cols
-						lastRows = term.rows
-						api?.ptyResize(paneId, term.cols, term.rows)
-					}
-				} catch {
-					/* noop */
-				}
-			})
+			if (!tabActiveRef.current || !spawned) {
+				return
+			}
+			syncDebounced()
 		})
 		ro.observe(el)
 
@@ -772,6 +844,7 @@ export default function TerminalView({
 			disposed = true
 			void disposed
 			stopGate()
+			if (resizeDebounce) clearTimeout(resizeDebounce)
 			if (idleTimer.current) clearTimeout(idleTimer.current)
 			ro.disconnect()
 			el.removeEventListener('contextmenu', onContextMenu)
@@ -816,8 +889,13 @@ export default function TerminalView({
 			t.options.fontSize = fontSize
 			t.options.scrollback = scrollback
 			try {
-				fitRef.current?.fit()
-				termApi()?.ptyResize(paneId, t.cols, t.rows)
+				const fit = fitRef.current
+				const dims = fit?.proposeDimensions()
+				if (fit && dims && isSpawnableGeometry(dims.cols, dims.rows)) {
+					fit.fit()
+					if (isSpawnableGeometry(t.cols, t.rows))
+						termApi()?.ptyResize(paneId, t.cols, t.rows)
+				}
 			} catch {
 				/* noop */
 			}
@@ -829,9 +907,14 @@ export default function TerminalView({
 		if (!focused || !tabActive) return
 		requestAnimationFrame(() => {
 			try {
-				fitRef.current?.fit()
-				const t = termRef.current
-				if (t) termApi()?.ptyResize(paneId, t.cols, t.rows)
+				const fit = fitRef.current
+				const dims = fit?.proposeDimensions()
+				if (fit && dims && isSpawnableGeometry(dims.cols, dims.rows)) {
+					fit.fit()
+					const t = termRef.current
+					if (t && isSpawnableGeometry(t.cols, t.rows))
+						termApi()?.ptyResize(paneId, t.cols, t.rows)
+				}
 				termRef.current?.focus()
 			} catch {
 				/* noop */
