@@ -25,7 +25,9 @@
 		"packages/*"
 	],
 	"scripts": {
-		"build": "tsc && vite build && bun scripts/rebuild-pty.mjs && electron-builder --publish never && bun scripts/link-latest.mjs",
+		"prebuild": "bun run preflight",
+		"build": "tsc && vite build && bun scripts/rebuild-pty.mjs && electron-builder --publish never && bun scripts/link-latest.mjs && bun run build:cli",
+		"build:cli": "bun run --filter @involvex/term build",
 		"build:electron": "tsc --project tsconfig.node.json && vite build",
 		"build:release": "tsc && vite build && bun scripts/rebuild-pty.mjs && electron-builder --publish never",
 		"dev": "vite",

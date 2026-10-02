@@ -31,7 +31,8 @@
 	"author": "involvex",
 	"type": "module",
 	"bin": {
-		"involvex-term": "dist/cli.js"
+		"involvex-term": "dist/cli.js",
+		"involvex-term-dev": "src/cli.ts"
 	},
 	"files": [
 		"dist",
@@ -39,6 +40,7 @@
 	],
 	"scripts": {
 		"build": "bun build src/cli.ts --target node --outfile dist/cli.js",
+		"dev": "bun run src/cli.ts",
 		"prepublishOnly": "bun run build"
 	},
 	"engines": {
