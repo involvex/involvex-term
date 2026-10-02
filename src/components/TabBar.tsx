@@ -1,10 +1,13 @@
 import {
+	useEffect,
+	useLayoutEffect,
 	useRef,
 	useState,
 	type CSSProperties,
 	type DragEvent,
 	type MouseEvent,
 } from 'react'
+import {createPortal} from 'react-dom'
 import {shortAgentTitle, type PaneAgentInfo} from '../lib/agentLabels'
 import {TAB_COLORS} from '../lib/agents'
 import {
@@ -112,9 +115,60 @@ export default function TabBar({
 	const [editingId, setEditingId] = useState<string | null>(null)
 	const [editValue, setEditValue] = useState('')
 	const [menuOpen, setMenuOpen] = useState(false)
+	const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null)
 	const [ctxMenu, setCtxMenu] = useState<TermContextMenuState | null>(null)
 	const [dropTabId, setDropTabId] = useState<string | null>(null)
 	const dragFrom = useRef<number | null>(null)
+	const menuBtnRef = useRef<HTMLButtonElement>(null)
+	const profileMenuRef = useRef<HTMLDivElement>(null)
+
+	/**
+	 * The tab bar is a scroll container (`overflow-x: auto` coerces overflow-y to
+	 * auto too), so the profile dropdown is rendered in a portal on document.body
+	 * — otherwise it gets clipped to the tab bar height.
+	 */
+	const openProfileMenu = () => {
+		const r = menuBtnRef.current?.getBoundingClientRect()
+		if (r) setMenuAnchor(r)
+		setMenuOpen(o => !o)
+	}
+
+	useLayoutEffect(() => {
+		if (!menuOpen || !menuAnchor) return
+		const el = profileMenuRef.current
+		if (!el) return
+		const pad = 8
+		const rect = el.getBoundingClientRect()
+		let left = menuAnchor.left
+		let top = menuAnchor.bottom + 4
+		if (top + rect.height > window.innerHeight - pad)
+			top = Math.max(pad, menuAnchor.top - rect.height - 6)
+		if (left + rect.width > window.innerWidth - pad)
+			left = Math.max(pad, window.innerWidth - rect.width - pad)
+		if (left < pad) left = pad
+		el.style.left = `${left}px`
+		el.style.top = `${top}px`
+	}, [menuOpen, menuAnchor, profiles])
+
+	useEffect(() => {
+		if (!menuOpen) return
+		const close = () => setMenuOpen(false)
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') close()
+		}
+		const onDown = (e: globalThis.MouseEvent) => {
+			const target = e.target as Node
+			if (profileMenuRef.current?.contains(target)) return
+			if (menuBtnRef.current?.contains(target)) return
+			close()
+		}
+		window.addEventListener('keydown', onKey)
+		window.addEventListener('mousedown', onDown, true)
+		return () => {
+			window.removeEventListener('keydown', onKey)
+			window.removeEventListener('mousedown', onDown, true)
+		}
+	}, [menuOpen])
 
 	const hasPaneDrag = (e: DragEvent) =>
 		Array.from(e.dataTransfer.types).includes(PANE_DRAG_MIME)
@@ -444,35 +498,16 @@ export default function TabBar({
 					+
 				</button>
 				<button
+					ref={menuBtnRef}
 					type="button"
 					className="tab-new tab-new-menu"
 					aria-label="New tab with profile"
 					title="New tab with profile"
-					onClick={() => setMenuOpen(o => !o)}
+					aria-expanded={menuOpen}
+					onClick={openProfileMenu}
 				>
 					▾
 				</button>
-				{menuOpen && (
-					<div className="tab-profile-menu">
-						{profiles.map(p => (
-							<button
-								key={p.id}
-								type="button"
-								className={
-									p.id === defaultProfileId
-										? 'tab-profile-item tab-profile-default'
-										: 'tab-profile-item'
-								}
-								onClick={() => {
-									setMenuOpen(false)
-									onNew(p.id)
-								}}
-							>
-								{p.name}
-							</button>
-						))}
-					</div>
-				)}
 			</div>
 			<span className="tabbar-spacer" />
 			{quickCommands.map(qc => (
@@ -510,6 +545,34 @@ export default function TabBar({
 			>
 				⚙
 			</button>
+			{menuOpen &&
+				createPortal(
+					<div
+						ref={profileMenuRef}
+						className="tab-profile-menu"
+						role="menu"
+						aria-label="New tab with profile"
+					>
+						{profiles.map(p => (
+							<button
+								key={p.id}
+								type="button"
+								className={
+									p.id === defaultProfileId
+										? 'tab-profile-item tab-profile-default'
+										: 'tab-profile-item'
+								}
+								onClick={() => {
+									setMenuOpen(false)
+									onNew(p.id)
+								}}
+							>
+								{p.name}
+							</button>
+						))}
+					</div>,
+					document.body,
+				)}
 			{ctxMenu && (
 				<TermContextMenu
 					menu={ctxMenu}

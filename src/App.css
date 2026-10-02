@@ -166,12 +166,11 @@ body {
 }
 
 .tab-profile-menu {
-	position: absolute;
-	top: 100%;
-	left: 0;
-	z-index: 40;
+	position: fixed;
+	z-index: 10000;
 	min-width: 180px;
-	margin-top: 4px;
+	max-height: calc(100vh - 48px);
+	overflow: auto;
 	padding: 4px;
 	background: #252526;
 	border: 1px solid #3c3c3c;
