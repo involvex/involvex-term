@@ -8,8 +8,16 @@ import path from 'node:path'
 import {Readable} from 'node:stream'
 import {pipeline} from 'node:stream/promises'
 import pkg from '../package.json' with {type: 'json'}
+import {
+	assertAllowedAssetUrl,
+	isNewer,
+	latestAsset,
+	maybeNotifyUpdate,
+	refreshUpdateCache,
+	safeAssetName,
+	type Asset,
+} from './updateCheck.js'
 
-const REPO = 'involvex/involvex-term'
 const PKG = '@involvex/term'
 const WIN = process.platform === 'win32'
 const CONFIG_DIR = path.join(os.homedir(), '.involvex-term')
@@ -18,47 +26,6 @@ const CONFIG_FILE = path.join(CONFIG_DIR, 'cli.json')
 interface Config {
 	exe?: string
 	version?: string
-}
-
-interface Asset {
-	tag: string
-	name: string
-	url: string
-}
-
-/**
- * CodeQL js/command-line-injection hardening (alert #3).
- * spawnSync(file, argsArray) runs without a shell, so `; & |` in a filename
- * are literal — but an unsanitized remote asset name still allows path
- * traversal out of os.tmpdir() (CWE-22) followed by write+exec. Hence the
- * basename + allowlist + containment checks below.
- */
-const SAFE_ASSET_NAME = /^[A-Za-z0-9._-]+\.(exe|AppImage)$/i
-const ALLOWED_ASSET_URL_PREFIXES = [
-	'https://github.com/involvex/involvex-term/releases/download/',
-	'https://objects.githubusercontent.com/',
-	'https://api.github.com/repos/involvex/involvex-term/',
-]
-
-function safeAssetName(
-	name: string,
-	platform: NodeJS.Platform = process.platform,
-): string {
-	const base = path.basename(name)
-	if (!SAFE_ASSET_NAME.test(base)) throw new Error(`Unsafe asset name: ${name}`)
-	if (platform === 'win32' && !/Windows.*Setup\.exe$/i.test(base)) {
-		throw new Error(`Unexpected Windows asset name: ${name}`)
-	}
-	if (platform !== 'win32' && !/\.AppImage$/i.test(base)) {
-		throw new Error(`Unexpected asset name: ${name}`)
-	}
-	return base
-}
-
-function assertAllowedAssetUrl(url: string): void {
-	if (!ALLOWED_ASSET_URL_PREFIXES.some(p => url.startsWith(p))) {
-		throw new Error(`Unexpected asset URL origin: ${url}`)
-	}
 }
 
 /** Resolve a temp path that is guaranteed to stay inside os.tmpdir(). */
@@ -87,7 +54,9 @@ Usage:
   involvex-term doctor [--fix] [--json] [--verbose]    Check for common issues
   involvex-term --version | --help
 
-Env: INVOLVEX_TERM_EXE overrides the app executable path.`
+Env: INVOLVEX_TERM_EXE overrides the app executable path.
+  Set NO_UPDATE_NOTIFIER=1 (or pass --no-update-notifier) to silence the
+  background update nudge (checked at most once a day).`
 
 function readConfig(): Config {
 	try {
@@ -151,39 +120,6 @@ function absolutizeArgs(args: string[]): string[] {
 	return out
 }
 
-async function latestAsset(): Promise<Asset> {
-	const res = await fetch(
-		`https://api.github.com/repos/${REPO}/releases/latest`,
-		{
-			headers: {
-				accept: 'application/vnd.github+json',
-				'user-agent': 'involvex-term-cli',
-			},
-		},
-	)
-	if (!res.ok) throw new Error(`GitHub API ${res.status} ${res.statusText}`)
-	const rel = (await res.json()) as {
-		tag_name: string
-		assets?: Array<{name: string; browser_download_url: string}>
-	}
-	const assets = rel.assets ?? []
-	const pick = WIN
-		? assets.find(a => /Windows.*Setup\.exe$/i.test(a.name))
-		: assets.find(a => /\.AppImage$/i.test(a.name))
-	if (!pick) {
-		throw new Error(`No ${process.platform} asset in release ${rel.tag_name}`)
-	}
-	if (typeof pick.name !== 'string' || !pick.name) {
-		throw new Error(`Invalid asset name in release ${rel.tag_name}`)
-	}
-	assertAllowedAssetUrl(pick.browser_download_url)
-	return {
-		tag: rel.tag_name,
-		name: safeAssetName(pick.name),
-		url: pick.browser_download_url,
-	}
-}
-
 async function download(url: string, dest: string): Promise<void> {
 	assertAllowedAssetUrl(url)
 	const res = await fetch(url, {headers: {'user-agent': 'involvex-term-cli'}})
@@ -222,23 +158,6 @@ function runPm(pm: 'bun' | 'npm', kind: 'add' | 'remove'): void {
 	if (r.status !== 0) {
 		console.warn(`Failed. Run manually: ${pm} ${args.join(' ')}`)
 	}
-}
-
-/** Numeric compare of v-prefixed semver-ish tags. */
-function isNewer(latest: string, current: string | undefined): boolean {
-	if (!current) return true
-	const n = (v: string) =>
-		v
-			.replace(/^v/, '')
-			.split(/[.-]/)
-			.map(x => parseInt(x, 10) || 0)
-	const a = n(latest)
-	const b = n(current)
-	for (let i = 0; i < Math.max(a.length, b.length); i++) {
-		const d = (a[i] ?? 0) - (b[i] ?? 0)
-		if (d !== 0) return d > 0
-	}
-	return false
 }
 
 async function installApp(asset: Asset): Promise<void> {
@@ -326,6 +245,12 @@ function uninstall(args: string[]): void {
 
 async function main(): Promise<void> {
 	const [cmd, ...rest] = process.argv.slice(2)
+	// Detached cache-refresh worker (spawned by maybeNotifyUpdate).
+	if (cmd === '__check-update') {
+		await refreshUpdateCache()
+		return
+	}
+	await maybeNotifyUpdate({currentVersion: readConfig().version})
 	switch (cmd) {
 		case undefined:
 		case 'help':

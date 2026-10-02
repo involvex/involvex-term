@@ -59,6 +59,14 @@ GitHub reachability, and disk space. Exit code is `1` when a check fails.
 pointer in `cli.json`); corrupt `settings.json` is never overwritten.
 `--json` emits machine-readable output for scripting/CI.
 
+Every command (except the hidden cache worker) prints a one-line nudge on
+stderr when the cached latest GitHub release is newer than your install —
+`involvex-term upgrade` then catches up. The check runs in a detached
+background process at most once a day and never delays `sp`/`nt`/`start`;
+the last result lives in `~/.involvex-term/update-check.json`. Set
+`NO_UPDATE_NOTIFIER=1` or pass `--no-update-notifier` to silence the nudge
+(skipped automatically in CI and for non-TTY output).
+
 ## Links
 
 - Repository: <https://github.com/involvex/involvex-term>
