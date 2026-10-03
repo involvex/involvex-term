@@ -209,11 +209,26 @@ type LoginResult =
 let pendingDevice: DeviceCodePending | null = null
 let loginCancelled = false
 
+/** The client id actually used for device flow, honouring the shipped default. */
 function resolveClientId(state: SyncState = loadSyncState()): string {
 	return (
 		process.env.INVOLVEX_GITHUB_CLIENT_ID?.trim() ||
 		state.clientId?.trim() ||
 		DEFAULT_GITHUB_CLIENT_ID
+	)
+}
+
+/**
+ * Whether a client id was *explicitly* supplied, i.e. not the shipped default.
+ *
+ * Kept separate from `resolveClientId` on purpose: resolve always returns a
+ * usable id, so `Boolean(resolveClientId(s))` was always true and the
+ * "GitHub OAuth client ID" field in Settings could never be shown. Self-hosters
+ * whose GitHub OAuth app differs from ours need that field to be reachable.
+ */
+export function hasExplicitClientId(state: SyncState): boolean {
+	return Boolean(
+		process.env.INVOLVEX_GITHUB_CLIENT_ID?.trim() || state.clientId?.trim(),
 	)
 }
 
@@ -267,7 +282,7 @@ export function getSyncStatus(): SyncStatus {
 		gistUrl: s.gistId ? `https://gist.github.com/${s.gistId}` : undefined,
 		lastSyncedAt: s.lastSyncedAt,
 		localUpdatedAt: s.localUpdatedAt,
-		clientIdConfigured: Boolean(resolveClientId(s)),
+		clientIdConfigured: hasExplicitClientId(s),
 	}
 }
 

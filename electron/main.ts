@@ -632,6 +632,12 @@ function registerIpc() {
 					m.installContextMenu(exe)
 					return m.contextMenuStatus(exe)
 				}
+				// Explicit, not fall-through: this branch used to be the implicit
+				// else, so any unrecognised action (typo, version skew, missing
+				// field) silently *removed* the Explorer context menu entry.
+				if (action !== 'uninstall') {
+					throw new Error(`Unknown context menu action: ${String(action)}`)
+				}
 				m.uninstallContextMenu()
 				return m.contextMenuStatus(exe)
 			})
