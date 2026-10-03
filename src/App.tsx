@@ -1,13 +1,18 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
+import {
+	Suspense,
+	lazy,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from 'react'
 import './App.css'
 import type {PaletteCommand} from './commands'
-import AboutModal from './components/AboutModal'
-import CommandPalette from './components/CommandPalette'
 import PaneLayout from './components/PaneLayout'
-import SearchBar from './components/SearchBar'
-import SettingsModal from './components/SettingsModal'
 import StatusBar from './components/StatusBar'
 import TabBar, {type TabInfo} from './components/TabBar'
+import {useTabBindings} from './hooks/useTabBindings'
 import {
 	assignPaneAgentLabels,
 	pruneAgentBindings,
@@ -52,6 +57,14 @@ import {
 	type SysStats,
 	type UpdateStatus,
 } from './types'
+// Overlay bundles split out of the initial chunk: settings/palette/about/
+// search are only fetched on first open, not on startup.
+const AboutModal = lazy(() => import('./components/AboutModal'))
+const CommandPalette = lazy(() => import('./components/CommandPalette'))
+const SearchBar = lazy(() => import('./components/SearchBar'))
+const SettingsModal = lazy(() => import('./components/SettingsModal'))
+
+const EMPTY_PANE_AGENTS: Record<string, PaneAgentInfo> = {}
 
 const DEFAULT_SETTINGS: AppSettings = {
 	theme: {
@@ -315,6 +328,8 @@ export default function App() {
 						agentBindingsRef.current,
 						paneIds,
 						s.sessions ?? [],
+						Date.now(),
+						s.truncated === true,
 					)
 					if (
 						Object.keys(pruned).length !==
@@ -352,6 +367,7 @@ export default function App() {
 						latest: null,
 						projectMatch: false,
 						sessions: [],
+						truncated: false,
 					})
 					setPaneAgents({})
 				}
@@ -1467,6 +1483,82 @@ export default function App() {
 		],
 	)
 
+	// Stable per-render callbacks: inline arrows in JSX would defeat the
+	// memo() on PaneLayout/StatusBar (new fn identity every sys/git tick).
+	const handleToast = useCallback((msg: string) => {
+		setToast(msg)
+		window.setTimeout(() => setToast(null), 2800)
+	}, [])
+	const handleGitRefreshed = useCallback((s: GitStatus) => {
+		setGit(s)
+		if (s.cwd) setCwd(s.cwd)
+	}, [])
+	const emptyAgents = showPaneLabels ? paneAgents : EMPTY_PANE_AGENTS
+	const fontFamily = useMemo(
+		() => effectiveFontFamily(settings.theme),
+		[settings.theme],
+	)
+	// Stable TabBar callbacks (inline arrows would defeat memo()).
+	const handleCloseTabId = useCallback(
+		(id: string) => void closeTab(id),
+		[closeTab],
+	)
+	const handleNewTab = useCallback(
+		(profileId?: string) => addTab(undefined, profileId),
+		[addTab],
+	)
+	const handleDuplicateTabId = useCallback(
+		(id: string) => void duplicateTab(id),
+		[duplicateTab],
+	)
+	const handleSplitOnTab = useCallback(
+		(id: string, dir: 'horizontal' | 'vertical') => splitPaneOnTab(id, dir),
+		[splitPaneOnTab],
+	)
+	const handleExportBuffer = useCallback(
+		(id: string) => void exportTabBuffer(id),
+		[exportTabBuffer],
+	)
+	const handleCloseOthers = useCallback(
+		(id: string) => void closeOtherTabs(id),
+		[closeOtherTabs],
+	)
+	const handleCloseToRight = useCallback(
+		(id: string) => void closeTabsToRight(id),
+		[closeTabsToRight],
+	)
+	const handleQuickCommand = useCallback(
+		(cmd: QuickCommand) => runSnippet(cmd.command, cmd.sendEnter !== false),
+		[runSnippet],
+	)
+	const handleOpenSettings = useCallback(() => setShowSettings(true), [])
+	const handleCloseSearch = useCallback(() => setSearchOpen(false), [])
+	const handleClosePalette = useCallback(() => setPaletteOpen(false), [])
+	const handleCloseSettings = useCallback(() => setShowSettings(false), [])
+	const handleCloseAbout = useCallback(() => setShowAbout(false), [])
+	const handleSearchFocusPane = useCallback(
+		(paneId: string) => {
+			if (activeTab) focusPane(activeTab.id, paneId)
+		},
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[activeTab?.id, focusPane],
+	)
+
+	const tabBindings = useTabBindings({
+		tabs,
+		focusPane,
+		resizeSplit,
+		resolveTabCwd,
+		splitPaneToward,
+		swapPane,
+		movePaneToTab,
+		closePane,
+		closeOtherPanes,
+		duplicateTab,
+		closeTab,
+		setSearchOpen,
+	})
+
 	return (
 		<div
 			className="app"
@@ -1485,98 +1577,58 @@ export default function App() {
 						agentLabel={activeAgent.label}
 						agentName={activeAgent.name}
 						agentAvailable={agentAvailable}
-						paneAgents={showPaneLabels ? paneAgents : {}}
+						paneAgents={emptyAgents}
 						onSelect={selectTab}
-						onClose={id => void closeTab(id)}
-						onNew={profileId => addTab(undefined, profileId)}
+						onClose={handleCloseTabId}
+						onNew={handleNewTab}
 						onRename={renameTab}
 						onReorder={reorderTabs}
 						onMovePaneToTab={movePaneToTab}
 						onTogglePin={togglePinTab}
 						onSetColor={setTabColor}
-						onDuplicate={id => void duplicateTab(id)}
-						onSplit={(id, dir) => splitPaneOnTab(id, dir)}
-						onExportBuffer={id => void exportTabBuffer(id)}
-						onCloseOthers={id => void closeOtherTabs(id)}
-						onCloseToRight={id => void closeTabsToRight(id)}
-						onQuickCommand={(cmd: QuickCommand) =>
-							runSnippet(cmd.command, cmd.sendEnter !== false)
-						}
+						onDuplicate={handleDuplicateTabId}
+						onSplit={handleSplitOnTab}
+						onExportBuffer={handleExportBuffer}
+						onCloseOthers={handleCloseOthers}
+						onCloseToRight={handleCloseToRight}
+						onQuickCommand={handleQuickCommand}
 						onOpenAgent={launchAgent}
-						onOpenSettings={() => setShowSettings(true)}
+						onOpenSettings={handleOpenSettings}
 					/>
 					<div className="terminals">
 						{searchOpen && activeTab && (
-							<SearchBar
-								root={activeTab.root}
-								activePaneId={activeTab.activePaneId}
-								bg={settings.theme.bg}
-								fg={settings.theme.fg}
-								onClose={() => setSearchOpen(false)}
-								onFocusPane={paneId => focusPane(activeTab.id, paneId)}
-							/>
+							<Suspense fallback={null}>
+								<SearchBar
+									root={activeTab.root}
+									activePaneId={activeTab.activePaneId}
+									bg={settings.theme.bg}
+									fg={settings.theme.fg}
+									onClose={handleCloseSearch}
+									onFocusPane={handleSearchFocusPane}
+								/>
+							</Suspense>
 						)}
-						{tabs.map(t => (
+						{tabBindings.map(b => (
 							<PaneLayout
-								key={t.id}
-								root={t.root}
-								tabId={t.id}
-								tabActive={t.id === activeTab?.id}
-								activePaneId={t.activePaneId}
-								fontFamily={effectiveFontFamily(settings.theme)}
+								key={b.tab.id}
+								root={b.tab.root}
+								tabId={b.tab.id}
+								tabActive={b.tab.id === activeTab?.id}
+								activePaneId={b.tab.activePaneId}
+								fontFamily={fontFamily}
 								fontSize={settings.theme.fontSize}
 								bg={settings.theme.bg}
 								fg={settings.theme.fg}
 								completionBell={settings.terminal.completionBell}
 								scrollback={settings.terminal.scrollback}
 								scrollbar={settings.terminal.scrollbar}
-								paneAgents={showPaneLabels ? paneAgents : {}}
-								onFocusPane={paneId => focusPane(t.id, paneId)}
-								onResizeSplit={(splitId, ratio) =>
-									resizeSplit(t.id, splitId, ratio)
-								}
+								paneAgents={emptyAgents}
+								onFocusPane={b.focusPane}
+								onResizeSplit={b.resizeSplit}
 								onBackgroundPrompt={showCompletionToast}
-								onResolvedCwd={(paneId, cwd) =>
-									resolveTabCwd(t.id, paneId, cwd)
-								}
-								onToast={msg => {
-									setToast(msg)
-									window.setTimeout(() => setToast(null), 2800)
-								}}
-								onPaneMenu={{
-									onFind: paneId => {
-										focusPane(t.id, paneId)
-										setSearchOpen(true)
-									},
-									onSplitToward: (paneId, toward) => {
-										focusPane(t.id, paneId)
-										splitPaneToward(toward, paneId)
-									},
-									onSwap: (paneId, toward) => {
-										focusPane(t.id, paneId)
-										swapPane(toward, paneId)
-									},
-									onMoveToTab: (paneId, toTabId) => {
-										focusPane(t.id, paneId)
-										movePaneToTab(paneId, t.id, toTabId, 'right')
-									},
-									moveTargets: tabs
-										.filter(x => x.id !== t.id)
-										.map(x => ({
-											id: x.id,
-											title: x.customTitle || x.title,
-										})),
-									onClosePane: paneId => {
-										focusPane(t.id, paneId)
-										closePane(paneId)
-									},
-									onCloseOtherPanes: paneId => {
-										focusPane(t.id, paneId)
-										closeOtherPanes(paneId)
-									},
-									onDuplicateTab: paneId => void duplicateTab(t.id, paneId),
-									onCloseTab: () => closeTab(t.id),
-								}}
+								onResolvedCwd={b.resolveCwd}
+								onToast={handleToast}
+								onPaneMenu={b.paneMenu}
 							/>
 						))}
 					</div>
@@ -1596,32 +1648,34 @@ export default function App() {
 						onSettingsChange={saveSettings}
 						onOpencodeContinue={continueAgent}
 						onOpencodeNew={launchAgent}
-						onGitRefreshed={s => {
-							setGit(s)
-							if (s.cwd) setCwd(s.cwd)
-						}}
+						onGitRefreshed={handleGitRefreshed}
 						pluginSegments={pluginStatusBar}
-						onToast={msg => {
-							setToast(msg)
-							window.setTimeout(() => setToast(null), 2800)
-						}}
+						onToast={handleToast}
 					/>
 				</>
 			)}
 			{showSettings && (
-				<SettingsModal
-					settings={settings}
-					onChange={saveSettings}
-					onClose={() => setShowSettings(false)}
-				/>
+				<Suspense fallback={null}>
+					<SettingsModal
+						settings={settings}
+						onChange={saveSettings}
+						onClose={handleCloseSettings}
+					/>
+				</Suspense>
 			)}
-			{showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
+			{showAbout && (
+				<Suspense fallback={null}>
+					<AboutModal onClose={handleCloseAbout} />
+				</Suspense>
+			)}
 			{paletteOpen && activeTab && (
-				<CommandPalette
-					tabId={activeTab.activePaneId}
-					commands={paletteCommands}
-					onClose={() => setPaletteOpen(false)}
-				/>
+				<Suspense fallback={null}>
+					<CommandPalette
+						tabId={activeTab.activePaneId}
+						commands={paletteCommands}
+						onClose={handleClosePalette}
+					/>
+				</Suspense>
 			)}
 		</div>
 	)

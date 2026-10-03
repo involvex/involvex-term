@@ -1,4 +1,5 @@
 import {
+	memo,
 	useEffect,
 	useLayoutEffect,
 	useRef,
@@ -85,7 +86,7 @@ interface Props {
 	onOpenSettings: () => void
 }
 
-export default function TabBar({
+export default memo(function TabBar({
 	tabs,
 	activeId,
 	profiles,
@@ -581,4 +582,4 @@ export default function TabBar({
 			)}
 		</div>
 	)
-}
+})

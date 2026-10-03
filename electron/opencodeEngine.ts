@@ -20,6 +20,11 @@ export interface OpencodeStatus {
 	projectMatch: boolean
 	/** Recent sessions (newest first), for the picker. */
 	sessions: OpencodeSession[]
+	/**
+	 * True when the fetch hit `limit` — the list may be incomplete and
+	 * absent ids prove nothing (callers must not prune bindings on it).
+	 */
+	truncated: boolean
 }
 
 function normPath(p: string): string {
@@ -52,8 +57,14 @@ function parseSessions(stdout: string): OpencodeSession[] {
 
 let availCache: {at: number; value: boolean} | null = null
 const AVAIL_TTL_MS = 60_000
-let statusCache: {at: number; cwd: string; value: OpencodeStatus} | null = null
+/** Keyed by cwd + limit: footer poll (10) and picker fetch (30) coexist. */
+const statusCache = new Map<string, {at: number; value: OpencodeStatus}>()
 const STATUS_TTL_MS = 4000
+
+/** Footer poll depth. The picker fetches deeper on open (see PICKER_LIMIT). */
+export const FOOTER_LIMIT = 10
+/** Full list for the session picker. */
+export const PICKER_LIMIT = 30
 
 async function opencodeAvailable(): Promise<boolean> {
 	const now = Date.now()
@@ -81,15 +92,16 @@ function sessionMatchesCwd(s: OpencodeSession, cwdN: string): boolean {
 }
 
 /** List recent OpenCode sessions; optionally prefer ones under `cwd`. */
-export async function getOpencodeStatus(cwd?: string): Promise<OpencodeStatus> {
+export async function getOpencodeStatus(
+	cwd?: string,
+	limit = FOOTER_LIMIT,
+): Promise<OpencodeStatus> {
 	const now = Date.now()
+	const depth = Math.min(50, Math.max(1, Math.floor(limit) || FOOTER_LIMIT))
 	const cwdKey = cwd ?? ''
-	if (
-		statusCache &&
-		now - statusCache.at < STATUS_TTL_MS &&
-		statusCache.cwd === cwdKey
-	)
-		return statusCache.value
+	const cacheKey = `${cwdKey}\n${depth}`
+	const hit = statusCache.get(cacheKey)
+	if (hit && now - hit.at < STATUS_TTL_MS) return hit.value
 	const available = await opencodeAvailable()
 	if (!available) {
 		return {
@@ -98,12 +110,13 @@ export async function getOpencodeStatus(cwd?: string): Promise<OpencodeStatus> {
 			latest: null,
 			projectMatch: false,
 			sessions: [],
+			truncated: false,
 		}
 	}
 	try {
 		const {stdout} = await execFileAsync(
 			'opencode',
-			['session', 'list', '--format', 'json', '-n', '30'],
+			['session', 'list', '--format', 'json', '-n', String(depth)],
 			{
 				timeout: 15_000,
 				windowsHide: true,
@@ -122,8 +135,9 @@ export async function getOpencodeStatus(cwd?: string): Promise<OpencodeStatus> {
 			latest,
 			projectMatch: Boolean(match),
 			sessions,
+			truncated: sessions.length >= depth,
 		}
-		statusCache = {at: Date.now(), cwd: cwdKey, value}
+		statusCache.set(cacheKey, {at: Date.now(), value})
 		return value
 	} catch {
 		return {
@@ -132,6 +146,7 @@ export async function getOpencodeStatus(cwd?: string): Promise<OpencodeStatus> {
 			latest: null,
 			projectMatch: false,
 			sessions: [],
+			truncated: false,
 		}
 	}
 }

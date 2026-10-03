@@ -19,6 +19,7 @@ export interface TermApi {
 		cb: (info: {hadOutput: boolean}) => void,
 	) => () => void
 	gitGet: (cwd: string) => Promise<unknown>
+	gitGetDetails: (cwd: string) => Promise<unknown>
 	gitBranches: (cwd: string) => Promise<unknown>
 	gitCheckout: (
 		cwd: string,
@@ -46,7 +47,10 @@ export interface TermApi {
 	onSettingsChanged: (cb: (s: unknown) => void) => () => void
 	onTabAction: (cb: (action: string) => void) => () => void
 	opencodeAvailable: () => Promise<boolean>
-	opencodeStatus: (cwd?: string) => Promise<{
+	opencodeStatus: (
+		cwd?: string,
+		limit?: number,
+	) => Promise<{
 		available: boolean
 		sessionCount: number
 		latest: {
@@ -64,6 +68,7 @@ export interface TermApi {
 			updated: number
 			created: number
 		}>
+		truncated: boolean
 	}>
 	agentWhich: (binary: string) => Promise<boolean>
 	dialogSaveText: (opts: {
@@ -206,6 +211,7 @@ const api: TermApi = {
 	onPtyExit: (id, cb) => sub(`pty:exit-${id}`, cb as never),
 	onPtyPrompt: (id, cb) => sub(`pty:prompt-${id}`, cb as never),
 	gitGet: cwd => ipcRenderer.invoke('git:get', {cwd}),
+	gitGetDetails: cwd => ipcRenderer.invoke('git:getDetails', {cwd}),
 	gitBranches: cwd => ipcRenderer.invoke('git:branches', {cwd}),
 	gitCheckout: (cwd, branch) =>
 		ipcRenderer.invoke('git:checkout', {cwd, branch}),
@@ -227,7 +233,8 @@ const api: TermApi = {
 	onSettingsChanged: cb => sub('settings:changed', cb as never),
 	onTabAction: cb => sub('tab:action', cb as never),
 	opencodeAvailable: () => ipcRenderer.invoke('opencode:available'),
-	opencodeStatus: cwd => ipcRenderer.invoke('opencode:status', {cwd}),
+	opencodeStatus: (cwd, limit) =>
+		ipcRenderer.invoke('opencode:status', {cwd, limit}),
 	agentWhich: binary => ipcRenderer.invoke('agent:which', {binary}),
 	dialogSaveText: opts => ipcRenderer.invoke('dialog:saveText', opts),
 	dialogConfirm: opts => ipcRenderer.invoke('dialog:confirm', opts),

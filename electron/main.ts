@@ -18,6 +18,7 @@ import {clearCwdPending, sniffCwd} from './cwdTracker.js'
 import {buildEnvHooks} from './envHooks.js'
 import {
 	checkoutBranch,
+	getGitDetails,
 	getGitStatus,
 	getRemoteUrl,
 	invalidateGitCache,
@@ -382,7 +383,10 @@ function registerIpc() {
 				win?.webContents.send(`pty:data-${id}`, cleaned)
 				if (sawPrompt)
 					win?.webContents.send(`pty:prompt-${id}`, {
-						hadOutput: cleaned.trim().length > 0,
+						// Regex test scans without copying; cleaned.trim()
+						// allocated a full duplicate per prompt chunk.
+						// eslint-disable-next-line no-control-regex
+						hadOutput: /[^\s\x1b]/.test(cleaned),
 					})
 				notifyPtyData(id, cleaned)
 			})
@@ -431,6 +435,11 @@ function registerIpc() {
 	ipcMain.handle('git:get', async (_e, {cwd}: {cwd: string}) =>
 		getGitStatus(cwd),
 	)
+	// Lazy enrichment: stash + ahead/behind (2 extra spawns). Called only
+	// when the footer git menu opens — never on the per-prompt hot path.
+	ipcMain.handle('git:getDetails', async (_e, {cwd}: {cwd: string}) =>
+		getGitDetails(cwd),
+	)
 	ipcMain.handle('git:branches', async (_e, {cwd}: {cwd: string}) =>
 		listBranches(cwd),
 	)
@@ -466,8 +475,10 @@ function registerIpc() {
 
 	ipcMain.handle('opencode:available', () => opencodeAvailable())
 
-	ipcMain.handle('opencode:status', (_e, {cwd}: {cwd?: string} = {}) =>
-		getOpencodeStatus(cwd),
+	ipcMain.handle(
+		'opencode:status',
+		(_e, {cwd, limit}: {cwd?: string; limit?: number} = {}) =>
+			getOpencodeStatus(cwd, limit),
 	)
 
 	ipcMain.handle('agent:which', async (_e, {binary}: {binary: string}) => {

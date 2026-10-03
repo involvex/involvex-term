@@ -33,6 +33,8 @@ export interface OpencodeStatus {
 	latest: OpencodeSession | null
 	projectMatch: boolean
 	sessions: OpencodeSession[]
+	/** True when the fetch hit its limit — absent ids prove nothing. */
+	truncated: boolean
 }
 
 export interface BranchList {
@@ -252,6 +254,8 @@ export interface TermApiShape {
 		cb: (info: {hadOutput: boolean}) => void,
 	) => () => void
 	gitGet: (cwd: string) => Promise<GitStatus>
+	/** Stash + ahead/behind enrichment (extra spawns) — menu-open only. */
+	gitGetDetails: (cwd: string) => Promise<GitStatus>
 	gitBranches: (cwd: string) => Promise<BranchList>
 	gitCheckout: (
 		cwd: string,
@@ -280,7 +284,7 @@ export interface TermApiShape {
 	onSettingsChanged: (cb: (s: AppSettings) => void) => () => void
 	onTabAction: (cb: (action: string) => void) => () => void
 	opencodeAvailable: () => Promise<boolean>
-	opencodeStatus: (cwd?: string) => Promise<OpencodeStatus>
+	opencodeStatus: (cwd?: string, limit?: number) => Promise<OpencodeStatus>
 	agentWhich: (binary: string) => Promise<boolean>
 	dialogSaveText: (opts: {
 		content: string

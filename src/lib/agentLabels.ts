@@ -144,12 +144,17 @@ export function pruneAgentBindings(
 	paneIds: Set<string>,
 	sessions: OpencodeSession[],
 	now = Date.now(),
+	/** True when `sessions` hit its fetch limit: absent ids prove nothing. */
+	truncated = false,
 ): Record<string, PaneLaunchBinding> {
 	const sessionIds = new Set(sessions.map(s => s.id))
 	const next: Record<string, PaneLaunchBinding> = {}
 	for (const [paneId, b] of Object.entries(bindings)) {
 		if (!paneIds.has(paneId)) continue
-		if (b.sessionId && !sessionIds.has(b.sessionId)) continue
+		// Explicit continue/launch binding whose session is missing from a
+		// truncated (footer-depth) list must survive — only a complete list
+		// proves the session is gone.
+		if (b.sessionId && !sessionIds.has(b.sessionId) && !truncated) continue
 		// Fresh launch without a listed session yet — keep briefly.
 		if (!b.sessionId && now - b.launchedAt > 5 * 60_000) continue
 		next[paneId] = b

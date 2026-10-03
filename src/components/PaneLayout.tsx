@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useRef, useState} from 'react'
+import {memo, useEffect, useMemo, useRef, useState} from 'react'
 import {shortAgentTitle, type PaneAgentInfo} from '../lib/agentLabels'
 import {
 	collectLeaves,
@@ -62,7 +62,7 @@ interface Drag {
  * closing one pane therefore never remounts the survivors' terminals.
  * Split dividers are absolutely positioned handles with pointer drag.
  */
-export default function PaneLayout({
+export default memo(function PaneLayout({
 	root,
 	tabId,
 	tabActive,
@@ -272,4 +272,4 @@ export default function PaneLayout({
 				)}
 		</div>
 	)
-}
+})

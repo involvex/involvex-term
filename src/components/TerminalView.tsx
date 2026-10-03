@@ -550,8 +550,14 @@ export default function TerminalView({
 		let disposed = false
 		let offData: (() => void) | undefined
 		let offExit: (() => void) | undefined
-		let writeQueue = ''
+		// Array segments + join: `+=` on a string copied the whole backlog
+		// per chunk (O(n²) on `cat` floods). Cap the backlog so a runaway
+		// producer can't OOM the renderer before the next frame.
+		let writeParts: string[] = []
+		let writeLen = 0
 		let writeScheduled = false
+		const WRITE_BACKLOG_MAX = 512 * 1024
+		const WRITE_SLICE = 64 * 1024
 		let offPrompt: (() => void) | undefined
 		let readyTimer: ReturnType<typeof setTimeout> | null = null
 		let readyRo: ResizeObserver | null = null
@@ -698,21 +704,39 @@ export default function TerminalView({
 				return
 			}
 			offData = api.onPtyData(paneId, data => {
-				// Batch bursty pty output into one xterm write per frame.
-				writeQueue += data
+				// Batch bursty pty output into chunked xterm writes on the
+				// next frame. Slices keep a single huge chunk from blocking
+				// the parser; on flood the oldest buffered segments are
+				// dropped first so the surviving window stays contiguous
+				// (scrollback may skip, but never reorders). A single chunk
+				// larger than the cap still goes through whole — the cap
+				// bounds accumulation across frames, not one write.
+				while (
+					writeParts.length > 0 &&
+					writeLen + data.length > WRITE_BACKLOG_MAX
+				) {
+					writeLen -= writeParts.shift()?.length ?? 0
+				}
+				writeParts.push(data)
+				writeLen += data.length
 				if (!writeScheduled) {
 					writeScheduled = true
 					requestAnimationFrame(() => {
 						writeScheduled = false
 						if (disposed) {
-							writeQueue = ''
+							writeParts = []
+							writeLen = 0
 							return
 						}
-						const chunk = writeQueue
-						writeQueue = ''
-						if (chunk) {
+						const parts = writeParts
+						writeParts = []
+						writeLen = 0
+						if (parts.length > 0) {
 							try {
-								term.write(chunk)
+								const chunk = parts.length === 1 ? parts[0] : parts.join('')
+								for (let i = 0; i < chunk.length; i += WRITE_SLICE) {
+									term.write(chunk.slice(i, i + WRITE_SLICE))
+								}
 							} catch {
 								/* noop */
 							}
@@ -729,9 +753,11 @@ export default function TerminalView({
 				// Prompt-anchored completion: a toast fires only when background
 				// output is followed by a fresh prompt (see onPtyPrompt below).
 				// BELs and bursty-but-unfinished output just arm the tracker.
+				// Regex test avoids copying the chunk (data.trim() duped it).
 				const r = completionRef.current.data(
 					true,
-					data.trim().length > 0,
+					// eslint-disable-next-line no-control-regex
+					/[^\s\x1b]/.test(data),
 					Date.now(),
 				)
 				if (r.shouldToast) {

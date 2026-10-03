@@ -59,6 +59,10 @@ export function sniffCwd(
 	data: string,
 	onChange?: (tabId: string, cwd: string) => void,
 ): string {
+	// Fast path: bulk output (cat/build logs) never contains ESC ].
+	// Skip pending bookkeeping + regex work entirely in that case.
+	const hasPending = pending.has(tabId)
+	if (!hasPending && !data.includes('\x1b]')) return data
 	const combined = (pending.get(tabId) ?? '') + data
 	const cut = incompleteTailStart(combined)
 	if (cut >= 0) pending.set(tabId, combined.slice(cut))
@@ -75,6 +79,9 @@ function sniffComplete(
 	data: string,
 	onChange?: (tabId: string, cwd: string) => void,
 ): string {
+	// Fast path (belt & braces — sniffCwd already checked): no OSC
+	// introducer means no cwd and nothing to strip.
+	if (!data.includes('\x1b]')) return data
 	let cwd: string | null = null
 	let at = -1
 	const patterns: Array<[RegExp, (raw: string) => string]> = [

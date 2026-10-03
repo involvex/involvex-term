@@ -1,4 +1,5 @@
 import {
+	memo,
 	useEffect,
 	useLayoutEffect,
 	useRef,
@@ -99,7 +100,7 @@ function FooterMenu({
 	)
 }
 
-export function GitWidget({
+export const GitWidget = memo(function GitWidget({
 	status,
 	onRefreshed,
 	onToast,
@@ -114,6 +115,11 @@ export function GitWidget({
 	const [branches, setBranches] = useState<BranchList | null>(null)
 	const [loading, setLoading] = useState(false)
 	const [view, setView] = useState<'main' | 'branches'>('main')
+	/** Cwd of the in-flight details fetch (dedupes menu re-opens). */
+	const detailsInFlight = useRef<string | null>(null)
+	/** Last completed details fetch per cwd — re-opens within TTL reuse it. */
+	const detailsFetchedAt = useRef(new Map<string, number>())
+	const DETAILS_TTL_MS = 10_000
 
 	if (!status || !status.repoRoot) {
 		return (
@@ -146,6 +152,26 @@ export function GitWidget({
 		setView('main')
 		setBranches(null)
 		setOpen(true)
+		// Lazy details: footer hot path carries base status only (no stash /
+		// ahead-behind spawns). Enrich on open; the footer button updates
+		// when the result lands via onRefreshed.
+		const api = termApi()
+		const cwd = status.cwd
+		if (!api || !cwd || detailsInFlight.current === cwd) return
+		const last = detailsFetchedAt.current.get(cwd) ?? 0
+		if (Date.now() - last < DETAILS_TTL_MS) return
+		detailsInFlight.current = cwd
+		void api
+			.gitGetDetails(cwd)
+			.then(next => {
+				if (detailsInFlight.current !== cwd) return
+				detailsInFlight.current = null
+				detailsFetchedAt.current.set(cwd, Date.now())
+				onRefreshed?.(next)
+			})
+			.catch(() => {
+				if (detailsInFlight.current === cwd) detailsInFlight.current = null
+			})
 	}
 
 	const loadBranches = async () => {
@@ -348,9 +374,9 @@ export function GitWidget({
 			)}
 		</>
 	)
-}
+})
 
-export function OpencodeWidget({
+export const OpencodeWidget = memo(function OpencodeWidget({
 	status,
 	cwd,
 	agentLabel = 'OC',
@@ -370,6 +396,11 @@ export function OpencodeWidget({
 	const btnRef = useRef<HTMLButtonElement>(null)
 	const [open, setOpen] = useState(false)
 	const [anchor, setAnchor] = useState<DOMRect | null>(null)
+	/** Full-depth status for the open picker (footer poll carries 10). */
+	const [fullStatus, setFullStatus] = useState<OpencodeStatus | null>(null)
+	const [fullLoading, setFullLoading] = useState(false)
+	/** Cwd key of the in-flight full fetch (dedupes re-opens). */
+	const fullFetchKey = useRef<string | null>(null)
 
 	if (sessionProvider !== 'opencode') {
 		return (
@@ -406,7 +437,10 @@ export function OpencodeWidget({
 		)
 	}
 
-	const sessions = status.sessions ?? []
+	const sessions = fullStatus?.sessions ?? status.sessions ?? []
+	/** Footer count is capped at the poll depth: mark it as a lower bound. */
+	const shownCount = fullStatus?.sessions.length ?? status.sessionCount
+	const countCapped = fullStatus ? fullStatus.truncated : status.truncated
 	const cwdN = (cwd || '').replace(/[/\\]+$/, '').toLowerCase()
 	const matches = (s: OpencodeSession) => {
 		if (!cwdN || !s.directory) return false
@@ -414,11 +448,42 @@ export function OpencodeWidget({
 		return d === cwdN || cwdN.startsWith(d + '\\') || cwdN.startsWith(d + '/')
 	}
 
+	const closePicker = () => {
+		setOpen(false)
+		setFullStatus(null)
+		setFullLoading(false)
+	}
+
 	const openPicker = () => {
 		const r = btnRef.current?.getBoundingClientRect()
 		if (!r) return
 		setAnchor(r)
 		setOpen(true)
+		// Lazy depth: the footer poll carries 10; fetch the full 30 only
+		// when the picker opens and the poll list hit its cap. Widget-local
+		// state keeps the poll loop untouched.
+		if (!status.truncated) {
+			setFullStatus(null)
+			return
+		}
+		const api = termApi()
+		const key = cwd ?? ''
+		if (!api || fullFetchKey.current === key) return
+		fullFetchKey.current = key
+		setFullLoading(true)
+		void api
+			.opencodeStatus(cwd, 30)
+			.then(s => {
+				if (fullFetchKey.current !== key) return
+				fullFetchKey.current = null
+				setFullLoading(false)
+				setFullStatus(s)
+			})
+			.catch(() => {
+				if (fullFetchKey.current !== key) return
+				fullFetchKey.current = null
+				setFullLoading(false)
+			})
 	}
 
 	const label = status.latest ? shortOcTitle(status.latest.title) : 'no session'
@@ -434,15 +499,19 @@ export function OpencodeWidget({
 						? [
 								'Click to pick a session',
 								`latest: ${status.latest.title}`,
-								`${status.sessionCount} session(s)`,
+								`${shownCount}${countCapped ? '+' : ''} session(s)`,
 							].join('\n')
 						: `Click to start or pick a ${agentName} session`
 				}
 				onClick={openPicker}
 			>
 				<span className="footer-oc-label">{agentLabel}</span>
-				{status.sessionCount > 1 && (
-					<span className="footer-dim"> {status.sessionCount}</span>
+				{shownCount > 1 && (
+					<span className="footer-dim">
+						{' '}
+						{shownCount}
+						{countCapped ? '+' : ''}
+					</span>
 				)}
 				<span className="footer-oc-title"> · {label}</span>
 				{status.projectMatch && <span className="footer-oc-dot"> ●</span>}
@@ -450,7 +519,7 @@ export function OpencodeWidget({
 			{open && anchor && (
 				<FooterMenu
 					anchor={anchor}
-					onClose={() => setOpen(false)}
+					onClose={closePicker}
 					wide
 				>
 					<button
@@ -459,7 +528,7 @@ export function OpencodeWidget({
 						role="menuitem"
 						onClick={() => {
 							onNew?.()
-							setOpen(false)
+							closePicker()
 						}}
 					>
 						New session
@@ -470,7 +539,7 @@ export function OpencodeWidget({
 						role="menuitem"
 						onClick={() => {
 							onContinue?.()
-							setOpen(false)
+							closePicker()
 						}}
 					>
 						Continue last
@@ -496,7 +565,7 @@ export function OpencodeWidget({
 											.join('\n')}
 										onClick={() => {
 											onContinue?.(s.id)
-											setOpen(false)
+											closePicker()
 										}}
 									>
 										<span className="footer-menu-session-title">
@@ -513,16 +582,17 @@ export function OpencodeWidget({
 							})}
 						</>
 					)}
-					{sessions.length === 0 && (
+					{fullLoading && <div className="footer-menu-meta">Loading more…</div>}
+					{sessions.length === 0 && !fullLoading && (
 						<div className="footer-menu-meta">No recent sessions</div>
 					)}
 				</FooterMenu>
 			)}
 		</>
 	)
-}
+})
 
-export function SysWidget({
+export const SysWidget = memo(function SysWidget({
 	stats,
 	settings,
 }: {
@@ -547,7 +617,7 @@ export function SysWidget({
 			)}
 		</span>
 	)
-}
+})
 
 function footerOrder(settings: AppSettings): string[] {
 	const order = settings.footer.modulesOrder?.length
@@ -613,7 +683,7 @@ function StatusBarEditItem({
 	)
 }
 
-export default function StatusBar({
+export default memo(function StatusBar({
 	git,
 	sys,
 	opencode,
@@ -800,4 +870,4 @@ export default function StatusBar({
 			)}
 		</footer>
 	)
-}
+})

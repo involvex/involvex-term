@@ -30,7 +30,16 @@ function findRepoRoot(start: string): string | null {
 	return null
 }
 
-export async function getGitStatus(cwd: string): Promise<GitStatus> {
+export interface GitStatusOptions {
+	/** When true, also fetch stash count + ahead/behind (2 extra spawns). */
+	details?: boolean
+}
+
+export async function getGitStatus(
+	cwd: string,
+	opts?: GitStatusOptions,
+): Promise<GitStatus> {
+	const wantDetails = opts?.details === true
 	const empty: GitStatus = {
 		cwd,
 		repoRoot: null,
@@ -59,29 +68,39 @@ export async function getGitStatus(cwd: string): Promise<GitStatus> {
 	if (!root) return {...empty, cwd: dir}
 
 	const cached = cache.get(root)
-	if (cached && Date.now() - cached.at < STATUS_TTL_MS)
+	// Details callers bypass the fast-path cache: it holds no stash /
+	// ahead-behind, and returning it would silently drop them (this is
+	// what getGitDetails relies on after its priming getGitStatus call).
+	if (cached && !wantDetails && Date.now() - cached.at < STATUS_TTL_MS)
 		return {...cached.status, cwd: dir}
 
 	try {
 		const git = simpleGit(root)
-		const [status, branch, stash] = await Promise.all([
-			git.status(),
-			git.revparse(['--abbrev-ref', 'HEAD']).catch(() => ''),
-			git.stashList().catch(() => ({all: [] as unknown[]})),
-		])
+		// Fast path: a single `git status` spawn. Branch comes from
+		// status.current — the old extra `revparse` spawn was redundant.
+		// Stash + ahead/behind cost 2 more spawns; fetch them only when
+		// the caller explicitly asked (footer menu open).
+		const status = await git.status()
 		let ahead = 0
 		let behind = 0
-		try {
-			const rev = await git
-				.raw(['rev-list', '--left-right', '--count', '@{upstream}...HEAD'])
-				.catch(() => '')
-			const m = rev.trim().split(/\s+/).map(Number)
-			if (m.length === 2 && m.every(n => Number.isFinite(n))) {
-				behind = m[0] ?? 0
-				ahead = m[1] ?? 0
+		let stashCount = 0
+		if (wantDetails) {
+			const [stash, rev] = await Promise.all([
+				git.stashList().catch(() => ({all: [] as unknown[]})),
+				git
+					.raw(['rev-list', '--left-right', '--count', '@{upstream}...HEAD'])
+					.catch(() => ''),
+			])
+			stashCount = (stash?.all?.length ?? 0) as number
+			try {
+				const m = rev.trim().split(/\s+/).map(Number)
+				if (m.length === 2 && m.every(n => Number.isFinite(n))) {
+					behind = m[0] ?? 0
+					ahead = m[1] ?? 0
+				}
+			} catch {
+				/* no upstream */
 			}
-		} catch {
-			/* no upstream */
 		}
 
 		const staged = status.staged.length
@@ -91,22 +110,36 @@ export async function getGitStatus(cwd: string): Promise<GitStatus> {
 		const result: GitStatus = {
 			cwd: dir,
 			repoRoot: root,
-			branch:
-				(typeof branch === 'string' ? branch : '').trim() ||
-				status.current ||
-				'',
+			branch: status.current || '',
 			isDirty: staged + unstaged + untracked > 0,
 			staged,
 			unstaged,
 			untracked,
 			ahead,
 			behind,
-			stashCount: (stash?.all?.length ?? 0) as number,
+			stashCount,
 		}
-		cache.set(root, {at: Date.now(), status: result})
+		// Cache both fast and detailed results (TTL is 1.5s; ahead/behind
+		// staleness is bounded by it either way).
+		cache.set(root, {at: Date.now(), status: {...result}})
 		return result
 	} catch {
 		return {...empty, cwd: dir, repoRoot: root}
+	}
+}
+
+/**
+ * Enrich a fast-path status with stash + ahead/behind for the footer menu.
+ * Single choke point so the per-prompt hot path never pays for these.
+ */
+export async function getGitDetails(cwd: string): Promise<GitStatus> {
+	const base = await getGitStatus(cwd)
+	if (!base.repoRoot) return base
+	try {
+		const detailed = await getGitStatus(cwd, {details: true})
+		return {...detailed, cwd: base.cwd}
+	} catch {
+		return base
 	}
 }
 
