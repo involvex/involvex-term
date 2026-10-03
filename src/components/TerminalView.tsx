@@ -40,6 +40,17 @@ import TermContextMenu, {
 	type TermContextMenuState,
 } from './TermContextMenu'
 
+/**
+ * Selection highlight inside the xterm canvas.
+ *
+ * Deliberately not a design token: xterm paints this itself and needs a
+ * resolved colour, so it cannot read a `color-mix()` derived `--selection`.
+ * Documented in index.css as theme-blind rather than duplicated inline at each
+ * of the two places that set it (the constructor and the live-update effect
+ * used to carry their own copy, which is how they drifted).
+ */
+const SELECTION_BACKGROUND = '#264f78'
+
 export interface TerminalPaneMenu {
 	paneCount: number
 	onFind: () => void
@@ -180,7 +191,7 @@ export default function TerminalView({
 				background: bg,
 				foreground: fg,
 				cursor: fg,
-				selectionBackground: '#264f78',
+				selectionBackground: SELECTION_BACKGROUND,
 			},
 			fontFamily,
 			fontSize,
@@ -909,7 +920,7 @@ export default function TerminalView({
 				background: bg,
 				foreground: fg,
 				cursor: fg,
-				selectionBackground: '#264f78',
+				selectionBackground: SELECTION_BACKGROUND,
 			}
 			t.options.fontFamily = fontFamily
 			t.options.fontSize = fontSize

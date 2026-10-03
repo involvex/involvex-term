@@ -16,13 +16,28 @@
  * purpose: they carry meaning (dirty/clean/error) that must not drift with a
  * palette preset, and the accent is a brand constant rather than a theme input.
  *
- * Still theme-blind, tracked as follow-ups: the xterm selection colour
- * (TerminalView.tsx) and the chrome font-family (App.css `body`).
+ * The one non-colour input is --font-ui, written from theme.fontFamily +
+ * theme.fontFallback so a preset's typeface moves the chrome too. Its fallback
+ * below is deliberately not the terminal's default stack: it is the literal
+ * App.css carried before this token existed, so the pre-hydration paint is
+ * unchanged.
+ *
+ * Still theme-blind, tracked as a follow-up: the xterm selection colour
+ * (SELECTION_BACKGROUND in TerminalView.tsx). xterm paints that itself and
+ * needs a resolved colour, so it cannot consume a `color-mix()` like the rest.
  *
  * Add new colours here rather than inlining literals in App.css.
  */
 :root {
 	color-scheme: dark;
+
+	/*
+	 * Chrome font stack, written at runtime from settings.theme by
+	 * lib/themeTokens.ts. Consumed by `body` in App.css and inherited from
+	 * there. The value below is the literal App.css used to carry inline, so
+	 * the paint before the theme effect runs is unchanged.
+	 */
+	--font-ui: 'Cascadia Code', Consolas, monospace;
 
 	/* Runtime-injected theme inputs. */
 	--theme-bg: #1e1e1e;

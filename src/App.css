@@ -18,7 +18,29 @@ body,
 }
 
 body {
-	font-family: 'Cascadia Code', Consolas, monospace;
+	/* Theme-driven (--font-ui, written from settings.theme by lib/themeTokens.ts).
+	   Mono because this is a terminal: proportional digits and ambiguous
+	   punctuation (`1l` vs `Il`, `O` vs `0`) in status counters are a real cost. */
+	font-family: var(--font-ui);
+}
+
+/*
+ * Form controls do not inherit `font-family` from `body`: Chromium's UA
+ * stylesheet sets a short `font` shorthand on button/input/select/textarea, and
+ * that beats inheritance. Without this every native control in the chrome
+ * silently renders in the UA default (Arial on Windows) instead of the theme
+ * font — verified, and true of the pre-token literal too, so this is not a
+ * regression from --font-ui.
+ *
+ * `font: inherit` rather than `font-family: inherit` so the UA font-size on
+ * controls goes too and control text matches the text around it. One rule for
+ * the whole set, which replaced seven scattered `font: inherit` declarations.
+ */
+button,
+input,
+select,
+textarea {
+	font: inherit;
 }
 
 /*
@@ -274,7 +296,6 @@ select,
 	background: var(--surface-app);
 	border: 1px solid var(--accent);
 	color: var(--text-default);
-	font: inherit;
 	padding: 2px 4px;
 	border-radius: 3px;
 }
@@ -352,9 +373,9 @@ select,
 	background: var(--surface-strip);
 	color: var(--text-default);
 	border: 1px solid var(--border-default);
+	border-radius: 4px;
 	padding: 4px 10px;
 	cursor: pointer;
-	font: inherit;
 	font-size: 12px;
 }
 
@@ -390,7 +411,6 @@ select,
 	background: transparent;
 	border: none;
 	color: inherit;
-	font: inherit;
 	text-align: left;
 	cursor: pointer;
 }
@@ -543,7 +563,6 @@ select,
 	background: var(--surface-strip);
 	border: 1px solid var(--accent);
 	color: var(--accent);
-	font: inherit;
 	font-size: 11px;
 	padding: 2px 8px;
 	border-radius: 3px;
@@ -591,7 +610,6 @@ select,
 	background: transparent;
 	border: none;
 	color: inherit;
-	font: inherit;
 	cursor: pointer;
 	padding: 0;
 	text-align: left;
@@ -600,7 +618,6 @@ select,
 	background: transparent;
 	border: none;
 	color: inherit;
-	font: inherit;
 	cursor: pointer;
 	padding: 0;
 	text-align: left;
@@ -661,7 +678,6 @@ select,
 	background: transparent;
 	border: none;
 	color: inherit;
-	font: inherit;
 	text-align: left;
 	cursor: pointer;
 }
@@ -1078,7 +1094,6 @@ select,
 	border: none;
 	color: inherit;
 	cursor: pointer;
-	font: inherit;
 	font-size: 14px;
 	line-height: 1;
 	padding: 0 4px;
@@ -1115,7 +1130,6 @@ select,
 	background: transparent;
 	border: none;
 	color: var(--text-default);
-	font: inherit;
 	font-size: 12px;
 	padding: 7px 10px;
 	border-radius: 4px;
@@ -1316,7 +1330,6 @@ select,
 	background: transparent;
 	border: none;
 	color: var(--text-default);
-	font: inherit;
 	font-size: 11px;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;

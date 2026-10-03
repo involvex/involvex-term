@@ -47,7 +47,7 @@ import {
 } from './lib/panes'
 import {TAB_PANEL_ID, tabDomId} from './lib/tabNav'
 import {getTermActions} from './lib/termActions'
-import {applyThemeTokens} from './lib/themeTokens'
+import {applyThemeTokens, resolveFontStack} from './lib/themeTokens'
 import {
 	isElectron,
 	termApi,
@@ -173,14 +173,6 @@ const DEFAULT_SETTINGS: AppSettings = {
 		heightPercent: 50,
 		hideOnFocusLoss: true,
 	},
-}
-
-function effectiveFontFamily(theme: AppSettings['theme']): string {
-	const primary = theme.fontFamily?.trim() || ''
-	const fallback = theme.fontFallback?.trim() || ''
-	if (!fallback) return primary
-	if (!primary) return fallback
-	return `${primary}, ${fallback}`
 }
 
 let tabSeq = 0
@@ -1565,7 +1557,7 @@ export default function App() {
 	}, [])
 	const emptyAgents = showPaneLabels ? paneAgents : EMPTY_PANE_AGENTS
 	const fontFamily = useMemo(
-		() => effectiveFontFamily(settings.theme),
+		() => resolveFontStack(settings.theme),
 		[settings.theme],
 	)
 	// Stable TabBar callbacks (inline arrows would defeat memo()).
