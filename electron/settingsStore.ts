@@ -248,6 +248,102 @@ function deepMergeDefaults(
 	return out
 }
 
+/** Zod issue path, truncated so we never try to splice inside an array. */
+type SettingPath = (string | number)[]
+
+/**
+ * Cut a path at the first array index.
+ *
+ * Deleting `profiles[2].shell` would splice the array and renumber every later
+ * profile, invalidating `terminal.defaultProfileId` along with it. A bad entry
+ * inside an array therefore drops the whole array, which is still far better
+ * than the all-or-nothing reset this replaced.
+ *
+ * Zod types `issue.path` as `PropertyKey[]`; symbol segments cannot be used as
+ * object keys or stringified, so they are dropped.
+ */
+function truncateAtArray(path: readonly PropertyKey[]): SettingPath {
+	const usable = path.filter(
+		(k): k is string | number => typeof k === 'string' || typeof k === 'number',
+	)
+	for (let i = 1; i < usable.length; i++) {
+		if (typeof usable[i] === 'number') return usable.slice(0, i)
+	}
+	return usable
+}
+
+/** Delete the leaf at `path`; false when there was nothing there to delete. */
+function dropLeaf(
+	root: Record<string, unknown>,
+	path: readonly (string | number)[],
+): boolean {
+	let node: unknown = root
+	for (let i = 0; i < path.length - 1; i++) {
+		if (node === null || typeof node !== 'object') return false
+		node = (node as Record<string, unknown>)[path[i] as string]
+	}
+	if (node === null || typeof node !== 'object') return false
+	const key = path[path.length - 1] as string
+	if (!(key in (node as object))) return false
+	delete (node as Record<string, unknown>)[key]
+	return true
+}
+
+/**
+ * Validate `raw` against the schema, falling back **per field** rather than
+ * all at once.
+ *
+ * `SettingsSchema.parse` used to throw on the first bad value and the caller's
+ * `catch` returned pristine defaults, so one typo — `fontSize: "14"` instead of
+ * `14`, say — silently reset every unrelated preference the user had set. Here
+ * we drop just the leaves zod rejects and re-parse, so the schema's own
+ * `.default()` fills each one back in and everything around it survives.
+ *
+ * Returns the settings plus the dotted paths that were rejected, so callers can
+ * tell the user what was ignored instead of quietly discarding their file.
+ */
+export function parseSettingsLenient(raw: unknown): {
+	settings: AppSettings
+	rejected: string[]
+} {
+	const base = defaultSettings() as unknown as Record<string, unknown>
+	const over =
+		raw && typeof raw === 'object' && !Array.isArray(raw)
+			? (raw as Record<string, unknown>)
+			: {}
+	// deepMergeDefaults shares nested objects with `base`, so clone before the
+	// delete-driven repair below mutates them.
+	const candidate = deepMergeDefaults(
+		structuredClone(base) as Record<string, unknown>,
+		over,
+	)
+	const rejected = new Set<string>()
+	for (;;) {
+		const result = SettingsSchema.safeParse(candidate)
+		if (result.success) return {settings: result.data, rejected: [...rejected]}
+		let dropped = false
+		for (const issue of result.error.issues) {
+			const path = truncateAtArray(issue.path)
+			if (path.length === 0) continue
+			if (dropLeaf(candidate, path)) {
+				rejected.add(path.join('.'))
+				dropped = true
+			}
+		}
+		// Nothing addressable left to drop (e.g. the document is not an object
+		// at all). Bail to defaults rather than spin.
+		if (!dropped) break
+	}
+	return {settings: defaultSettings(), rejected: [...rejected]}
+}
+
+function warnRejected(source: string, rejected: string[]): void {
+	if (!rejected.length) return
+	console.warn(
+		`[settings] ignored ${rejected.length} invalid value(s) in ${source}: ${rejected.join(', ')}`,
+	)
+}
+
 export function loadSettings(): AppSettings {
 	try {
 		if (!fs.existsSync(SETTINGS_DIR))
@@ -258,14 +354,19 @@ export function loadSettings(): AppSettings {
 			return d
 		}
 		const raw = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'))
-		return SettingsSchema.parse(deepMergeDefaults(defaultSettings(), raw))
-	} catch {
+		const {settings: parsed, rejected} = parseSettingsLenient(raw)
+		warnRejected('settings.json', rejected)
+		return parsed
+	} catch (err) {
+		// Unreadable file or malformed JSON — nothing to salvage field by field.
+		console.warn('[settings] could not read settings.json; using defaults', err)
 		return defaultSettings()
 	}
 }
 
 export function saveSettings(next: AppSettings): AppSettings {
-	const parsed = SettingsSchema.parse(next)
+	const {settings: parsed, rejected} = parseSettingsLenient(next)
+	warnRejected('save', rejected)
 	if (!fs.existsSync(SETTINGS_DIR))
 		fs.mkdirSync(SETTINGS_DIR, {recursive: true})
 	fs.writeFileSync(SETTINGS_FILE, JSON.stringify(parsed, null, 2))
@@ -274,10 +375,9 @@ export function saveSettings(next: AppSettings): AppSettings {
 
 /** Merge unknown JSON onto defaults and validate (for import). */
 export function parseImportedSettings(raw: unknown): AppSettings {
-	const base = defaultSettings() as unknown as Record<string, unknown>
-	const over =
-		raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
-	return SettingsSchema.parse(deepMergeDefaults(base, over))
+	const {settings, rejected} = parseSettingsLenient(raw)
+	warnRejected('import', rejected)
+	return settings
 }
 
 function isValidSessionTab(t: unknown): t is {title: unknown; root: unknown} {
