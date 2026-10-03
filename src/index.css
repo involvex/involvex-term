@@ -1,6 +1,55 @@
+/*
+ * Design tokens — the single source of truth for app chrome colour.
+ *
+ * Every value below is exactly the literal it replaces, so this is a pure
+ * refactor: rendering is unchanged. B2 makes these derive from
+ * settings.theme at runtime so theme presets stop repainting only the xterm
+ * canvas. Add new colours here rather than inlining literals in App.css.
+ */
 :root {
 	color-scheme: dark;
+
+	/* Surfaces */
+	--surface-app: #1e1e1e;
+	--surface-panel: #252526;
+	--surface-strip: #2d2d2d;
+	--surface-tabbar: #181818;
+	--surface-statusbar: #0e0e0e;
+	--surface-sunken: #161616;
+	--surface-hover: #3c3c3c;
+	--surface-hover-strong: #333333;
+	--surface-row-hover: #2a2d2e;
+	--surface-chip: rgba(30, 30, 30, 0.88);
+	--surface-accent-hover: #1a3a34;
+	--surface-selected: #094771;
+	--surface-selected-soft: rgba(9, 71, 113, 0.2);
+	--surface-warn: #3a2b00;
+
+	/* Text */
+	--text-default: #cccccc;
+	--text-dim: #888888;
+	--text-muted: #858585;
+	--text-inverse: #ffffff;
+	--text-warn: #ffd479;
+
+	/* Lines */
+	--border-default: #3c3c3c;
+	--border-accent-soft: #3c5c54;
+
+	/* Accent + status */
+	--accent: #4ec9b0;
+	--accent-translucent: rgba(78, 201, 176, 0.45);
+	--status-warn: #e5c07b;
+	--status-error: #f48771;
+	--status-ok: #98c379;
+
+	/* Elevation — colour only; blur/offset stay inline since they vary per surface */
+	--shadow-color-menu: rgba(0, 0, 0, 0.45);
+	--shadow-color-raised: rgba(0, 0, 0, 0.5);
+	--shadow-color-toast: rgba(0, 0, 0, 0.4);
+	--scrim: rgba(0, 0, 0, 0.6);
 }
+
 html,
 body,
 #root {
@@ -9,6 +58,6 @@ body,
 	height: 100%;
 	width: 100%;
 	overflow: hidden;
-	background: #1e1e1e;
-	color: #cccccc;
+	background: var(--surface-app);
+	color: var(--text-default);
 }
