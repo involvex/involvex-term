@@ -45,6 +45,7 @@ import {
 	type PaneNode,
 	type SplitDir,
 } from './lib/panes'
+import {TAB_PANEL_ID, tabDomId} from './lib/tabNav'
 import {getTermActions} from './lib/termActions'
 import {applyThemeTokens} from './lib/themeTokens'
 import {
@@ -1664,7 +1665,14 @@ export default function App() {
 						onOpenProcesses={handleOpenProcesses}
 						onOpenSettings={handleOpenSettings}
 					/>
-					<div className="terminals">
+					<div
+						className="terminals"
+						// Completes the tabs pattern: every role="tab" points here via
+						// aria-controls, and this names the selected tab back.
+						role="tabpanel"
+						id={TAB_PANEL_ID}
+						aria-labelledby={activeTab ? tabDomId(activeTab.id) : undefined}
+					>
 						{searchOpen && activeTab && (
 							<Suspense fallback={null}>
 								<SearchBar

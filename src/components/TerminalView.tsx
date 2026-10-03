@@ -941,6 +941,21 @@ export default function TerminalView({
 					if (t && isSpawnableGeometry(t.cols, t.rows))
 						termApi()?.ptyResize(paneId, t.cols, t.rows)
 				}
+				// Skip the focus grab while the tab bar holds *keyboard* focus. The
+				// tab bar moves focus with the arrow keys, and yanking it back
+				// here made every arrow press work exactly once.
+				//
+				// :focus-visible is what separates the two cases: clicking a tab
+				// focuses it too (it has tabIndex now), but Chromium does not
+				// mark a pointer click focus-visible, whereas arrow navigation
+				// does. So a mouse user still gets the caret in the terminal.
+				const ae = document.activeElement
+				if (
+					ae instanceof HTMLElement &&
+					ae.matches(':focus-visible') &&
+					ae.closest('[role="tablist"]')
+				)
+					return
 				termRef.current?.focus()
 			} catch {
 				/* noop */

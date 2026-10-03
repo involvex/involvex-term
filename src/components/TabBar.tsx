@@ -18,6 +18,7 @@ import {
 	type PaneInsertPosition,
 	type PaneNode,
 } from '../lib/panes'
+import {isTabNavKey, resolveTabNav, TAB_PANEL_ID, tabDomId} from '../lib/tabNav'
 import type {QuickCommand, ShellProfile} from '../types'
 import TermContextMenu, {
 	type ContextMenuItem,
@@ -124,6 +125,38 @@ export default memo(function TabBar({
 	const dragFrom = useRef<number | null>(null)
 	const menuBtnRef = useRef<HTMLButtonElement>(null)
 	const profileMenuRef = useRef<HTMLDivElement>(null)
+	/** Tab elements by id, so arrow navigation can move real DOM focus. */
+	const tabRefs = useRef(new Map<string, HTMLDivElement>())
+
+	const focusTab = (id: string) => {
+		tabRefs.current.get(id)?.focus()
+	}
+
+	/**
+	 * Roving-tabindex arrow navigation with automatic activation.
+	 *
+	 * Handled on the tablist rather than per tab so it works no matter which tab
+	 * holds focus, and so a single listener covers tabs added later. Focus has to
+	 * move explicitly because only the active tab carries `tabIndex={0}`; without
+	 * it the browser would jump to the tab strip's other stop instead.
+	 */
+	const onTabListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+		// The rename field lives inside a tab and handles its own keys.
+		if ((e.target as HTMLElement).closest('.tab-rename')) return
+		if (e.altKey || e.ctrlKey || e.metaKey) return
+		if (!isTabNavKey(e.key)) return
+		const from = tabs.findIndex(t => t.id === e.currentTarget.dataset.active)
+		const next = resolveTabNav(e.key, from, tabs.length)
+		if (next === null) return
+		// Only consume the key when there is somewhere to go, so a lone tab does
+		// not swallow arrow keys the terminal might want.
+		if (tabs.length < 2 && e.key !== 'Home' && e.key !== 'End') return
+		e.preventDefault()
+		const target = tabs[next]
+		if (!target) return
+		onSelect(target.id)
+		focusTab(target.id)
+	}
 
 	/**
 	 * The tab bar is a scroll container (`overflow-x: auto` coerces overflow-y to
@@ -328,6 +361,8 @@ export default memo(function TabBar({
 		<div
 			className="tabbar"
 			role="tablist"
+			data-active={activeId}
+			onKeyDown={onTabListKeyDown}
 		>
 			{tabs.map((t, i) => {
 				const agent = tabAgentLabel(t, paneAgents)
@@ -344,7 +379,17 @@ export default memo(function TabBar({
 					<div
 						key={t.id}
 						role="tab"
+						id={tabDomId(t.id)}
 						aria-selected={t.id === activeId}
+						aria-controls={TAB_PANEL_ID}
+						// Roving tabindex: the whole strip is one Tab stop, and the
+						// arrows move within it. Without this the tab bar is
+						// keyboard-unreachable entirely (a div is not focusable).
+						tabIndex={t.id === activeId ? 0 : -1}
+						ref={el => {
+							if (el) tabRefs.current.set(t.id, el)
+							else tabRefs.current.delete(t.id)
+						}}
 						className={[
 							'tab',
 							t.id === activeId ? 'tab-active' : '',
@@ -393,6 +438,11 @@ export default memo(function TabBar({
 						}}
 						onClick={() => {
 							if (editingId !== t.id) onSelect(t.id)
+							// Deliberately no focusTab() here: clicking a tab should put the
+							// caret in that tab's terminal (TerminalView does it), not
+							// park focus on the tab strip. Keyboard users reach the strip
+							// with Tab, and a mouse user who then wants arrows presses Tab
+							// too — so nothing is stranded.
 						}}
 						onDoubleClick={e => {
 							e.stopPropagation()
