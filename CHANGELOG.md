@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.5] - 2026-10-03
+
+### Added
+
+- process manager with per-process CPU, memory, and disk I/O
+
+### Changed
+
+- perf: lazy footer data depth, PTY batching, and render/bundle cuts
+
 ## [0.8.4] - 2026-10-03
 
 ### Added
