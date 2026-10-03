@@ -2,6 +2,7 @@ dist
 dist-electron
 release
 build
+coverage
 node_modules
 bun.lock
 *.ico

@@ -12,6 +12,7 @@ export default tseslint.config(
 			'dist-electron/**',
 			'release/**',
 			'build/**',
+			'coverage/**',
 			'packages/*/dist/**',
 		],
 	},

@@ -13,6 +13,8 @@ dist-electron
 dist-ssr
 release
 build
+coverage
+*.tsbuildinfo
 *.local
 
 # Machine-specific npm config (PYTHON path for node-gyp), see README
