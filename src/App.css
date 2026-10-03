@@ -50,6 +50,46 @@ body {
 	outline: none;
 }
 
+/*
+ * Motion
+ *
+ * The chrome had no transitions at all, so every hover and state change
+ * snapped. Durations come from tokens, so `prefers-reduced-motion` collapses
+ * them all to 0ms in one place (index.css) instead of every rule carrying its
+ * own guard.
+ *
+ * Deliberately limited to colour, opacity and box-shadow. Not `all`: that would
+ * animate properties nobody asked for and costs a repaint per element. Not the
+ * terminal either — animating anything behind live text reads as lag.
+ */
+button,
+input,
+select,
+.tab,
+.settings-nav button,
+.footer-menu-item,
+.tab-profile-item,
+.term-context-item,
+.about-row a,
+.proc-sort,
+.proc-table tbody tr,
+.statusbar-done,
+.pane-divider,
+.pane-drag-handle,
+.split-leaf,
+.statusbar-editing,
+.searchbar button,
+.footer-git-btn,
+.footer-oc-btn {
+	transition:
+		background-color var(--motion-fast) var(--motion-ease),
+		border-color var(--motion-fast) var(--motion-ease),
+		color var(--motion-fast) var(--motion-ease),
+		opacity var(--motion-fast) var(--motion-ease),
+		outline-color var(--motion-fast) var(--motion-ease),
+		box-shadow var(--motion-base) var(--motion-ease);
+}
+
 .app {
 	display: flex;
 	flex-direction: column;

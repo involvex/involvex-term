@@ -80,6 +80,28 @@
 	/* Negative in App.css: the chrome is full of overflow:auto strips that clip
 	   an outward ring, .tabbar most of all. */
 	--focus-ring-inset: 1px;
+
+	/*
+	 * Motion. Durations are tokens so prefers-reduced-motion can zero them in
+	 * one place below, rather than every transition needing its own guard.
+	 * Hover feedback is the common case, so it gets the short one.
+	 */
+	--motion-fast: 110ms;
+	--motion-base: 180ms;
+	--motion-ease: cubic-bezier(0.2, 0, 0.15, 1);
+}
+
+/*
+ * Honour the OS "reduce motion" setting by collapsing durations to zero rather
+ * than removing transitions: hover and focus states still change, they just
+ * change instantly instead of animating. Zeroing the tokens covers every
+ * transition in the app, including ones added later.
+ */
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--motion-fast: 0ms;
+		--motion-base: 0ms;
+	}
 }
 
 html,
