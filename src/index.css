@@ -1,44 +1,67 @@
 /*
  * Design tokens — the single source of truth for app chrome colour.
  *
- * Every value below is exactly the literal it replaces, so this is a pure
- * refactor: rendering is unchanged. B2 makes these derive from
- * settings.theme at runtime so theme presets stop repainting only the xterm
- * canvas. Add new colours here rather than inlining literals in App.css.
+ * --theme-bg / --theme-fg are the only two values written at runtime, from
+ * settings.theme (see lib/themeTokens.ts). Everything else is derived from
+ * them, so a preset repaints the whole app instead of just the xterm canvas.
+ *
+ * --theme-bg / --theme-fg fall back to the involvex-dark defaults, so the app
+ * still renders correctly before the effect runs (or with no JS at all). The
+ * mix percentages below are calibrated so that the default theme resolves to
+ * the values that were hardcoded before this split, to within 3/255 on every
+ * channel — imperceptible. Changing preset theme.bg/theme.fg is what moves the
+ * chrome.
+ *
+ * The brand accent and the git/semantic status colours stay literal on
+ * purpose: they carry meaning (dirty/clean/error) that must not drift with a
+ * palette preset, and the accent is a brand constant rather than a theme input.
+ *
+ * Still theme-blind, tracked as follow-ups: the xterm selection colour
+ * (TerminalView.tsx) and the chrome font-family (App.css `body`).
+ *
+ * Add new colours here rather than inlining literals in App.css.
  */
 :root {
 	color-scheme: dark;
 
-	/* Surfaces */
-	--surface-app: #1e1e1e;
-	--surface-panel: #252526;
-	--surface-strip: #2d2d2d;
-	--surface-tabbar: #181818;
-	--surface-statusbar: #0e0e0e;
-	--surface-sunken: #161616;
-	--surface-hover: #3c3c3c;
-	--surface-hover-strong: #333333;
-	--surface-row-hover: #2a2d2e;
-	--surface-chip: rgba(30, 30, 30, 0.88);
+	/* Runtime-injected theme inputs. */
+	--theme-bg: #1e1e1e;
+	--theme-fg: #cccccc;
+
+	/* Surfaces — a ramp up from the theme background */
+	--surface-app: var(--theme-bg);
+	--surface-panel: color-mix(in srgb, var(--theme-bg), var(--theme-fg) 4%);
+	--surface-strip: color-mix(in srgb, var(--theme-bg), var(--theme-fg) 9%);
+	--surface-tabbar: color-mix(in srgb, var(--theme-bg), #000 18%);
+	--surface-statusbar: color-mix(in srgb, var(--theme-bg), #000 45%);
+	--surface-sunken: color-mix(in srgb, var(--theme-bg), #000 25%);
+	--surface-hover: color-mix(in srgb, var(--theme-bg), var(--theme-fg) 17%);
+	--surface-hover-strong: color-mix(
+		in srgb,
+		var(--theme-bg),
+		var(--theme-fg) 13%
+	);
+	--surface-row-hover: color-mix(in srgb, var(--theme-bg), var(--theme-fg) 8%);
+	--surface-chip: color-mix(in srgb, var(--theme-bg) 88%, transparent);
 	--surface-accent-hover: #1a3a34;
-	--surface-selected: #094771;
-	--surface-selected-soft: rgba(9, 71, 113, 0.2);
+	--surface-selected: color-mix(in srgb, #094771 98%, var(--theme-bg));
+	--surface-selected-soft: color-mix(in srgb, #094771 20%, transparent);
 	--surface-warn: #3a2b00;
 
-	/* Text */
-	--text-default: #cccccc;
-	--text-dim: #888888;
-	--text-muted: #858585;
+	/* Text — the theme foreground, dimmed toward the background */
+	--text-default: var(--theme-fg);
+	--text-dim: color-mix(in srgb, var(--theme-fg), var(--theme-bg) 39%);
+	--text-muted: color-mix(in srgb, var(--theme-fg), var(--theme-bg) 41%);
 	--text-inverse: #ffffff;
 	--text-warn: #ffd479;
 
 	/* Lines */
-	--border-default: #3c3c3c;
+	--border-default: color-mix(in srgb, var(--theme-bg), var(--theme-fg) 17%);
 	--border-accent-soft: #3c5c54;
 
-	/* Accent + status */
+	/* Accent + status — literal; see the note above */
 	--accent: #4ec9b0;
-	--accent-translucent: rgba(78, 201, 176, 0.45);
+	--accent-translucent: color-mix(in srgb, var(--accent) 45%, transparent);
 	--status-warn: #e5c07b;
 	--status-error: #f48771;
 	--status-ok: #98c379;

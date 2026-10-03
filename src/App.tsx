@@ -46,6 +46,7 @@ import {
 	type SplitDir,
 } from './lib/panes'
 import {getTermActions} from './lib/termActions'
+import {applyThemeTokens} from './lib/themeTokens'
 import {
 	isElectron,
 	termApi,
@@ -248,6 +249,12 @@ export default function App() {
 	useEffect(() => {
 		cwdRef.current = cwd
 	}, [cwd])
+
+	// Publish the theme to CSS; every chrome colour is derived from these two
+	// tokens in index.css, so a preset repaints the app and not just the canvas.
+	useEffect(() => {
+		applyThemeTokens(settings.theme)
+	}, [settings.theme])
 
 	const activeTab = tabs.find(t => t.id === activeId) || tabs[0]
 	const activeAgent = resolveActiveAgent(
@@ -1619,10 +1626,7 @@ export default function App() {
 	})
 
 	return (
-		<div
-			className="app"
-			style={{background: settings.theme.bg, color: settings.theme.fg}}
-		>
+		<div className="app">
 			{!bootstrapped || tabs.length === 0 ? (
 				<div className="web-warning">Starting…</div>
 			) : (
