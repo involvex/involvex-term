@@ -77,6 +77,45 @@ function newestMatching(
 }
 
 /**
+ * Field-wise equality for PaneAgentInfo (every field is a primitive, so this is
+ * a cheap structural compare). `activity` is included deliberately: it is
+ * derived from `now`, so a session can legitimately flip active -> idle with
+ * no session change and that must still count as a real update.
+ */
+export function samePaneAgent(
+	a: PaneAgentInfo | undefined,
+	b: PaneAgentInfo | undefined,
+): boolean {
+	if (a === b) return true
+	if (!a || !b) return false
+	return (
+		a.paneId === b.paneId &&
+		a.sessionId === b.sessionId &&
+		a.title === b.title &&
+		a.activity === b.activity &&
+		a.directory === b.directory &&
+		a.agentLabel === b.agentLabel &&
+		a.bound === b.bound
+	)
+}
+
+/**
+ * Shallow record equality for the pane-agent map. The opencode poll runs every
+ * few seconds and used to install a fresh object unconditionally, which
+ * invalidated the memoized PaneLayout in every tab and rebuilt every pane's
+ * menu object even when no session had changed.
+ */
+export function samePaneAgents(
+	a: Record<string, PaneAgentInfo>,
+	b: Record<string, PaneAgentInfo>,
+): boolean {
+	const keys = Object.keys(a)
+	if (keys.length !== Object.keys(b).length) return false
+	for (const k of keys) if (!samePaneAgent(a[k], b[k])) return false
+	return true
+}
+
+/**
  * Assign at most one OpenCode session per pane and one pane per session.
  * Prefer explicit launch/continue bindings, then newest cwd match.
  */

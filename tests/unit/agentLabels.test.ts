@@ -1,6 +1,9 @@
 import {describe, expect, it} from 'bun:test'
 import {
 	pruneAgentBindings,
+	samePaneAgent,
+	samePaneAgents,
+	type PaneAgentInfo,
 	type PaneLaunchBinding,
 } from '../../src/lib/agentLabels.ts'
 import type {OpencodeSession} from '../../src/types.ts'
@@ -84,5 +87,88 @@ describe('pruneAgentBindings truncated vs complete lists', () => {
 				pruneAgentBindings(stale, new Set(['p1']), [], NOW, truncated),
 			).toEqual({})
 		}
+	})
+})
+
+function info(over: Partial<PaneAgentInfo> = {}): PaneAgentInfo {
+	return {
+		paneId: 'p1',
+		sessionId: 's1',
+		title: 'Fix the thing',
+		activity: 'active',
+		directory: 'C:\\repo',
+		agentLabel: 'OC',
+		bound: false,
+		...over,
+	}
+}
+
+describe('samePaneAgent', () => {
+	it('treats a fresh object with identical fields as equal', () => {
+		// This is the poll-tick no-op the App guard relies on.
+		expect(samePaneAgent(info(), info())).toBe(true)
+	})
+
+	it('detects each field independently', () => {
+		const base = info()
+		for (const over of [
+			{paneId: 'other'},
+			{sessionId: 'other'},
+			{title: 'other'},
+			{activity: 'idle' as const},
+			{directory: 'C:\\elsewhere'},
+			{agentLabel: 'XX'},
+			{bound: true},
+		]) {
+			expect(samePaneAgent(base, info(over))).toBe(false)
+		}
+	})
+
+	it('treats a missing side as unequal', () => {
+		expect(samePaneAgent(info(), undefined)).toBe(false)
+		expect(samePaneAgent(undefined, info())).toBe(false)
+		expect(samePaneAgent(undefined, undefined)).toBe(true)
+	})
+})
+
+describe('samePaneAgents', () => {
+	it('treats an identical rebuild as equal', () => {
+		expect(samePaneAgents({p1: info()}, {p1: info()})).toBe(true)
+	})
+
+	it('treats two empty maps as equal', () => {
+		expect(samePaneAgents({}, {})).toBe(true)
+	})
+
+	it('detects a changed field on one pane', () => {
+		expect(samePaneAgents({p1: info()}, {p1: info({title: 'new'})})).toBe(false)
+	})
+
+	it('detects an activity flip on an otherwise identical session', () => {
+		// activity is derived from `now`, so it changes with time alone.
+		expect(samePaneAgents({p1: info()}, {p1: info({activity: 'idle'})})).toBe(
+			false,
+		)
+	})
+
+	it('detects an added pane', () => {
+		expect(
+			samePaneAgents({p1: info()}, {p1: info(), p2: info({paneId: 'p2'})}),
+		).toBe(false)
+	})
+
+	it('detects a removed pane', () => {
+		expect(
+			samePaneAgents({p1: info(), p2: info({paneId: 'p2'})}, {p1: info()}),
+		).toBe(false)
+	})
+
+	it('detects a swapped session under the same pane', () => {
+		expect(
+			samePaneAgents(
+				{p1: info()},
+				{p1: info({sessionId: 's2', title: 'other'})},
+			),
+		).toBe(false)
 	})
 })

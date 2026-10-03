@@ -16,6 +16,7 @@ import {useTabBindings} from './hooks/useTabBindings'
 import {
 	assignPaneAgentLabels,
 	pruneAgentBindings,
+	samePaneAgents,
 	type PaneAgentInfo,
 	type PaneLaunchBinding,
 } from './lib/agentLabels'
@@ -361,9 +362,13 @@ export default function App() {
 						})
 						const next: Record<string, PaneAgentInfo> = {}
 						for (const [id, info] of assigned) next[id] = info
-						setPaneAgents(next)
+						// Keep the previous object identity when nothing actually
+						// changed. A fresh object here invalidates the memoized
+						// PaneLayout for every tab and rebuilds every pane's menu
+						// object, on every poll tick, for a no-op.
+						setPaneAgents(prev => (samePaneAgents(prev, next) ? prev : next))
 					} else {
-						setPaneAgents({})
+						setPaneAgents(prev => (samePaneAgents(prev, {}) ? prev : {}))
 					}
 				} catch {
 					if (cancelled) return
