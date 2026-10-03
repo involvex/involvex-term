@@ -185,6 +185,20 @@ export function killPty(id: string): void {
 	entries.delete(id)
 }
 
+/**
+ * Drop an entry without signalling the process. For the natural-exit path,
+ * where node-pty has already torn the process down, so kill() would be a
+ * pointless syscall (and can throw on Windows).
+ */
+export function forgetPty(id: string): void {
+	entries.delete(id)
+}
+
+/** Terminate every live pty — on quit, and when the renderer dies. */
+export function killAllPtys(): void {
+	for (const id of [...entries.keys()]) killPty(id)
+}
+
 export function setCwd(id: string, cwd: string): void {
 	const e = entries.get(id)
 	if (e) e.cwd = cwd

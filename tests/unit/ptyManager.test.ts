@@ -33,8 +33,15 @@ function makeFakeModule(): typeof Pty {
 	return mod as unknown as typeof Pty
 }
 
-const {getPty, killPty, ptyIds, setPtyModule, spawnPty} =
-	await import('../../electron/ptyManager.ts')
+const {
+	forgetPty,
+	getPty,
+	killAllPtys,
+	killPty,
+	ptyIds,
+	setPtyModule,
+	spawnPty,
+} = await import('../../electron/ptyManager.ts')
 
 describe('ptyManager pane-id reuse', () => {
 	beforeEach(() => {
@@ -93,5 +100,36 @@ describe('ptyManager pane-id reuse', () => {
 
 		expect(fake.killed).toBe(1)
 		expect(ptyIds()).toEqual([])
+	})
+
+	it('forgetPty drops a naturally-exited entry without signalling it', () => {
+		spawnPty('pane-1', cwd, 80, 24)
+		forgetPty('pane-1')
+
+		// The process is already gone, so kill() must not be attempted.
+		expect(fake.killed).toBe(0)
+		expect(getPty('pane-1')).toBeUndefined()
+		expect(ptyIds()).toEqual([])
+	})
+
+	it('forgetPty on an unknown id is a no-op', () => {
+		expect(() => forgetPty('nope')).not.toThrow()
+		expect(ptyIds()).toEqual([])
+	})
+
+	it('killAllPtys terminates every live pty', () => {
+		spawnPty('pane-a', cwd, 80, 24)
+		spawnPty('pane-b', cwd, 80, 24)
+		spawnPty('pane-c', cwd, 80, 24)
+
+		killAllPtys()
+
+		expect(fake.killed).toBe(3)
+		expect(ptyIds()).toEqual([])
+	})
+
+	it('killAllPtys with nothing live does not throw', () => {
+		expect(() => killAllPtys()).not.toThrow()
+		expect(fake.killed).toBe(0)
 	})
 })

@@ -41,7 +41,9 @@ import {
 } from './pluginManager.js'
 import {getProcessList, killProcess} from './procEngine.js'
 import {
+	forgetPty,
 	getPty,
+	killAllPtys,
 	killPty,
 	resolveSpawnCwd,
 	setCwd,
@@ -237,6 +239,22 @@ function releaseGitWatcher(paneId: string) {
 	}
 }
 
+/**
+ * Release every per-pane resource keyed by pty id: debounced git refresh,
+ * chokidar watcher, and the cwd-tracker's pending OSC chunk. Shared by the
+ * `pty:kill` handler and the pty `onExit` handler so the two cannot drift —
+ * a path that only one of them cleaned up is a leak.
+ */
+function releasePaneResources(id: string): void {
+	clearCwdPending(id)
+	const pending = pendingGitRefresh.get(id)
+	if (pending) {
+		clearTimeout(pending)
+		pendingGitRefresh.delete(id)
+	}
+	releaseGitWatcher(id)
+}
+
 function ensureGitWatcher(paneId: string, repoRoot: string | null) {
 	for (const [root, entry] of gitWatchers) {
 		if (!entry.panes.has(paneId)) continue
@@ -400,6 +418,13 @@ function registerIpc() {
 				if (getPty(id) !== entry) return
 				win?.webContents.send(`pty:exit-${id}`)
 				notifyPtyExit(id)
+				// Natural exit: node-pty already tore the process down, so just
+				// forget the entry. Without this the PtyEntry (net.Socket +
+				// ConPTY handle) is pinned for the life of the app, and the
+				// per-pane git watcher / cwd-tracker row are never released —
+				// ensureGitWatcher happily re-adds a dead pane id.
+				forgetPty(id)
+				releasePaneResources(id)
 			})
 			scheduleGitRefresh(id, entry.cwd)
 			notifyPtySpawn({paneId: id, cwd: entry.cwd, shell: entry.shell})
@@ -426,13 +451,7 @@ function registerIpc() {
 	)
 	ipcMain.on('pty:kill', (_e, {id}: {id: string}) => {
 		killPty(id)
-		clearCwdPending(id)
-		const pending = pendingGitRefresh.get(id)
-		if (pending) {
-			clearTimeout(pending)
-			pendingGitRefresh.delete(id)
-		}
-		releaseGitWatcher(id)
+		releasePaneResources(id)
 	})
 	ipcMain.on('pty:cwd-seed', (_e, {id, cwd}: {id: string; cwd: string}) => {
 		setCwd(id, cwd)
@@ -857,6 +876,12 @@ function createWindow() {
 	win.webContents.on('did-finish-load', () => {
 		win?.webContents.send('main-process-message', new Date().toLocaleString())
 	})
+	// A dead renderer never runs its effect cleanups, so no ptyKill is issued
+	// and every pane's pty would survive with nothing left able to reach it.
+	// Tear them all down; a reload re-spawns from the session snapshot.
+	win.webContents.on('render-process-gone', () => {
+		killAllPtys()
+	})
 	if (VITE_DEV_SERVER_URL) win.loadURL(VITE_DEV_SERVER_URL)
 	else win.loadFile(path.join(RENDERER_DIST, 'index.html'))
 	void buildMenu(win, settings).catch(() => undefined)
@@ -898,6 +923,11 @@ function quitApp(): void {
 app.on('will-quit', () => {
 	unregisterQuake()
 	unregisterToggleApp()
+	// Teardown lives here rather than in quitApp because this is the one choke
+	// point every exit path reaches — quitApp, window-all-closed, and the OS
+	// closing the last window all funnel through it. Without it ConPTY is never
+	// closed and conhost plus detached grandchildren outlive the app.
+	killAllPtys()
 	void unloadPlugins()
 })
 
