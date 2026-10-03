@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.4] - 2026-10-03
+
+### Added
+
+- actionable gist errors and proactive token validation
+
 ## [0.8.3] - 2026-10-02
 
 ### Fixed
