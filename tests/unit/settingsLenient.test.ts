@@ -1,4 +1,7 @@
-import {describe, expect, it} from 'bun:test'
+import {afterEach, describe, expect, it} from 'bun:test'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import {
 	defaultSettings,
 	parseSettingsLenient,
@@ -121,5 +124,90 @@ describe('parseSettingsLenient', () => {
 				theme: {...defaultSettings().theme, bg: '#002b36'},
 			}),
 		)
+	})
+})
+
+/**
+ * The rejection buckets live in settingsStore and are written by the
+ * filesystem-touching entry points, so this reloads the module against a
+ * throwaway home directory rather than the developer's real settings file.
+ */
+let counter = 0
+const scratchDirs: string[] = []
+
+async function storeWithScratchHome(): Promise<
+	typeof import('../../electron/settingsStore.ts')
+> {
+	const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ivx-settings-'))
+	scratchDirs.push(home)
+	const previous = process.env.USERPROFILE
+	process.env.USERPROFILE = home
+	try {
+		// Distinct specifier so Bun evaluates a fresh copy of the module.
+		return await import(`../../electron/settingsStore.ts?t=${counter++}`)
+	} finally {
+		if (previous === undefined) delete process.env.USERPROFILE
+		else process.env.USERPROFILE = previous
+	}
+}
+
+afterEach(() => {
+	while (scratchDirs.length) {
+		fs.rmSync(scratchDirs.pop()!, {recursive: true, force: true})
+	}
+})
+
+describe('rejection reporting', () => {
+	it('records the paths a load had to reject', async () => {
+		const store = await storeWithScratchHome()
+		fs.mkdirSync(store.SETTINGS_DIR, {recursive: true})
+		fs.writeFileSync(
+			store.SETTINGS_FILE,
+			JSON.stringify({theme: {fontSize: '14'}, terminal: {scrollback: 1}}),
+		)
+
+		const loaded = store.loadSettings()
+
+		expect(loaded.terminal.scrollback).toBe(
+			defaultSettings().terminal.scrollback,
+		)
+		expect(store.rejectedSettingsPaths('settings.json').sort()).toEqual([
+			'terminal.scrollback',
+			'theme.fontSize',
+		])
+		expect(store.allRejectedSettingsPaths().sort()).toEqual([
+			'terminal.scrollback',
+			'theme.fontSize',
+		])
+	})
+
+	it('keeps an import report when the save that follows it reports nothing', async () => {
+		// This is why the buckets are keyed by source. `settings:import` runs
+		// parseImportedSettings() and then saveSettings(); with a single shared
+		// slot the save's empty result would erase the import's report and the
+		// user would never learn the file did not apply in full.
+		const store = await storeWithScratchHome()
+		const imported = store.parseImportedSettings({
+			theme: {fontSize: '14'},
+			terminal: {startDir: 'D:\\kept'},
+		})
+		expect(imported.terminal.startDir).toBe('D:\\kept')
+
+		store.saveSettings(imported)
+
+		expect(store.rejectedSettingsPaths('import')).toEqual(['theme.fontSize'])
+	})
+
+	it('reports nothing when the file is entirely valid', async () => {
+		const store = await storeWithScratchHome()
+		fs.mkdirSync(store.SETTINGS_DIR, {recursive: true})
+		fs.writeFileSync(
+			store.SETTINGS_FILE,
+			JSON.stringify({theme: {bg: '#002b36'}}),
+		)
+
+		store.loadSettings()
+
+		expect(store.allRejectedSettingsPaths()).toEqual([])
 	})
 })

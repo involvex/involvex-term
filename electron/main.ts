@@ -58,9 +58,11 @@ import {
 	unregisterToggleApp,
 } from './quake.js'
 import {
+	allRejectedSettingsPaths,
 	loadSession,
 	loadSettings,
 	parseImportedSettings,
+	rejectedSettingsPaths,
 	saveSession,
 	saveSettings,
 	SETTINGS_FILE,
@@ -673,7 +675,9 @@ function registerIpc() {
 			settings = saveSettings(parseImportedSettings(raw))
 			bumpLocalUpdatedAt()
 			await applyLoadedSettings()
-			return {ok: true, settings}
+			// Read the 'import' bucket, not the shared one: the save above
+			// reports its own (empty) result and would clear the import's.
+			return {ok: true, settings, rejected: rejectedSettingsPaths('import')}
 		} catch (e) {
 			return {ok: false, error: e instanceof Error ? e.message : String(e)}
 		}
@@ -743,7 +747,10 @@ function registerIpc() {
 		}
 	})
 
-	ipcMain.handle('settings:get', () => settings)
+	ipcMain.handle('settings:get', () => ({
+		settings,
+		rejected: allRejectedSettingsPaths(),
+	}))
 	ipcMain.handle('settings:set', async (_e, next: typeof settings) => {
 		const pluginsToggled = next.plugins?.enabled !== settings.plugins?.enabled
 		settings = saveSettings(next)

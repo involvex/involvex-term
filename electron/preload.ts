@@ -59,7 +59,10 @@ export interface TermApi {
 	clipboardWrite: (text: string) => Promise<void>
 	clipboardRead: () => Promise<string>
 	clipboardHasImage: () => Promise<boolean>
-	settingsGet: () => Promise<unknown>
+	settingsGet: () => Promise<{
+		settings: unknown
+		rejected: string[]
+	}>
 	settingsSet: (next: unknown) => Promise<unknown>
 	onSettingsChanged: (cb: (s: unknown) => void) => () => void
 	onTabAction: (cb: (action: string) => void) => () => void
@@ -141,6 +144,7 @@ export interface TermApi {
 	settingsImport: () => Promise<{
 		ok: boolean
 		settings?: unknown
+		rejected?: string[]
 		error?: string
 	}>
 	syncStatus: () => Promise<{

@@ -337,7 +337,31 @@ export function parseSettingsLenient(raw: unknown): {
 	return {settings: defaultSettings(), rejected: [...rejected]}
 }
 
+/**
+ * Paths dropped by the most recent lenient parse, keyed by source.
+ *
+ * Kept so `settings:get` / `settings:import` can hand them to the renderer: a
+ * value that silently reverts to its default looks identical to the app
+ * ignoring the user, so Settings shows the offending paths instead.
+ *
+ * Keyed rather than a single "last" slot because `settings:import` runs a
+ * parse and then a save — a shared slot would be overwritten by the save's
+ * (empty) result and the import report would be lost.
+ */
+const rejectedBySource = new Map<string, string[]>()
+
+/** Rejected paths recorded for one source ('settings.json', 'import', 'save'). */
+export function rejectedSettingsPaths(source: string): string[] {
+	return [...(rejectedBySource.get(source) ?? [])]
+}
+
+/** Every rejected path recorded so far, de-duplicated and ordered. */
+export function allRejectedSettingsPaths(): string[] {
+	return [...new Set([...rejectedBySource.values()].flat())]
+}
+
 function warnRejected(source: string, rejected: string[]): void {
+	rejectedBySource.set(source, [...rejected])
 	if (!rejected.length) return
 	console.warn(
 		`[settings] ignored ${rejected.length} invalid value(s) in ${source}: ${rejected.join(', ')}`,

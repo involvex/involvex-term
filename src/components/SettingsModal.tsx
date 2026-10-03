@@ -12,6 +12,8 @@ import {
 
 interface Props {
 	settings: AppSettings
+	/** Dotted settings.json paths that failed validation and reset to defaults. */
+	rejected?: string[]
 	onChange: (next: AppSettings) => void
 	onClose: () => void
 }
@@ -471,7 +473,15 @@ const SETTINGS_TABS = [
 ] as const
 type SettingsTabId = (typeof SETTINGS_TABS)[number]['id']
 
-export default function SettingsModal({settings, onChange, onClose}: Props) {
+/** Cap on rejected paths listed inline before collapsing into "and N more". */
+const REJECTED_PATH_PREVIEW = 8
+
+export default function SettingsModal({
+	settings,
+	rejected,
+	onChange,
+	onClose,
+}: Props) {
 	const [tab, setTab] = useState<SettingsTabId>('appearance')
 	const set = (patch: Partial<AppSettings>) => onChange({...settings, ...patch})
 	const [pluginStatus, setPluginStatus] = useState<{
@@ -480,6 +490,35 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 		loaded: Array<{name: string; commands: string[]}>
 		errors: Array<{name: string; error: string}>
 	} | null>(null)
+	/**
+	 * Remembers which rejection list was dismissed rather than a boolean, so a
+	 * different list re-shows the banner with no effect to reset it.
+	 */
+	const [dismissedKey, setDismissedKey] = useState<string | null>(null)
+	const rejectedPaths = rejected ?? []
+	const rejectedKey = rejectedPaths.join('\n')
+	const showRejected = rejectedKey !== '' && dismissedKey !== rejectedKey
+	const dismissRejected = () => setDismissedKey(rejectedKey)
+
+	/** Shared by the two "Import settings…" buttons in the sync section. */
+	const runImport = () => {
+		void termApi()
+			?.settingsImport()
+			.then(r => {
+				if (!r.ok) {
+					if (r.error !== 'canceled') window.alert(r.error || 'Import failed')
+					return
+				}
+				if (r.settings) onChange(r.settings as AppSettings)
+				// Imported anyway, but say what did not make it — otherwise the
+				// user assumes the file applied in full.
+				if (r.rejected?.length) {
+					window.alert(
+						`Imported, but ${r.rejected.length} value(s) were invalid and ignored:\n\n${r.rejected.join('\n')}`,
+					)
+				}
+			})
+	}
 
 	useEffect(() => {
 		if (tab !== 'plugins') return
@@ -518,6 +557,38 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 						×
 					</button>
 				</div>
+
+				{showRejected && (
+					<div
+						className="settings-warning"
+						role="status"
+					>
+						<div className="settings-warning-body">
+							<strong>
+								{rejectedPaths.length === 1
+									? '1 value in settings.json is invalid'
+									: `${rejectedPaths.length} values in settings.json are invalid`}
+							</strong>{' '}
+							and {rejectedPaths.length === 1 ? 'was' : 'were'} reset to{' '}
+							{rejectedPaths.length === 1 ? 'its' : 'their'} default. Everything
+							else was kept.
+							<div className="settings-warning-paths">
+								{rejectedPaths.slice(0, REJECTED_PATH_PREVIEW).join(', ')}
+								{rejectedPaths.length > REJECTED_PATH_PREVIEW
+									? ` and ${rejectedPaths.length - REJECTED_PATH_PREVIEW} more`
+									: ''}
+							</div>
+						</div>
+						<button
+							type="button"
+							className="settings-warning-dismiss"
+							onClick={dismissRejected}
+							aria-label="Dismiss settings warning"
+						>
+							×
+						</button>
+					</div>
+				)}
 
 				<div className="settings-layout">
 					<nav
@@ -1570,18 +1641,7 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 										<button
 											type="button"
 											className="settings-btn"
-											onClick={() => {
-												void termApi()
-													?.settingsImport()
-													.then(r => {
-														if (!r.ok) {
-															if (r.error !== 'canceled')
-																window.alert(r.error || 'Import failed')
-															return
-														}
-														if (r.settings) onChange(r.settings as AppSettings)
-													})
-											}}
+											onClick={runImport}
 										>
 											Import settings…
 										</button>
@@ -1678,18 +1738,7 @@ export default function SettingsModal({settings, onChange, onClose}: Props) {
 										<button
 											type="button"
 											className="settings-btn"
-											onClick={() => {
-												void termApi()
-													?.settingsImport()
-													.then(r => {
-														if (!r.ok) {
-															if (r.error !== 'canceled')
-																window.alert(r.error || 'Import failed')
-															return
-														}
-														if (r.settings) onChange(r.settings as AppSettings)
-													})
-											}}
+											onClick={runImport}
 										>
 											Import settings…
 										</button>

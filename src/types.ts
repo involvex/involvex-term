@@ -249,6 +249,13 @@ export interface AppInfo {
 	platform: string
 }
 
+/** Result of reading settings, including any values that failed validation. */
+export interface SettingsLoadResult {
+	settings: AppSettings
+	/** Dotted paths from settings.json that were invalid and reset to defaults. */
+	rejected: string[]
+}
+
 export interface TermApiShape {
 	ptySpawn: (args: {
 		id: string
@@ -296,7 +303,7 @@ export interface TermApiShape {
 	clipboardWrite: (text: string) => Promise<void>
 	clipboardRead: () => Promise<string>
 	clipboardHasImage: () => Promise<boolean>
-	settingsGet: () => Promise<AppSettings>
+	settingsGet: () => Promise<SettingsLoadResult>
 	settingsSet: (next: AppSettings) => Promise<AppSettings>
 	onSettingsChanged: (cb: (s: AppSettings) => void) => () => void
 	onTabAction: (cb: (action: string) => void) => () => void
@@ -335,6 +342,8 @@ export interface TermApiShape {
 	settingsImport: () => Promise<{
 		ok: boolean
 		settings?: AppSettings
+		/** Dotted paths from the imported file that were invalid and ignored. */
+		rejected?: string[]
 		error?: string
 	}>
 	syncStatus: () => Promise<SyncStatus>
