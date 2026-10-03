@@ -19,6 +19,21 @@ export interface SysStats {
 	uptimeSec: number
 }
 
+export interface ProcInfo {
+	pid: number
+	name: string
+	cpu: number
+	mem: number
+	memRssMB: number
+	path: string
+	parentPid?: number
+	started?: string
+	diskReadKBs: number
+	diskWriteKBs: number
+	diskTotalKBs: number
+	ioSupported: boolean
+}
+
 export interface OpencodeSession {
 	id: string
 	title: string
@@ -271,6 +286,8 @@ export interface TermApiShape {
 	) => () => void
 	sysGet: () => Promise<SysStats>
 	onSysTick: (cb: (stats: SysStats) => void) => () => void
+	procList: () => Promise<ProcInfo[]>
+	procKill: (pid: number) => Promise<{ok: boolean; error?: string}>
 	ptyCwd: (ids: string[]) => Promise<Array<{id: string; cwd: string | null}>>
 	sessionGet: () => Promise<SessionState | null>
 	sessionSave: (state: SessionState) => Promise<unknown>

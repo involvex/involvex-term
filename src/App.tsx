@@ -53,6 +53,7 @@ import {
 	type OpencodeStatus,
 	type PluginCommand,
 	type PluginStatusBarSegment,
+	type ProcInfo,
 	type QuickCommand,
 	type SysStats,
 	type UpdateStatus,
@@ -61,6 +62,7 @@ import {
 // search are only fetched on first open, not on startup.
 const AboutModal = lazy(() => import('./components/AboutModal'))
 const CommandPalette = lazy(() => import('./components/CommandPalette'))
+const ProcessManager = lazy(() => import('./components/ProcessManager'))
 const SearchBar = lazy(() => import('./components/SearchBar'))
 const SettingsModal = lazy(() => import('./components/SettingsModal'))
 
@@ -198,6 +200,9 @@ export default function App() {
 	const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
 	const [showSettings, setShowSettings] = useState(false)
 	const [showAbout, setShowAbout] = useState(false)
+	const [showProcesses, setShowProcesses] = useState(false)
+	/** Background-refreshed process cache so the manager opens instantly. */
+	const [procs, setProcs] = useState<ProcInfo[]>([])
 	const [pluginCommands, setPluginCommands] = useState<PluginCommand[]>([])
 	const [pluginStatusBar, setPluginStatusBar] = useState<
 		PluginStatusBarSegment[]
@@ -603,6 +608,40 @@ export default function App() {
 			.catch(() => undefined)
 		const off = api.onSysTick(s => setSys(s as SysStats))
 		return off
+	}, [])
+
+	// Process list cache: refreshed in the background (paused while the
+	// manager is open — it runs its own faster poll then) so reopening
+	// the panel shows rows instantly instead of a fresh load.
+	const showProcessesRef = useRef(showProcesses)
+	useEffect(() => {
+		showProcessesRef.current = showProcesses
+	}, [showProcesses])
+	useEffect(() => {
+		const api = termApi()
+		if (!api || typeof api.procList !== 'function') return
+		let cancelled = false
+		let busy = false
+		const tick = async () => {
+			if (busy || showProcessesRef.current) return
+			if (typeof document !== 'undefined' && document.hidden) return
+			busy = true
+			try {
+				const list = await api.procList()
+				if (!cancelled && Array.isArray(list) && list.length > 0) setProcs(list)
+			} catch {
+				/* keep stale cache */
+			} finally {
+				busy = false
+			}
+		}
+		const warmup = setTimeout(() => void tick(), 3000)
+		const timer = setInterval(() => void tick(), 5000)
+		return () => {
+			cancelled = true
+			clearTimeout(warmup)
+			clearInterval(timer)
+		}
 	}, [])
 
 	// Git status for the active pane: subscribe per-pane + global events.
@@ -1352,6 +1391,11 @@ export default function App() {
 				run: () => setShowSettings(true),
 			},
 			{
+				id: 'cmd:processes',
+				title: 'Open process manager',
+				run: () => setShowProcesses(true),
+			},
+			{
 				id: 'cmd:opencode',
 				title: `Open ${activeAgent.name}`,
 				hint: agentAvailable ? 'Ctrl+Shift+O' : 'not found on PATH',
@@ -1532,6 +1576,8 @@ export default function App() {
 		[runSnippet],
 	)
 	const handleOpenSettings = useCallback(() => setShowSettings(true), [])
+	const handleOpenProcesses = useCallback(() => setShowProcesses(true), [])
+	const handleCloseProcesses = useCallback(() => setShowProcesses(false), [])
 	const handleCloseSearch = useCallback(() => setSearchOpen(false), [])
 	const handleClosePalette = useCallback(() => setPaletteOpen(false), [])
 	const handleCloseSettings = useCallback(() => setShowSettings(false), [])
@@ -1593,6 +1639,7 @@ export default function App() {
 						onCloseToRight={handleCloseToRight}
 						onQuickCommand={handleQuickCommand}
 						onOpenAgent={launchAgent}
+						onOpenProcesses={handleOpenProcesses}
 						onOpenSettings={handleOpenSettings}
 					/>
 					<div className="terminals">
@@ -1666,6 +1713,18 @@ export default function App() {
 			{showAbout && (
 				<Suspense fallback={null}>
 					<AboutModal onClose={handleCloseAbout} />
+				</Suspense>
+			)}
+			{showProcesses && (
+				<Suspense fallback={null}>
+					<ProcessManager
+						bg={settings.theme.bg}
+						fg={settings.theme.fg}
+						initialProcs={procs}
+						onClose={handleCloseProcesses}
+						onToast={handleToast}
+						onProcs={setProcs}
+					/>
 				</Suspense>
 			)}
 			{paletteOpen && activeTab && (

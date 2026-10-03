@@ -19,6 +19,23 @@ export interface SysStats {
 	uptimeSec: number
 }
 
+export interface ProcInfo {
+	pid: number
+	name: string
+	cpu: number
+	mem: number
+	memRssMB: number
+	path: string
+	parentPid?: number
+	started?: string
+	/** I/O rate in KB/s since previous snapshot. */
+	diskReadKBs: number
+	diskWriteKBs: number
+	diskTotalKBs: number
+	/** True when the OS backend provided IO counters for this row. */
+	ioSupported: boolean
+}
+
 export type FooterModuleId = 'git' | 'sys'
 
 /** Persisted session: tab split-trees with per-pane cwds. `root` is opaque

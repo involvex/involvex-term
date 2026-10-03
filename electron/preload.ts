@@ -35,6 +35,23 @@ export interface TermApi {
 	) => () => void
 	sysGet: () => Promise<unknown>
 	onSysTick: (cb: (stats: Record<string, unknown>) => void) => () => void
+	procList: () => Promise<
+		Array<{
+			pid: number
+			name: string
+			cpu: number
+			mem: number
+			memRssMB: number
+			path: string
+			parentPid?: number
+			started?: string
+			diskReadKBs: number
+			diskWriteKBs: number
+			diskTotalKBs: number
+			ioSupported: boolean
+		}>
+	>
+	procKill: (pid: number) => Promise<{ok: boolean; error?: string}>
 	ptyCwd: (ids: string[]) => Promise<Array<{id: string; cwd: string | null}>>
 	sessionGet: () => Promise<unknown>
 	sessionSave: (state: unknown) => Promise<unknown>
@@ -221,6 +238,8 @@ const api: TermApi = {
 	onGitChangedFor: (tabId, cb) => sub(`git:changed-${tabId}`, cb as never),
 	sysGet: () => ipcRenderer.invoke('sys:get'),
 	onSysTick: cb => sub('sys:tick', cb as never),
+	procList: () => ipcRenderer.invoke('proc:list'),
+	procKill: pid => ipcRenderer.invoke('proc:kill', {pid}),
 	ptyCwd: ids => ipcRenderer.invoke('pty:cwd', {ids}),
 	sessionGet: () => ipcRenderer.invoke('session:get'),
 	sessionSave: state => ipcRenderer.invoke('session:save', state),

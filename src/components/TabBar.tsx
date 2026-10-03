@@ -83,6 +83,7 @@ interface Props {
 	onCloseToRight: (id: string) => void
 	onQuickCommand: (cmd: QuickCommand) => void
 	onOpenAgent: () => void
+	onOpenProcesses: () => void
 	onOpenSettings: () => void
 }
 
@@ -111,6 +112,7 @@ export default memo(function TabBar({
 	onCloseToRight,
 	onQuickCommand,
 	onOpenAgent,
+	onOpenProcesses,
 	onOpenSettings,
 }: Props) {
 	const [editingId, setEditingId] = useState<string | null>(null)
@@ -536,6 +538,15 @@ export default memo(function TabBar({
 				aria-label={`Open ${agentName}`}
 			>
 				{agentLabel}
+			</button>
+			<button
+				type="button"
+				className="tab-new"
+				onClick={onOpenProcesses}
+				title="Process manager"
+				aria-label="Open process manager"
+			>
+				☰
 			</button>
 			<button
 				type="button"

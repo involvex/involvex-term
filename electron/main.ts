@@ -39,6 +39,7 @@ import {
 	runPluginCommand,
 	unloadPlugins,
 } from './pluginManager.js'
+import {getProcessList, killProcess} from './procEngine.js'
 import {
 	getPty,
 	killPty,
@@ -472,6 +473,16 @@ function registerIpc() {
 	ipcMain.on('session:save', onSessionSave as never)
 
 	ipcMain.handle('sys:get', async () => getSysStats())
+
+	ipcMain.handle('proc:list', async () => getProcessList())
+	ipcMain.handle('proc:kill', async (_e, {pid}: {pid: number}) => {
+		// Defense in depth: validate at the IPC boundary too, so a future
+		// caller of the channel can't smuggle non-integer pids past typing.
+		const id = typeof pid === 'number' ? pid : Number(pid)
+		if (!Number.isInteger(id) || id <= 0)
+			return {ok: false, error: 'Invalid pid'}
+		return killProcess(id)
+	})
 
 	ipcMain.handle('opencode:available', () => opencodeAvailable())
 
