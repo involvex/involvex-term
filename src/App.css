@@ -986,6 +986,21 @@ select,
 	background: var(--accent-translucent);
 }
 
+/*
+ * Keyboard focus on a splitter, which was impossible before it became a
+ * focusable `role="separator"`. Hover already tints the handle, so this matches
+ * that affordance rather than introducing a new look - the divider is a grab
+ * target, not a control with its own visual identity.
+ *
+ * The ring is inset because the handle is 7px and an outward one would be
+ * clipped by `.terminals` at the window edges.
+ */
+.pane-divider:focus-visible {
+	outline: var(--focus-ring-width) solid var(--accent);
+	outline-offset: calc(-1 * var(--focus-ring-width));
+	background: var(--accent-translucent);
+}
+
 .hotkey-row {
 	display: inline-flex;
 	gap: 6px;

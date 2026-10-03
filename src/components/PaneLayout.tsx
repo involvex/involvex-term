@@ -1,8 +1,16 @@
 import {memo, useEffect, useMemo, useRef, useState} from 'react'
 import {shortAgentTitle, type PaneAgentInfo} from '../lib/agentLabels'
 import {
+	dividerPercent,
+	isDividerKey,
+	resolveDividerKey,
+	SPLIT_MAX,
+	SPLIT_MIN,
+} from '../lib/dividerKeys'
+import {
 	collectLeaves,
 	findNeighborPane,
+	findSplitRatio,
 	layoutPanes,
 	PANE_DRAG_MIME,
 	splitBoundaries,
@@ -250,47 +258,82 @@ export default memo(function PaneLayout({
 				)
 			})}
 			{tabActive &&
-				dividers.map(b =>
-					b.dir === 'horizontal' ? (
+				dividers.map(b => {
+					// The split's stored ratio, not the divider's absolute position:
+					// `onResizeSplit` takes a ratio within the split's own range, and
+					// the two differ as soon as a split is nested in an off-centre parent.
+					const ratio = findSplitRatio(root, b.id) ?? 0.5
+					const startDrag = (e: React.PointerEvent) => {
+						e.preventDefault()
+						setDrag({
+							id: b.id,
+							dir: b.dir,
+							rangeStart: b.rangeStart,
+							rangeEnd: b.rangeEnd,
+						})
+					}
+					/**
+					 * Arrow keys resize, per the ARIA window-splitter pattern.
+					 *
+					 * Only claims keys the splitter actually acts on, and ignores
+					 * modified presses so Ctrl+Home and friends still reach the
+					 * terminal underneath.
+					 */
+					const onKeyDown = (e: React.KeyboardEvent) => {
+						if (e.altKey || e.ctrlKey || e.metaKey) return
+						if (!isDividerKey(e.key)) return
+						const next = resolveDividerKey(e.key, b.dir, ratio, e.shiftKey)
+						if (next === null) return
+						// Consumed even when the step is a no-op (already at the limit):
+						// letting ArrowUp scroll the terminal while a splitter holds
+						// focus would be surprising.
+						e.preventDefault()
+						onResizeSplit(b.id, next)
+					}
+					// Shared by both orientations so the ARIA contract cannot drift
+					// between them. `role="separator"` with a value range is the
+					// window-splitter pattern; without tabIndex it is not focusable
+					// and none of this is reachable.
+					const common = {
+						role: 'separator',
+						'aria-orientation': b.dir,
+						'aria-valuenow': dividerPercent(ratio),
+						'aria-valuemin': dividerPercent(SPLIT_MIN),
+						'aria-valuemax': dividerPercent(SPLIT_MAX),
+						'aria-label':
+							b.dir === 'horizontal'
+								? 'Resize panes, up and down'
+								: 'Resize panes, left and right',
+						tabIndex: 0,
+						title: 'Drag, or use the arrow keys to resize',
+						onKeyDown,
+					}
+					return b.dir === 'horizontal' ? (
 						<div
 							key={b.id}
+							{...common}
 							className="pane-divider h"
 							style={{
 								top: `calc(${(b.line * 100).toFixed(3)}% - 3px)`,
 								left: `${(b.crossStart * 100).toFixed(3)}%`,
 								width: `${((b.crossEnd - b.crossStart) * 100).toFixed(3)}%`,
 							}}
-							onPointerDown={e => {
-								e.preventDefault()
-								setDrag({
-									id: b.id,
-									dir: b.dir,
-									rangeStart: b.rangeStart,
-									rangeEnd: b.rangeEnd,
-								})
-							}}
+							onPointerDown={startDrag}
 						/>
 					) : (
 						<div
 							key={b.id}
+							{...common}
 							className="pane-divider v"
 							style={{
 								left: `calc(${(b.line * 100).toFixed(3)}% - 3px)`,
 								top: `${(b.crossStart * 100).toFixed(3)}%`,
 								height: `${((b.crossEnd - b.crossStart) * 100).toFixed(3)}%`,
 							}}
-							onPointerDown={e => {
-								e.preventDefault()
-								setDrag({
-									id: b.id,
-									dir: b.dir,
-									rangeStart: b.rangeStart,
-									rangeEnd: b.rangeEnd,
-								})
-							}}
+							onPointerDown={startDrag}
 						/>
-					),
-				)}
+					)
+				})}
 		</div>
 	)
 })
