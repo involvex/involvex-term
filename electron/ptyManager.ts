@@ -25,7 +25,23 @@ export interface PtyEntry {
 
 const entries = new Map<string, PtyEntry>()
 
+/**
+ * Test seam: lets tests substitute a fake node-pty so the registry invariants
+ * can be exercised without spawning real shells. Production leaves this null.
+ */
+let ptyOverride: typeof Pty | null = null
+
+export function setPtyModule(mod: typeof Pty | null): void {
+	ptyOverride = mod
+}
+
+/** Live entry ids — used by tests and the killAll teardown. */
+export function ptyIds(): string[] {
+	return [...entries.keys()]
+}
+
 function lazyPty(): typeof Pty | null {
+	if (ptyOverride) return ptyOverride
 	try {
 		return require('node-pty') as typeof Pty
 	} catch (e) {
@@ -143,6 +159,13 @@ export function spawnPty(
 		} as Record<string, string>,
 	})
 	const entry: PtyEntry = {id, pty, cwd: home, shell: finalShell}
+	// A pane id can be re-spawned (renderer reload restores saved pane ids, and
+	// session restore reuses them). Kill whatever is registered under this id
+	// first: leaving it alive would keep its onData attached and streaming into
+	// the same `pty:data-<id>` channel, so two shells would write into one xterm,
+	// and the orphan would be unreachable from `entries` forever.
+	// Done after `mod.spawn` so a failed spawn leaves the existing pty running.
+	killPty(id)
 	entries.set(id, entry)
 	return entry
 }

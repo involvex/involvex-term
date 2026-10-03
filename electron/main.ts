@@ -392,6 +392,12 @@ function registerIpc() {
 				notifyPtyData(id, cleaned)
 			})
 			entry.pty.onExit(() => {
+				// A re-spawn under the same pane id supersedes the previous pty
+				// (renderer reload / session restore). That predecessor is killed by
+				// spawnPty, so ignore its exit: the replacement owns the pane now
+				// and must not be told it exited, nor have "[process exited]"
+				// written into the fresh shell by the renderer's onPtyExit.
+				if (getPty(id) !== entry) return
 				win?.webContents.send(`pty:exit-${id}`)
 				notifyPtyExit(id)
 			})
