@@ -21,6 +21,35 @@ body {
 	font-family: 'Cascadia Code', Consolas, monospace;
 }
 
+/*
+ * Focus ring
+ *
+ * Chromium's default was the only focus indicator in the app and it does not
+ * follow the theme. One rule covers every native control (buttons, inputs,
+ * selects, links) rather than enumerating the 100+ class names in this file.
+ *
+ * Inset rather than outward: the chrome is full of `overflow: hidden` / `auto`
+ * strips, and `.tabbar` clips vertically, so an outward ring would be cut off on
+ * the most-used control. `outline` also follows border-radius automatically and
+ * does not clobber the box-shadows on menus and the searchbar.
+ *
+ * `:focus-visible` (not `:focus`) so a mouse click does not leave a ring behind.
+ * Chromium still shows it for text fields on click, which is what you want.
+ */
+:focus-visible {
+	outline: var(--focus-ring-width) solid var(--accent);
+	outline-offset: calc(-1 * var(--focus-ring-inset));
+}
+
+/*
+ * xterm keeps keyboard focus on a 0x0 textarea parked at left:-9999em. It is
+ * off-screen today so the ring is invisible, but nothing should be drawing a
+ * focus ring on it: the focused pane already says so via `.split-leaf.focused`.
+ */
+.xterm-helper-textarea:focus-visible {
+	outline: none;
+}
+
 .app {
 	display: flex;
 	flex-direction: column;

@@ -71,6 +71,15 @@
 	--shadow-color-raised: rgba(0, 0, 0, 0.5);
 	--shadow-color-toast: rgba(0, 0, 0, 0.4);
 	--scrim: rgba(0, 0, 0, 0.6);
+
+	/*
+	 * Focus ring. Accent on a dark chrome gives strong contrast against every
+	 * surface in use, and it tracks the theme because --accent is a token.
+	 */
+	--focus-ring-width: 2px;
+	/* Negative in App.css: the chrome is full of overflow:auto strips that clip
+	   an outward ring, .tabbar most of all. */
+	--focus-ring-inset: 1px;
 }
 
 html,
