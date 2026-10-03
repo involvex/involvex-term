@@ -143,6 +143,47 @@ export type SyncStatus = {
 	clientIdConfigured: boolean
 }
 
+/** HTTP status + operation context for GitHub API failures. */
+export class GithubApiError extends Error {
+	status?: number
+	operation: string
+	constructor(message: string, operation: string, status?: number) {
+		super(message)
+		this.name = 'GithubApiError'
+		this.operation = operation
+		this.status = status
+	}
+}
+
+/**
+ * Map a raw GitHub API failure to an actionable message.
+ * 401 almost always means the stored OAuth token was revoked server-side
+ * (app access removed, password change, token reset) — retrying with the
+ * same token will keep failing, the user must sign in again.
+ */
+export function githubErrorMessage(
+	status: number | undefined,
+	apiMessage: string,
+	operation: string,
+): string {
+	if (status === 401) {
+		return (
+			`GitHub rejected the stored token during ${operation} (${apiMessage}). ` +
+			`The token is invalid or was revoked — Unlink and Sign in again. ` +
+			`This happens if GitHub access was removed or the password changed.`
+		)
+	}
+	if (status === 404 && operation.includes('gist')) {
+		return (
+			`Sync gist not found during ${operation} (${apiMessage}). ` +
+			`It may have been deleted — Push again to recreate it.`
+		)
+	}
+	return status
+		? `${operation} failed: ${apiMessage} (HTTP ${status})`
+		: `${operation} failed: ${apiMessage}`
+}
+
 export type DeviceCodePending = {
 	userCode: string
 	verificationUri: string
@@ -180,14 +221,27 @@ export function loadSyncState(): SyncState {
 	try {
 		if (!fs.existsSync(SYNC_FILE)) return SyncStateSchema.parse({})
 		const raw = JSON.parse(fs.readFileSync(SYNC_FILE, 'utf8'))
-		return SyncStateSchema.parse(raw ?? {})
+		const parsed = SyncStateSchema.parse(raw ?? {})
+		return normalizeSyncState(parsed)
 	} catch {
 		return SyncStateSchema.parse({})
 	}
 }
 
+function normalizeSyncState(s: SyncState): SyncState {
+	const token = s.accessToken?.trim()
+	const gistId = s.gistId?.trim()
+	const login = s.login?.trim()
+	return {
+		...s,
+		accessToken: token ? token : undefined,
+		gistId: gistId ? gistId : undefined,
+		login: login ? login : undefined,
+	}
+}
+
 export function saveSyncState(next: SyncState): SyncState {
-	const parsed = SyncStateSchema.parse(next)
+	const parsed = normalizeSyncState(SyncStateSchema.parse(next))
 	if (!fs.existsSync(SETTINGS_DIR))
 		fs.mkdirSync(SETTINGS_DIR, {recursive: true})
 	fs.writeFileSync(SYNC_FILE, JSON.stringify(parsed, null, 2), {
@@ -215,6 +269,42 @@ export function getSyncStatus(): SyncStatus {
 		localUpdatedAt: s.localUpdatedAt,
 		clientIdConfigured: Boolean(resolveClientId(s)),
 	}
+}
+
+export type SyncTokenState = 'signed-out' | 'valid' | 'invalid' | 'unknown'
+
+export type SyncValidation = {
+	state: SyncTokenState
+	login?: string
+	message?: string
+}
+
+/** Liveness check for a token: GET /user without touching gist state. */
+export async function validateToken(token: string): Promise<SyncValidation> {
+	try {
+		const user = await githubJson<{login: string}>(
+			token,
+			'https://api.github.com/user',
+			undefined,
+			'validate token',
+		)
+		return {state: 'valid', login: user.login}
+	} catch (e) {
+		if (e instanceof GithubApiError && e.status === 401) {
+			return {state: 'invalid', message: e.message}
+		}
+		return {
+			state: 'unknown',
+			message: e instanceof Error ? e.message : String(e),
+		}
+	}
+}
+
+/** Validate the stored token (no gist reads/writes). */
+export async function validateSyncToken(): Promise<SyncValidation> {
+	const s = loadSyncState()
+	if (!s.accessToken) return {state: 'signed-out'}
+	return validateToken(s.accessToken)
 }
 
 /** Mark local portable settings as newer (call after user edits settings). */
@@ -325,6 +415,7 @@ async function githubJson<T>(
 	token: string | null,
 	url: string,
 	init?: RequestInit,
+	operation = 'GitHub request',
 ): Promise<T> {
 	const headers: Record<string, string> = {
 		Accept: 'application/vnd.github+json',
@@ -345,14 +436,23 @@ async function githubJson<T>(
 		body = text
 	}
 	if (!res.ok) {
-		const msg =
+		const apiMessage =
 			body &&
 			typeof body === 'object' &&
 			'message' in body &&
 			typeof (body as {message: unknown}).message === 'string'
 				? (body as {message: string}).message
 				: `${res.status} ${res.statusText}`
-		throw new Error(msg)
+		console.warn('[settingsSync] GitHub API failed:', {
+			operation,
+			status: res.status,
+			message: apiMessage,
+		})
+		throw new GithubApiError(
+			githubErrorMessage(res.status, apiMessage, operation),
+			operation,
+			res.status,
+		)
 	}
 	return body as T
 }
@@ -432,6 +532,8 @@ async function pollAccessToken(
 				const user = await githubJson<{login: string}>(
 					data.access_token,
 					'https://api.github.com/user',
+					undefined,
+					'fetch GitHub user',
 				)
 				login = user.login
 			} catch {
@@ -473,6 +575,8 @@ async function readGistPortable(
 	const gist = await githubJson<GistResponse>(
 		token,
 		`https://api.github.com/gists/${gistId}`,
+		undefined,
+		'read gist',
 	)
 	const file = gist.files[GIST_FILENAME]
 	if (!file) return null
@@ -485,7 +589,12 @@ async function readGistPortable(
 				Accept: 'application/vnd.github.raw',
 			},
 		})
-		if (!raw.ok) throw new Error('Failed to download gist content')
+		if (!raw.ok)
+			throw new GithubApiError(
+				githubErrorMessage(raw.status, raw.statusText, 'download gist content'),
+				'download gist content',
+				raw.status,
+			)
 		content = await raw.text()
 	}
 	if (!content.trim()) return null
@@ -495,7 +604,7 @@ async function readGistPortable(
 async function findExistingGistId(token: string): Promise<string | null> {
 	const list = await githubJson<
 		Array<{id: string; files: Record<string, unknown>}>
-	>(token, 'https://api.github.com/gists?per_page=100')
+	>(token, 'https://api.github.com/gists?per_page=100', undefined, 'list gists')
 	for (const g of list) {
 		if (g.files && GIST_FILENAME in g.files) return g.id
 	}
@@ -517,24 +626,35 @@ async function ensureGist(
 		},
 	}
 	if (existingId) {
-		await githubJson(token, `https://api.github.com/gists/${existingId}`, {
-			method: 'PATCH',
-			body: JSON.stringify(body),
-		})
+		await githubJson(
+			token,
+			`https://api.github.com/gists/${existingId}`,
+			{
+				method: 'PATCH',
+				body: JSON.stringify(body),
+			},
+			'update gist',
+		)
 		return existingId
 	}
 	const found = await findExistingGistId(token)
 	if (found) {
-		await githubJson(token, `https://api.github.com/gists/${found}`, {
-			method: 'PATCH',
-			body: JSON.stringify(body),
-		})
+		await githubJson(
+			token,
+			`https://api.github.com/gists/${found}`,
+			{
+				method: 'PATCH',
+				body: JSON.stringify(body),
+			},
+			'update gist',
+		)
 		return found
 	}
 	const created = await githubJson<GistResponse>(
 		token,
 		'https://api.github.com/gists',
 		{method: 'POST', body: JSON.stringify(body)},
+		'create gist',
 	)
 	return created.id
 }

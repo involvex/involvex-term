@@ -72,6 +72,7 @@ import {
 	setSyncClientId,
 	startDeviceLoginAsync,
 	unlinkSync,
+	validateSyncToken,
 } from './settingsSync.js'
 import {getSysStats} from './sysEngine.js'
 import {destroyTray, setupTray} from './tray.js'
@@ -626,6 +627,7 @@ function registerIpc() {
 	})
 
 	ipcMain.handle('sync:status', () => getSyncStatus())
+	ipcMain.handle('sync:validate', () => validateSyncToken())
 	ipcMain.handle('sync:setClientId', (_e, clientId: string) =>
 		setSyncClientId(typeof clientId === 'string' ? clientId : ''),
 	)

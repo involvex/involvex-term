@@ -180,6 +180,14 @@ export interface SyncStatus {
 	clientIdConfigured: boolean
 }
 
+export type SyncTokenState = 'signed-out' | 'valid' | 'invalid' | 'unknown'
+
+export interface SyncValidation {
+	state: SyncTokenState
+	login?: string
+	message?: string
+}
+
 export type CliCommand =
 	| {
 			kind: 'split'
@@ -309,6 +317,7 @@ export interface TermApiShape {
 		error?: string
 	}>
 	syncStatus: () => Promise<SyncStatus>
+	syncValidate: () => Promise<SyncValidation>
 	syncSetClientId: (clientId: string) => Promise<SyncStatus>
 	syncLoginStart: () => Promise<{
 		ok: boolean

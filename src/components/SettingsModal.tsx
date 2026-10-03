@@ -7,6 +7,7 @@ import {
 	type CommandSnippet,
 	type QuickCommand,
 	type SyncStatus,
+	type SyncValidation,
 } from '../types'
 
 interface Props {
@@ -121,6 +122,7 @@ function SyncSection({
 }) {
 	const api = termApi()
 	const [status, setStatus] = useState<SyncStatus | null>(null)
+	const [validation, setValidation] = useState<SyncValidation | null>(null)
 	const [clientIdDraft, setClientIdDraft] = useState('')
 	const [busy, setBusy] = useState(false)
 	const [message, setMessage] = useState<string | null>(null)
@@ -130,11 +132,40 @@ function SyncSection({
 	} | null>(null)
 
 	useEffect(() => {
-		void api?.syncStatus().then(s => setStatus(s))
+		let cancelled = false
+		void api?.syncStatus().then(s => {
+			if (cancelled) return
+			setStatus(s)
+			if (s.linked) {
+				void api
+					?.syncValidate()
+					.then(v => {
+						if (!cancelled) setValidation(v)
+					})
+					.catch(() => {
+						if (!cancelled) setValidation({state: 'unknown'})
+					})
+			} else {
+				setValidation(null)
+			}
+		})
+		return () => {
+			cancelled = true
+		}
 	}, [api])
 
 	const refresh = () => {
-		void api?.syncStatus().then(s => setStatus(s))
+		void api?.syncStatus().then(s => {
+			setStatus(s)
+			if (!s.linked) {
+				setValidation(null)
+				return
+			}
+			void api
+				?.syncValidate()
+				.then(v => setValidation(v))
+				.catch(() => setValidation({state: 'unknown'}))
+		})
 	}
 
 	const run = async (fn: () => Promise<void>) => {
@@ -173,6 +204,18 @@ function SyncSection({
 							</button>
 						</>
 					) : null}
+				</p>
+			)}
+			{status?.linked && validation?.state === 'invalid' && (
+				<p className="footer-dim">
+					Stored GitHub token was rejected — Push/Pull will fail. Unlink and
+					Sign in again to restore sync.
+				</p>
+			)}
+			{status?.linked && validation?.state === 'unknown' && (
+				<p className="footer-dim">
+					Couldn&apos;t reach GitHub to check the token — Push will verify it
+					anyway.
 				</p>
 			)}
 			{!status?.clientIdConfigured && !status?.linked && (

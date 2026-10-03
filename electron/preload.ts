@@ -130,6 +130,11 @@ export interface TermApi {
 		localUpdatedAt: number
 		clientIdConfigured: boolean
 	}>
+	syncValidate: () => Promise<{
+		state: 'signed-out' | 'valid' | 'invalid' | 'unknown'
+		login?: string
+		message?: string
+	}>
 	syncSetClientId: (clientId: string) => Promise<{
 		linked: boolean
 		login?: string
@@ -242,6 +247,7 @@ const api: TermApi = {
 	settingsExport: () => ipcRenderer.invoke('settings:export'),
 	settingsImport: () => ipcRenderer.invoke('settings:import'),
 	syncStatus: () => ipcRenderer.invoke('sync:status'),
+	syncValidate: () => ipcRenderer.invoke('sync:validate'),
 	syncSetClientId: clientId => ipcRenderer.invoke('sync:setClientId', clientId),
 	syncLoginStart: () => ipcRenderer.invoke('sync:loginStart'),
 	syncLoginFinish: () => ipcRenderer.invoke('sync:loginFinish'),
