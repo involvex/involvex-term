@@ -91,22 +91,43 @@ export default memo(function PaneLayout({
 
 	useEffect(() => {
 		if (!drag) return
-		const onMove = (e: PointerEvent) => {
+		// Coalesce pointermove bursts to one write per frame. Each write lands in
+		// App's `setTabs`, and a new `tabs` identity invalidates the memoized
+		// PaneLayout for *every* tab — so an unthrottled drag re-rendered the whole
+		// tree at ~60Hz. Pointer events can fire several times per frame; only the
+		// newest position matters.
+		let frame = 0
+		let latest: {x: number; y: number} | null = null
+		const flush = () => {
+			frame = 0
+			const pt = latest
+			latest = null
 			const el = containerRef.current
-			if (!el) return
+			if (!pt || !el) return
 			const rect = el.getBoundingClientRect()
 			const f =
 				drag.dir === 'horizontal'
-					? (e.clientY - rect.top) / rect.height
-					: (e.clientX - rect.left) / rect.width
+					? (pt.y - rect.top) / rect.height
+					: (pt.x - rect.left) / rect.width
 			const span = drag.rangeEnd - drag.rangeStart
 			if (!(span > 0)) return
 			onResizeSplit(drag.id, (f - drag.rangeStart) / span)
 		}
-		const onUp = () => setDrag(null)
+		const onMove = (e: PointerEvent) => {
+			latest = {x: e.clientX, y: e.clientY}
+			if (!frame) frame = requestAnimationFrame(flush)
+		}
+		const onUp = () => {
+			// Apply the release position synchronously so the divider never lands
+			// a frame short of where the pointer actually let go.
+			if (frame) cancelAnimationFrame(frame)
+			flush()
+			setDrag(null)
+		}
 		window.addEventListener('pointermove', onMove)
 		window.addEventListener('pointerup', onUp)
 		return () => {
+			if (frame) cancelAnimationFrame(frame)
 			window.removeEventListener('pointermove', onMove)
 			window.removeEventListener('pointerup', onUp)
 		}

@@ -341,6 +341,18 @@ export function insertPaneIntoTree(
 	}
 }
 
+/** Current ratio of `splitId`, or undefined if it is not in this subtree. */
+export function findSplitRatio(
+	node: PaneNode,
+	splitId: string,
+): number | undefined {
+	if (node.kind === 'leaf') return undefined
+	if (node.id === splitId) return node.ratio
+	return (
+		findSplitRatio(node.first, splitId) ?? findSplitRatio(node.second, splitId)
+	)
+}
+
 /** Set a split's ratio (clamped), preserving everything else. */
 export function updateSplitRatio(
 	node: PaneNode,
@@ -350,11 +362,25 @@ export function updateSplitRatio(
 	if (node.kind === 'leaf') return node
 	if (node.id === splitId)
 		return {...node, ratio: Math.min(0.9, Math.max(0.1, ratio))}
-	return {
-		...node,
-		first: updateSplitRatio(node.first, splitId, ratio),
-		second: updateSplitRatio(node.second, splitId, ratio),
+	// Descend one branch only. The previous shape recursed into both and
+	// reallocated the untouched sibling on every call, which during a divider
+	// drag meant rebuilding the whole subtree per pointermove.
+	if (findSplit(node.first, splitId)) {
+		const first = updateSplitRatio(node.first, splitId, ratio)
+		return first === node.first ? node : {...node, first}
 	}
+	if (findSplit(node.second, splitId)) {
+		const second = updateSplitRatio(node.second, splitId, ratio)
+		return second === node.second ? node : {...node, second}
+	}
+	return node
+}
+
+/** Whether `splitId` appears in this subtree. */
+function findSplit(node: PaneNode, splitId: string): boolean {
+	if (node.kind === 'leaf') return false
+	if (node.id === splitId) return true
+	return findSplit(node.first, splitId) || findSplit(node.second, splitId)
 }
 
 export interface GridArea {

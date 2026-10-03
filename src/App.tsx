@@ -26,6 +26,7 @@ import {
 	countLeaves,
 	findLeaf,
 	findNeighborPane,
+	findSplitRatio,
 	firstLeaf,
 	insertPaneIntoTree,
 	keepOnlyPane,
@@ -1083,12 +1084,19 @@ export default function App() {
 	// Drag a split divider to a new ratio.
 	const resizeSplit = useCallback(
 		(tabId: string, splitId: string, ratio: number) => {
+			const next = Math.min(0.9, Math.max(0.1, ratio))
 			setTabs(prev =>
-				prev.map(t =>
-					t.id === tabId
-						? {...t, root: updateSplitRatio(t.root, splitId, ratio)}
-						: t,
-				),
+				prev.map(t => {
+					if (t.id !== tabId) return t
+					// Bail out when the effective ratio is unchanged, mirroring the
+					// guard on the git-title path below. Rebuilding `tabs` identity
+					// invalidates the memoized PaneLayout for every tab, so an
+					// unconditional write here turns one divider drag into a
+					// whole-tree re-render storm.
+					const cur = findSplitRatio(t.root, splitId)
+					if (cur !== undefined && Math.abs(cur - next) < 1e-4) return t
+					return {...t, root: updateSplitRatio(t.root, splitId, next)}
+				}),
 			)
 		},
 		[],
