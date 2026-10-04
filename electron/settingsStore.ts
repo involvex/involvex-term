@@ -364,7 +364,7 @@ function warnRejected(source: string, rejected: string[]): void {
 	rejectedBySource.set(source, [...rejected])
 	if (!rejected.length) return
 	console.warn(
-		`[settings] ignored ${rejected.length} invalid value(s) in ${source}: ${rejected.join(', ')}`,
+		`[settings] ignored ${rejected.length} value(s) in ${source}: ${rejected.join(', ')}`,
 	)
 }
 
@@ -397,9 +397,52 @@ export function saveSettings(next: AppSettings): AppSettings {
 	return parsed
 }
 
+/**
+ * Strip the executable part of every imported profile.
+ *
+ * A profile's `command`/`args` are spawned verbatim on every new tab, so an
+ * imported file is executable content, not just preferences. The realistic
+ * vector is not a chosen victim but a *chosen file*: a config posted in a
+ * gist, issue, forum thread or "share your theme" tool that carries a profile
+ * running some other program's path. The user imports what they believe is a
+ * colour scheme and gets code execution on every tab they open afterwards,
+ * with no prompt and nothing in the UI to notice.
+ *
+ * So the trust boundary is the same one `extractPortable` already draws for
+ * gist sync: a profile may *travel* (id, name, kind) but its command may not.
+ * Filtering only `kind === 'custom'` would be a false sense of safety -
+ * `resolveProfile` honours `command` for every builtin kind too whenever the
+ * path exists, so `kind: 'cmd'` pointing at an arbitrary executable runs just
+ * the same.
+ *
+ * Stripping rather than dropping the entry keeps `terminal.defaultProfileId`
+ * and `startup.profileId` pointing at something real, so an import cannot
+ * leave a dangling reference behind. `resolveProfile` already falls back to
+ * the detected default when `command` is absent, so the profile still works -
+ * it just can no longer choose what gets executed.
+ *
+ * Returns the paths stripped, so the import report can say what was dropped
+ * instead of silently changing the user's shells.
+ */
+function stripProfileCommands(settings: AppSettings): string[] {
+	const dropped: string[] = []
+	const profiles = settings.terminal.profiles
+	if (!Array.isArray(profiles)) return dropped
+	profiles.forEach((p, i) => {
+		const hasCommand = typeof p.command === 'string' && p.command !== ''
+		const hasArgs = Array.isArray(p.args) && p.args.length > 0
+		if (!hasCommand && !hasArgs) return
+		delete p.command
+		delete p.args
+		dropped.push(`terminal.profiles[${i}].command`)
+	})
+	return dropped
+}
+
 /** Merge unknown JSON onto defaults and validate (for import). */
 export function parseImportedSettings(raw: unknown): AppSettings {
 	const {settings, rejected} = parseSettingsLenient(raw)
+	rejected.push(...stripProfileCommands(settings))
 	warnRejected('import', rejected)
 	return settings
 }

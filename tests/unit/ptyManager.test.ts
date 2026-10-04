@@ -1,5 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it} from 'bun:test'
 import type * as Pty from 'node-pty'
+import path from 'node:path'
 
 // ptyManager reads os.homedir() at call time (not import time), but resolveSpawnCwd
 // still touches the real filesystem, so keep every spawn pointed at a real dir.
@@ -131,5 +132,75 @@ describe('ptyManager pane-id reuse', () => {
 	it('killAllPtys with nothing live does not throw', () => {
 		expect(() => killAllPtys()).not.toThrow()
 		expect(fake.killed).toBe(0)
+	})
+})
+
+describe('spawnPty profile availability', () => {
+	beforeEach(() => {
+		fake = {spawned: 0, killed: 0}
+		setPtyModule(makeFakeModule())
+	})
+
+	afterEach(() => {
+		for (const id of ptyIds()) killPty(id)
+		setPtyModule(null)
+	})
+
+	// A real, existing shell, by ABSOLUTE path: resolveProfile's `available`
+	// is fs.existsSync, which resolves a bare name like "cmd.exe" against the
+	// process cwd rather than PATH, so a bare name would read as missing and
+	// leave the fallback with nothing to fall back to.
+	const REAL =
+		process.platform === 'win32'
+			? path.join(
+					process.env.SystemRoot ?? 'C:\\Windows',
+					'System32',
+					'cmd.exe',
+				)
+			: '/bin/sh'
+
+	it('falls back when the chosen profile points at a missing binary', () => {
+		// The regression: resolveProfile computes `available` and nothing read
+		// it, so a stale or hand-edited profile spawned a nonexistent path and
+		// surfaced as a dead pane with no explanation.
+		const entry = spawnPty('pane-missing', cwd, 80, 24, {
+			profileId: 'gone',
+			profiles: [
+				{id: 'gone', name: 'Gone', kind: 'custom', command: '/nope/not-here'},
+				{id: 'ok', name: 'Ok', kind: 'custom', command: REAL},
+			],
+			defaultProfileId: 'gone',
+		})
+
+		expect(entry.shell).toBe(REAL)
+	})
+
+	it('prefers the requested profile when it does resolve', () => {
+		const entry = spawnPty('pane-ok', cwd, 80, 24, {
+			profileId: 'ok',
+			profiles: [
+				{id: 'gone', name: 'Gone', kind: 'custom', command: '/nope/not-here'},
+				{id: 'ok', name: 'Ok', kind: 'custom', command: REAL},
+			],
+			defaultProfileId: 'gone',
+		})
+
+		expect(entry.shell).toBe(REAL)
+	})
+
+	it('does not touch the profile list when everything resolves', () => {
+		// Regression guard on the fallback itself: resolving twice must not
+		// change which shell wins.
+		const entry = spawnPty('pane-first', cwd, 80, 24, {
+			profileId: 'ok',
+			profiles: [
+				{id: 'ok', name: 'Ok', kind: 'custom', command: REAL},
+				{id: 'ok2', name: 'Ok2', kind: 'custom', command: REAL},
+			],
+			defaultProfileId: 'ok',
+		})
+
+		expect(entry.shell).toBe(REAL)
+		expect(fake.spawned).toBe(1)
 	})
 })

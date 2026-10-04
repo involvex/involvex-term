@@ -124,7 +124,22 @@ export function spawnPty(
 	const profiles = opts?.profiles?.length ? opts.profiles : defaultProfiles()
 	const fallback = opts?.defaultProfileId || defaultProfileId(profiles)
 	const profile = pickProfile(profiles, opts?.profileId, fallback)
-	const {shell, args} = resolveProfile(profile)
+	// `resolveProfile` reports whether the shell it resolved actually exists,
+	// but nothing checked it: a profile pointing at a missing binary produced a
+	// spawn ENOENT that surfaced as a dead pane with no explanation. Fall back
+	// to the first profile that does resolve, so a stale or hand-edited
+	// settings file degrades to a working shell instead of an empty pane.
+	let resolved = resolveProfile(profile)
+	if (!resolved.available) {
+		const alt = profiles.find(p => resolveProfile(p).available)
+		if (alt) {
+			resolved = resolveProfile(alt)
+			console.warn(
+				`[pty] profile "${profile.id}" (${profile.kind}) is unavailable; using "${alt.id}"`,
+			)
+		}
+	}
+	const {shell, args} = resolved
 	const home = resolveSpawnCwd(cwd)
 	if (!mod)
 		throw new Error(

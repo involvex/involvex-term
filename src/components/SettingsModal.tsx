@@ -513,9 +513,26 @@ export default function SettingsModal({
 				// Imported anyway, but say what did not make it — otherwise the
 				// user assumes the file applied in full.
 				if (r.rejected?.length) {
-					window.alert(
-						`Imported, but ${r.rejected.length} value(s) were invalid and ignored:\n\n${r.rejected.join('\n')}`,
+					// A profile command is stripped on import for safety, not
+					// because it was malformed, so it gets its own wording —
+					// otherwise the message implies the user's own file was
+					// broken and invites them to "fix" it.
+					const stripped = r.rejected.filter(p =>
+						p.startsWith('terminal.profiles['),
 					)
+					const invalid = r.rejected.filter(
+						p => !p.startsWith('terminal.profiles['),
+					)
+					const lines: string[] = []
+					if (stripped.length)
+						lines.push(
+							`${stripped.length} shell profile command(s) were removed for safety — an imported file cannot choose what gets executed:\n\n${stripped.join('\n')}`,
+						)
+					if (invalid.length)
+						lines.push(
+							`${invalid.length} value(s) were invalid and ignored:\n\n${invalid.join('\n')}`,
+						)
+					window.alert(`Imported, but:\n\n${lines.join('\n\n')}`)
 				}
 			})
 	}
