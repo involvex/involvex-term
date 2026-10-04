@@ -6,6 +6,7 @@
 import type {BrowserWindow} from 'electron'
 import {app, dialog, shell} from 'electron'
 import {autoUpdater} from 'electron-updater'
+import {safeSend} from './safeSend.js'
 
 export type UpdateState =
 	| 'idle'
@@ -37,7 +38,7 @@ function emit(next: Partial<UpdateStatus>): void {
 		...next,
 		currentVersion: app.getVersion(),
 	}
-	winRef?.webContents.send('update:status', status)
+	safeSend(winRef, 'update:status', status)
 }
 
 function wireUpdater(): void {

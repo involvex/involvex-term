@@ -57,6 +57,7 @@ import {
 	unregisterQuake,
 	unregisterToggleApp,
 } from './quake.js'
+import {safeSend} from './safeSend.js'
 import {
 	allRejectedSettingsReport,
 	loadSession,
@@ -198,8 +199,8 @@ async function refreshGitForTab(tabId: string, cwd: string) {
 		if (!win) return
 		const status = await withTimeout(getGitStatus(cwd), 8000, null)
 		if (!status) return
-		win.webContents.send(`git:changed-${tabId}`, status)
-		win.webContents.send('git:changed', {tabId, ...status})
+		safeSend(win, `git:changed-${tabId}`, status)
+		safeSend(win, 'git:changed', {tabId, ...status})
 		ensureGitWatcher(tabId, status.repoRoot)
 	})().finally(() => {
 		inFlightGit.delete(key)
@@ -309,7 +310,7 @@ function startSysLoop() {
 		}
 		try {
 			const stats = await getSysStats()
-			win.webContents.send('sys:tick', stats)
+			safeSend(win, 'sys:tick', stats)
 		} catch {
 			/* noop */
 		}
@@ -330,7 +331,7 @@ function stopSysLoop() {
 async function applyLoadedSettings(): Promise<void> {
 	if (!win || win.isDestroyed()) return
 	applyWindowMaterial(win, settings)
-	win.webContents.send('settings:changed', settings)
+	safeSend(win, 'settings:changed', settings)
 	await buildMenu(win, settings).catch(() => undefined)
 	setupTray(win, iconPath(), settings, quitApp)
 	registerQuake(win, () => settings)
@@ -401,9 +402,9 @@ function registerIpc() {
 					setCwd(tabId, newCwd)
 					scheduleGitRefresh(tabId, newCwd)
 				})
-				win?.webContents.send(`pty:data-${id}`, cleaned)
+				safeSend(win, `pty:data-${id}`, cleaned)
 				if (sawPrompt)
-					win?.webContents.send(`pty:prompt-${id}`, {
+					safeSend(win, `pty:prompt-${id}`, {
 						// Regex test scans without copying; cleaned.trim()
 						// allocated a full duplicate per prompt chunk.
 						// eslint-disable-next-line no-control-regex
@@ -418,7 +419,7 @@ function registerIpc() {
 				// and must not be told it exited, nor have "[process exited]"
 				// written into the fresh shell by the renderer's onPtyExit.
 				if (getPty(id) !== entry) return
-				win?.webContents.send(`pty:exit-${id}`)
+				safeSend(win, `pty:exit-${id}`)
 				notifyPtyExit(id)
 				// Natural exit: node-pty already tore the process down, so just
 				// forget the entry. Without this the PtyEntry (net.Socket +
@@ -839,7 +840,7 @@ function watchSettingsFile() {
 		w.on('all', () => {
 			try {
 				settings = loadSettings()
-				win?.webContents.send('settings:changed', settings)
+				safeSend(win, 'settings:changed', settings)
 				if (win) void buildMenu(win, settings).catch(() => undefined)
 				if (win) setupTray(win, iconPath(), settings, quitApp)
 				if (win) registerQuake(win, () => settings)
@@ -911,7 +912,7 @@ function createWindow() {
 	})
 
 	win.webContents.on('did-finish-load', () => {
-		win?.webContents.send('main-process-message', new Date().toLocaleString())
+		safeSend(win, 'main-process-message', new Date().toLocaleString())
 	})
 	// A dead renderer never runs its effect cleanups, so no ptyKill is issued
 	// and every pane's pty would survive with nothing left able to reach it.
@@ -940,7 +941,7 @@ function createWindow() {
 		}),
 		onChanged: () => {
 			if (!win || win.isDestroyed()) return
-			win.webContents.send('plugin:changed', {
+			safeSend(win, 'plugin:changed', {
 				commands: pluginCommandList(),
 				statusBar: pluginStatusBarList(),
 			})
@@ -983,7 +984,7 @@ if (gotLock) {
 		const cmd = parseCliArgs(argv.slice(app.isPackaged ? 1 : 2))
 		if (cmd) {
 			if (win && !win.isDestroyed() && cliReady) {
-				win.webContents.send('cli:command', cmd)
+				safeSend(win, 'cli:command', cmd)
 			} else pendingCli.push(cmd)
 		}
 		if (!win || win.isDestroyed()) return

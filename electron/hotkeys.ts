@@ -1,4 +1,5 @@
 import type {BrowserWindow, Input} from 'electron'
+import {safeSend} from './safeSend.js'
 import type {AppSettings} from './settingsStore.js'
 
 function accelFromSetting(
@@ -120,7 +121,7 @@ export function bindPaneHotkeys(
 		for (const {action, fallback} of PANE_ACTIONS) {
 			if (matchInput(input, hk[action] || fallback)) {
 				event.preventDefault()
-				win.webContents.send('tab:action', action)
+				safeSend(win, 'tab:action', action)
 				return
 			}
 		}
@@ -148,7 +149,7 @@ export async function buildMenu(
 						hk['new-tab'],
 						'CommandOrControl+Shift+T',
 					),
-					click: () => win.webContents.send('tab:action', 'new-tab'),
+					click: () => safeSend(win, 'tab:action', 'new-tab'),
 				},
 				{
 					id: 'tab:duplicate',
@@ -157,7 +158,7 @@ export async function buildMenu(
 						hk['duplicate-tab'],
 						'CommandOrControl+Shift+D',
 					),
-					click: () => win.webContents.send('tab:action', 'duplicate-tab'),
+					click: () => safeSend(win, 'tab:action', 'duplicate-tab'),
 				},
 				{
 					id: 'pane:split',
@@ -165,20 +166,19 @@ export async function buildMenu(
 					// Accelerator omitted — handled by before-input-event (Alt+Shift
 					// is unreliable as a menu accelerator on Windows).
 					accelerator: undefined,
-					click: () => win.webContents.send('tab:action', 'split-pane'),
+					click: () => safeSend(win, 'tab:action', 'split-pane'),
 				},
 				{
 					id: 'pane:split-vertical',
 					label: 'Split Pane Vertically',
 					accelerator: undefined,
-					click: () =>
-						win.webContents.send('tab:action', 'split-pane-vertical'),
+					click: () => safeSend(win, 'tab:action', 'split-pane-vertical'),
 				},
 				{
 					id: 'pane:close',
 					label: 'Close Pane',
 					accelerator: undefined,
-					click: () => win.webContents.send('tab:action', 'close-pane'),
+					click: () => safeSend(win, 'tab:action', 'close-pane'),
 				},
 				{
 					id: 'tab:close',
@@ -187,7 +187,7 @@ export async function buildMenu(
 						hk['close-tab'],
 						'CommandOrControl+Shift+W',
 					),
-					click: () => win.webContents.send('tab:action', 'close-tab'),
+					click: () => safeSend(win, 'tab:action', 'close-tab'),
 				},
 				{type: 'separator'},
 				{
@@ -197,7 +197,7 @@ export async function buildMenu(
 						hk['clear-buffer'],
 						'CommandOrControl+Shift+K',
 					),
-					click: () => win.webContents.send('tab:action', 'clear-buffer'),
+					click: () => safeSend(win, 'tab:action', 'clear-buffer'),
 				},
 				{
 					id: 'tab:mark-prompt',
@@ -206,7 +206,7 @@ export async function buildMenu(
 						hk['mark-prompt'],
 						'CommandOrControl+Shift+M',
 					),
-					click: () => win.webContents.send('tab:action', 'mark-prompt'),
+					click: () => safeSend(win, 'tab:action', 'mark-prompt'),
 				},
 				{
 					id: 'tab:prev-mark',
@@ -215,7 +215,7 @@ export async function buildMenu(
 						hk['prev-mark'],
 						'CommandOrControl+Shift+Up',
 					),
-					click: () => win.webContents.send('tab:action', 'prev-mark'),
+					click: () => safeSend(win, 'tab:action', 'prev-mark'),
 				},
 				{
 					id: 'tab:next-mark',
@@ -224,14 +224,14 @@ export async function buildMenu(
 						hk['next-mark'],
 						'CommandOrControl+Shift+Down',
 					),
-					click: () => win.webContents.send('tab:action', 'next-mark'),
+					click: () => safeSend(win, 'tab:action', 'next-mark'),
 				},
 				{type: 'separator'},
 				{
 					id: 'tab:settings',
 					label: 'Settings',
 					accelerator: accelFromSetting(hk['settings'], 'CommandOrControl+,'),
-					click: () => win.webContents.send('tab:action', 'open-settings'),
+					click: () => safeSend(win, 'tab:action', 'open-settings'),
 				},
 				{
 					id: 'tab:palette',
@@ -240,7 +240,7 @@ export async function buildMenu(
 						hk['palette'],
 						'CommandOrControl+Shift+P',
 					),
-					click: () => win.webContents.send('tab:action', 'open-palette'),
+					click: () => safeSend(win, 'tab:action', 'open-palette'),
 				},
 				{
 					id: 'tab:opencode',
@@ -249,7 +249,7 @@ export async function buildMenu(
 						hk['opencode'],
 						'CommandOrControl+Shift+O',
 					),
-					click: () => win.webContents.send('tab:action', 'open-opencode'),
+					click: () => safeSend(win, 'tab:action', 'open-opencode'),
 				},
 				{
 					id: 'tab:check-updates',
@@ -258,7 +258,7 @@ export async function buildMenu(
 						hk['check-updates'],
 						'CommandOrControl+Shift+U',
 					),
-					click: () => win.webContents.send('tab:action', 'check-updates'),
+					click: () => safeSend(win, 'tab:action', 'check-updates'),
 				},
 				{type: 'separator'},
 				{role: 'quit'},
@@ -271,7 +271,7 @@ export async function buildMenu(
 					id: 'tab:next',
 					label: 'Next Tab',
 					accelerator: accelFromSetting(hk['next-tab'], 'CommandOrControl+Tab'),
-					click: () => win.webContents.send('tab:action', 'next-tab'),
+					click: () => safeSend(win, 'tab:action', 'next-tab'),
 				},
 				{
 					id: 'tab:prev',
@@ -280,14 +280,14 @@ export async function buildMenu(
 						hk['prev-tab'],
 						'CommandOrControl+Shift+Tab',
 					),
-					click: () => win.webContents.send('tab:action', 'prev-tab'),
+					click: () => safeSend(win, 'tab:action', 'prev-tab'),
 				},
 				{type: 'separator'},
 				{
 					id: 'tab:search',
 					label: 'Find in Terminal...',
 					accelerator: accelFromSetting(hk['find'], 'CommandOrControl+Shift+F'),
-					click: () => win.webContents.send('tab:action', 'open-search'),
+					click: () => safeSend(win, 'tab:action', 'open-search'),
 				},
 				{type: 'separator'},
 				{
@@ -310,7 +310,7 @@ export async function buildMenu(
 		{
 			id: 'app:about',
 			label: 'About',
-			click: () => win.webContents.send('tab:action', 'open-about'),
+			click: () => safeSend(win, 'tab:action', 'open-about'),
 		},
 	]
 	const menu = Menu.buildFromTemplate(template)

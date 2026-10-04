@@ -1,5 +1,6 @@
 import type {BrowserWindow} from 'electron'
 import {Menu, Tray, nativeImage} from 'electron'
+import {safeSend} from './safeSend.js'
 import type {AppSettings} from './settingsStore.js'
 
 let tray: Tray | null = null
@@ -55,7 +56,7 @@ export function setupTray(
 				click: () => {
 					if (!win.isVisible()) win.show()
 					win.focus()
-					win.webContents.send('tab:action', 'new-tab')
+					safeSend(win, 'tab:action', 'new-tab')
 				},
 			},
 			{
@@ -63,7 +64,7 @@ export function setupTray(
 				click: () => {
 					if (!win.isVisible()) win.show()
 					win.focus()
-					win.webContents.send('tab:action', 'open-settings')
+					safeSend(win, 'tab:action', 'open-settings')
 				},
 			},
 			{type: 'separator'},
