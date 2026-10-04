@@ -21,6 +21,7 @@ import {
 	type PaneLaunchBinding,
 } from './lib/agentLabels'
 import {defaultAgentTools, resolveActiveAgent} from './lib/agents'
+import {focusPaneInTabs} from './lib/focusPane'
 import {matchHotkey} from './lib/hotkeys'
 import {
 	collectLeaves,
@@ -923,9 +924,7 @@ export default function App() {
 
 	// Focus a pane within its tab.
 	const focusPane = useCallback((tabId: string, paneId: string) => {
-		setTabs(prev =>
-			prev.map(t => (t.id === tabId ? {...t, activePaneId: paneId} : t)),
-		)
+		setTabs(prev => focusPaneInTabs(prev, tabId, paneId) as TabInfo[])
 	}, [])
 
 	// Title honesty: main resolves the spawn dir (saved cwd → startDir →
