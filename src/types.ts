@@ -265,6 +265,16 @@ export interface SettingsLoadResult {
 	rejectedTotal?: number
 }
 
+/**
+ * Result of persisting settings.
+ *
+ * A discriminated result rather than a rejected promise: the write failing is
+ * an ordinary outcome (read-only file, disk full), not an exception, and the
+ * renderer has to be able to tell the user rather than drop it.
+ */
+export type SettingsSaveResult =
+	{ok: true; settings: AppSettings} | {ok: false; error: string}
+
 export interface TermApiShape {
 	ptySpawn: (args: {
 		id: string
@@ -313,7 +323,7 @@ export interface TermApiShape {
 	clipboardRead: () => Promise<string>
 	clipboardHasImage: () => Promise<boolean>
 	settingsGet: () => Promise<SettingsLoadResult>
-	settingsSet: (next: AppSettings) => Promise<AppSettings>
+	settingsSet: (next: AppSettings) => Promise<SettingsSaveResult>
 	onSettingsChanged: (cb: (s: AppSettings) => void) => () => void
 	onTabAction: (cb: (action: string) => void) => () => void
 	opencodeAvailable: () => Promise<boolean>

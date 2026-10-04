@@ -73,6 +73,15 @@ const SettingsModal = lazy(() => import('./components/SettingsModal'))
 
 const EMPTY_PANE_AGENTS: Record<string, PaneAgentInfo> = {}
 
+/**
+ * Toast duration for messages about a persistent condition.
+ *
+ * A failed settings save is not transient: the file stays unwritable until
+ * the user fixes it, so the default 2.8s would hide the message from anyone
+ * not already watching the corner of the screen when they hit Save.
+ */
+const TOAST_ERROR_MS = 8000
+
 const DEFAULT_SETTINGS: AppSettings = {
 	theme: {
 		bg: '#1e1e1e',
@@ -215,6 +224,28 @@ export default function App() {
 	const [opencode, setOpencode] = useState<OpencodeStatus | null>(null)
 	const [agentAvailable, setAgentAvailable] = useState(true)
 	const [toast, setToast] = useState<string | null>(null)
+	/**
+	 * The settings actually on disk, and a sequence number for save attempts.
+	 *
+	 * `persistedRef` is the rollback target when a write fails: the UI must
+	 * never display a change that was not persisted, because the user cannot
+	 * distinguish that from a saved one until the next launch silently undoes
+	 * it. `saveSeq` stops a slow failure from reverting a newer change.
+	 */
+	const persistedRef = useRef<AppSettings | null>(null)
+	const saveSeq = useRef(0)
+
+	// Declared here, next to the state it drives, because `saveSettings` below
+	// needs it and referencing a later `const` is a temporal-dead-zone error.
+	const handleToast = useCallback((msg: string, ms?: number) => {
+		setToast(msg)
+		window.setTimeout(() => setToast(null), ms ?? 2800)
+	}, [])
+	/** Toast with an error budget, for messages the user needs time to read. */
+	const showToast = useCallback(
+		(msg: string, ms?: number) => handleToast(msg, ms),
+		[handleToast],
+	)
 	/** paneId → launch/continue binding (cleared when session ends). */
 	const [agentBindings, setAgentBindings] = useState<
 		Record<string, PaneLaunchBinding>
@@ -546,6 +577,7 @@ export default function App() {
 			.then(async s => {
 				const merged = {...DEFAULT_SETTINGS, ...s.settings}
 				setSettings(merged)
+				persistedRef.current = merged
 				// Values that failed validation reset to defaults; Settings
 				// shows which, so a typo doesn't look like the app ignoring you.
 				setSettingsRejected(s.rejected ?? [])
@@ -1289,12 +1321,35 @@ export default function App() {
 		duplicateTab,
 	])
 
-	const saveSettings = useCallback((next: AppSettings) => {
-		setSettings(next)
-		termApi()
-			?.settingsSet(next)
-			.catch(() => undefined)
-	}, [])
+	const saveSettings = useCallback(
+		(next: AppSettings) => {
+			setSettings(next)
+			const api = termApi()
+			if (!api) return
+			// Tag each attempt so a slow failure cannot roll back a change the
+			// user has since superseded.
+			const attempt = ++saveSeq.current
+			const fail = (why: string) => {
+				if (attempt !== saveSeq.current) return
+				// Roll back to what is actually on disk. Leaving the change
+				// applied would mean the app displays a setting that silently
+				// reverts on the next launch, which is worse than it never
+				// taking: the user has no way to tell the two apart.
+				const previous = persistedRef.current
+				if (previous) setSettings(previous)
+				showToast(`Not saved: ${why}. Reverted.`, TOAST_ERROR_MS)
+			}
+			void api.settingsSet(next).then(
+				res => {
+					if (attempt !== saveSeq.current) return
+					if (res?.ok) persistedRef.current = res.settings
+					else fail(res?.error ?? 'unknown error')
+				},
+				err => fail(err instanceof Error ? err.message : String(err)),
+			)
+		},
+		[showToast],
+	)
 
 	// Snapshot tabs (split trees + live per-pane cwds) for session restore.
 	const persistSession = useCallback(async () => {
@@ -1548,10 +1603,6 @@ export default function App() {
 
 	// Stable per-render callbacks: inline arrows in JSX would defeat the
 	// memo() on PaneLayout/StatusBar (new fn identity every sys/git tick).
-	const handleToast = useCallback((msg: string) => {
-		setToast(msg)
-		window.setTimeout(() => setToast(null), 2800)
-	}, [])
 	const handleGitRefreshed = useCallback((s: GitStatus) => {
 		setGit(s)
 		if (s.cwd) setCwd(s.cwd)

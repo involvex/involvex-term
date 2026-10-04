@@ -764,14 +764,26 @@ function registerIpc() {
 		}
 	})
 	ipcMain.handle('settings:set', async (_e, next: typeof settings) => {
-		const pluginsToggled = next.plugins?.enabled !== settings.plugins?.enabled
-		settings = saveSettings(next)
-		bumpLocalUpdatedAt()
-		if (pluginsToggled) await applyPluginsEnabled()
-		if (win) {
-			await applyLoadedSettings()
+		// `saveSettings` throws when the write fails (read-only file, disk
+		// full, permissions). That used to reject the IPC promise and the
+		// renderer discarded it, so a failed save looked exactly like a
+		// successful one and the change silently reappeared on the next
+		// launch. Report it instead of letting it vanish.
+		try {
+			const pluginsToggled = next.plugins?.enabled !== settings.plugins?.enabled
+			settings = saveSettings(next)
+			bumpLocalUpdatedAt()
+			if (pluginsToggled) await applyPluginsEnabled()
+			if (win) {
+				await applyLoadedSettings()
+			}
+			return {ok: true as const, settings}
+		} catch (err) {
+			return {
+				ok: false as const,
+				error: err instanceof Error ? err.message : String(err),
+			}
 		}
-		return settings
 	})
 
 	ipcMain.handle('plugin:list', () => ({
