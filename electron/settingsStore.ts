@@ -3,7 +3,11 @@ import os from 'node:os'
 import path from 'node:path'
 import {z} from 'zod'
 import {defaultAgentTools} from './agents.js'
-import {defaultProfileId, defaultProfiles} from './shellProfiles.js'
+import {
+	defaultProfileId,
+	defaultProfiles,
+	type ShellProfile,
+} from './shellProfiles.js'
 import type {SessionState} from './types.js'
 
 export const SETTINGS_DIR = path.join(os.homedir(), '.involvex-term')
@@ -566,20 +570,56 @@ export function saveSettings(next: AppSettings): AppSettings {
  *
  * Returns the paths stripped, so the import report can say what was dropped
  * instead of silently changing the user's shells.
+ *
+ * `generated` is overridable so the trust rule can be tested on Windows, where
+ * no builtin profile carries a command and the Linux shape is unreachable.
  */
-function stripProfileCommands(settings: AppSettings): string[] {
+export function stripProfileCommands(
+	settings: AppSettings,
+	generated: readonly ShellProfile[] = defaultProfiles(),
+): string[] {
 	const dropped: string[] = []
 	const profiles = settings.terminal.profiles
 	if (!Array.isArray(profiles)) return dropped
+	// A profile the app itself generates is not file-supplied content, so it
+	// is not stripped and not reported. This matters on Linux, where the
+	// default profile *is* a `custom` one pointing at $SHELL: without this,
+	// every import on Linux reported a safety removal for a shell the app
+	// itself had chosen, which is exactly the permanent warning that trains
+	// a user to ignore the one that matters.
+	//
+	// Trusting an exact match is safe rather than a hole — the generated
+	// command is what `resolveProfile` would run anyway, so keeping it grants
+	// the file no capability it did not already have.
+	const trusted = new Set(generated.map(profileFingerprint))
 	profiles.forEach((p, i) => {
 		const hasCommand = typeof p.command === 'string' && p.command !== ''
 		const hasArgs = Array.isArray(p.args) && p.args.length > 0
 		if (!hasCommand && !hasArgs) return
+		if (trusted.has(profileFingerprint(p))) return
 		delete p.command
 		delete p.args
 		dropped.push(`terminal.profiles[${i}].command`)
 	})
 	return dropped
+}
+
+/**
+ * Identity of a profile's executable configuration.
+ *
+ * `id` is included so an import cannot borrow the id of a generated profile
+ * while pointing somewhere else. `\u0000` cannot appear in a JSON string, so
+ * the join cannot be forged by choosing a value that looks like a separator.
+ */
+function profileFingerprint(p: {
+	id: string
+	kind: string
+	command?: string
+	args?: string[]
+}): string {
+	return [p.id, p.kind, p.command ?? '', (p.args ?? []).join('\u0001')].join(
+		'\u0000',
+	)
 }
 
 /** Merge unknown JSON onto defaults and validate (for import). */

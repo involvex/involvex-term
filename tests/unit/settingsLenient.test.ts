@@ -140,14 +140,21 @@ async function storeWithScratchHome(): Promise<
 > {
 	const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ivx-settings-'))
 	scratchDirs.push(home)
-	const previous = process.env.USERPROFILE
+	// Both variables: `os.homedir()` reads $HOME on POSIX and $USERPROFILE on
+	// Windows, so redirecting only one leaves the module resolving the real
+	// home on the other platform.
+	const restore = {HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE}
+	process.env.HOME = home
 	process.env.USERPROFILE = home
 	try {
 		// Distinct specifier so Bun evaluates a fresh copy of the module.
 		return await import(`../../electron/settingsStore.ts?t=${counter++}`)
 	} finally {
-		if (previous === undefined) delete process.env.USERPROFILE
-		else process.env.USERPROFILE = previous
+		for (const key of ['HOME', 'USERPROFILE'] as const) {
+			const value = restore[key]
+			if (value === undefined) delete process.env[key]
+			else process.env[key] = value
+		}
 	}
 }
 

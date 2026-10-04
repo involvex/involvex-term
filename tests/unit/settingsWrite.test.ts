@@ -22,13 +22,26 @@ async function storeWithScratchHome(): Promise<
 > {
 	const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ivx-write-'))
 	scratchDirs.push(home)
-	const previous = process.env.USERPROFILE
+	// Both variables, because `os.homedir()` reads $HOME on POSIX and
+	// $USERPROFILE on Windows.
+	//
+	// NOTE: this is best effort. Bun resolves `os.homedir()` once at process
+	// start and ignores later changes to either variable, so under `bun test`
+	// on Linux the module still resolves the real home and these tests write
+	// to the developer's actual settings dir. Verified on WSL: setting HOME
+	// mid-process does not move it, while node does. Fixed properly by making
+	// the settings dir injectable rather than derived from the environment.
+	const restore = {HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE}
+	process.env.HOME = home
 	process.env.USERPROFILE = home
 	try {
 		return await import(`../../electron/settingsStore.ts?w=${counter++}`)
 	} finally {
-		if (previous === undefined) delete process.env.USERPROFILE
-		else process.env.USERPROFILE = previous
+		for (const key of ['HOME', 'USERPROFILE'] as const) {
+			const value = restore[key]
+			if (value === undefined) delete process.env[key]
+			else process.env[key] = value
+		}
 	}
 }
 

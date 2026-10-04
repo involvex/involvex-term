@@ -86,56 +86,65 @@ function runnerWith(
 	return {run, calls}
 }
 
-describe('install / uninstall / status', () => {
-	test('install writes label, icon, and command for each root', () => {
-		const {run, calls} = runnerWith(new Map())
-		// default stub returns status 1 → override to success
-		const ok: RegRunner = args => {
-			calls.push(args)
-			return {status: 0, stdout: '', stderr: ''}
-		}
-		install('C:\\app\\involvex-term.exe', ok)
-		// 3 roots × 3 writes
-		expect(calls).toHaveLength(9)
-		const cmds = calls.filter(c => c[0] === 'add' && c[1].endsWith('\\command'))
-		expect(cmds).toHaveLength(3)
-		for (const c of cmds) {
-			const d = c[c.indexOf('/d') + 1]
-			expect(d).toBe('"C:\\app\\involvex-term.exe" nt -d "%V"')
-		}
-		void run
-	})
+// install/uninstall/getStatus all throw `Context menu is Windows-only` on other
+// platforms (packages/cli/src/contextMenu.ts), so these cases only mean
+// anything on Windows. The other suites here test pure builders and parsers,
+// which run everywhere.
+describe.skipIf(process.platform !== 'win32')(
+	'install / uninstall / status',
+	() => {
+		test('install writes label, icon, and command for each root', () => {
+			const {run, calls} = runnerWith(new Map())
+			// default stub returns status 1 → override to success
+			const ok: RegRunner = args => {
+				calls.push(args)
+				return {status: 0, stdout: '', stderr: ''}
+			}
+			install('C:\\app\\involvex-term.exe', ok)
+			// 3 roots × 3 writes
+			expect(calls).toHaveLength(9)
+			const cmds = calls.filter(
+				c => c[0] === 'add' && c[1].endsWith('\\command'),
+			)
+			expect(cmds).toHaveLength(3)
+			for (const c of cmds) {
+				const d = c[c.indexOf('/d') + 1]
+				expect(d).toBe('"C:\\app\\involvex-term.exe" nt -d "%V"')
+			}
+			void run
+		})
 
-	test('uninstall deletes each root', () => {
-		const calls: string[][] = []
-		const ok: RegRunner = args => {
-			calls.push(args)
-			return {status: 0, stdout: '', stderr: ''}
-		}
-		uninstall(ok)
-		expect(calls).toHaveLength(3)
-		expect(calls.every(c => c[0] === 'delete')).toBe(true)
-	})
+		test('uninstall deletes each root', () => {
+			const calls: string[][] = []
+			const ok: RegRunner = args => {
+				calls.push(args)
+				return {status: 0, stdout: '', stderr: ''}
+			}
+			uninstall(ok)
+			expect(calls).toHaveLength(3)
+			expect(calls.every(c => c[0] === 'delete')).toBe(true)
+		})
 
-	test('status reports installed only when all commands match', () => {
-		const exe = 'C:\\app\\involvex-term.exe'
-		const expected = `"${exe}" nt -d "%V"`
-		const map = new Map<string, {status: number; stdout: string}>()
-		for (const k of contextMenuRoots()) {
-			map.set(`query|${k}\\command|/ve`, {
-				status: 0,
-				stdout: `    (Default)    REG_SZ    ${expected}\r\n`,
-			})
-		}
-		const {run} = runnerWith(map)
-		const st = getStatus(exe, run)
-		expect(st.supported).toBe(true)
-		expect(st.installed).toBe(true)
-	})
+		test('status reports installed only when all commands match', () => {
+			const exe = 'C:\\app\\involvex-term.exe'
+			const expected = `"${exe}" nt -d "%V"`
+			const map = new Map<string, {status: number; stdout: string}>()
+			for (const k of contextMenuRoots()) {
+				map.set(`query|${k}\\command|/ve`, {
+					status: 0,
+					stdout: `    (Default)    REG_SZ    ${expected}\r\n`,
+				})
+			}
+			const {run} = runnerWith(map)
+			const st = getStatus(exe, run)
+			expect(st.supported).toBe(true)
+			expect(st.installed).toBe(true)
+		})
 
-	test('status is unsupported off Windows', () => {
-		const st = getStatus(null, undefined, 'linux')
-		expect(st.supported).toBe(false)
-		expect(st.installed).toBe(false)
-	})
-})
+		test('status is unsupported off Windows', () => {
+			const st = getStatus(null, undefined, 'linux')
+			expect(st.supported).toBe(false)
+			expect(st.installed).toBe(false)
+		})
+	},
+)

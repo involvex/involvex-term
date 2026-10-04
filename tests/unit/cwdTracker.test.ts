@@ -12,7 +12,13 @@ describe('CWD Tracker OSC7 sniffing', () => {
 			},
 		)
 
-		expect(capturedCwd).toBe('C:\\repos\\app')
+		// `normalizeWinPath` is deliberately platform-conditional (it turns the
+		// URL path `/C:/repos/app` into `C:\repos\app`), so the expected value
+		// legitimately differs off Windows. Asserting the Windows form
+		// unconditionally made this suite Linux-only-red.
+		expect(capturedCwd).toBe(
+			process.platform === 'win32' ? 'C:\\repos\\app' : '/C:/repos/app',
+		)
 		expect(output).not.toContain('\x1b]7;')
 		expect(output).toContain('helloworld')
 	})
