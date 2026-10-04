@@ -484,7 +484,7 @@ export function loadSettings(): AppSettings {
 			fs.mkdirSync(SETTINGS_DIR, {recursive: true})
 		if (!fs.existsSync(SETTINGS_FILE)) {
 			const d = defaultSettings()
-			fs.writeFileSync(SETTINGS_FILE, JSON.stringify(d, null, 2))
+			writeJsonAtomic(SETTINGS_FILE, d)
 			return d
 		}
 		const raw = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'))
@@ -498,12 +498,45 @@ export function loadSettings(): AppSettings {
 	}
 }
 
+/**
+ * Replace a JSON file atomically: write a sibling temp file, then rename over
+ * the target.
+ *
+ * `fs.writeFileSync(file, ...)` opens with 'w', which truncates the target
+ * *before* the first byte is written. So anything that interrupts the write —
+ * the app being killed, a crash, the machine losing power, the disk filling
+ * mid-write — leaves a truncated file behind. That is far worse here than for
+ * an ordinary data file: `loadSettings` catches the resulting `JSON.parse`
+ * failure and returns pristine defaults, so a settings.json that was cut in
+ * half silently resets *every* preference the user had.
+ *
+ * `rename` is atomic within a volume, so the target is only ever the old file
+ * or the new one, never a half-written mixture.
+ */
+function writeJsonAtomic(file: string, data: unknown): void {
+	const tmp = `${file}.${process.pid}.tmp`
+	try {
+		fs.writeFileSync(tmp, JSON.stringify(data, null, 2))
+		fs.renameSync(tmp, file)
+	} catch (err) {
+		// The previous file is untouched, which is the point - but the temp
+		// file must not survive to be mistaken for real settings on the next
+		// launch, or to make every later save fail.
+		try {
+			fs.unlinkSync(tmp)
+		} catch {
+			/* nothing to clean up */
+		}
+		throw err
+	}
+}
+
 export function saveSettings(next: AppSettings): AppSettings {
 	const {settings: parsed, rejected} = parseSettingsLenient(next)
 	warnRejected('save', rejected)
 	if (!fs.existsSync(SETTINGS_DIR))
 		fs.mkdirSync(SETTINGS_DIR, {recursive: true})
-	fs.writeFileSync(SETTINGS_FILE, JSON.stringify(parsed, null, 2))
+	writeJsonAtomic(SETTINGS_FILE, parsed)
 	return parsed
 }
 
