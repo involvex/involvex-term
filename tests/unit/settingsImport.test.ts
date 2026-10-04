@@ -18,6 +18,7 @@ import path from 'node:path'
 
 let counter = 0
 const scratchDirs: string[] = []
+let activeStore: typeof import('../../electron/settingsStore.ts') | null = null
 
 /**
  * Fresh module copy per test, so `rejectedBySource` (module-level state) and
@@ -28,24 +29,21 @@ async function storeWithScratchHome(): Promise<
 > {
 	const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ivx-import-'))
 	scratchDirs.push(home)
-	// Both variables: `os.homedir()` reads $HOME on POSIX and $USERPROFILE on
-	// Windows, so redirecting only one leaves the module resolving the real
-	// home on the other platform.
-	const restore = {HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE}
-	process.env.HOME = home
-	process.env.USERPROFILE = home
-	try {
-		return await import(`../../electron/settingsStore.ts?i=${counter++}`)
-	} finally {
-		for (const key of ['HOME', 'USERPROFILE'] as const) {
-			const value = restore[key]
-			if (value === undefined) delete process.env[key]
-			else process.env[key] = value
-		}
-	}
+	// Distinct specifier so Bun evaluates a fresh copy of the module; that also
+	// means the override below cannot leak into another test file.
+	const store = await import(`../../electron/settingsStore.ts?i=${counter++}`)
+	// Redirect through the seam, not $HOME / $USERPROFILE: Bun resolves
+	// `os.homedir()` once at process start, so an environment override does not
+	// move the settings dir and these tests would write to the real
+	// ~/.involvex-term.
+	store.setSettingsHome(home)
+	activeStore = store
+	return store
 }
 
 afterEach(() => {
+	activeStore?.setSettingsHome(null)
+	activeStore = null
 	while (scratchDirs.length) {
 		fs.rmSync(scratchDirs.pop()!, {recursive: true, force: true})
 	}

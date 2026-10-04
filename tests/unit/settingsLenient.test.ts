@@ -134,31 +134,28 @@ describe('parseSettingsLenient', () => {
  */
 let counter = 0
 const scratchDirs: string[] = []
+let activeStore: typeof import('../../electron/settingsStore.ts') | null = null
 
 async function storeWithScratchHome(): Promise<
 	typeof import('../../electron/settingsStore.ts')
 > {
 	const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ivx-settings-'))
 	scratchDirs.push(home)
-	// Both variables: `os.homedir()` reads $HOME on POSIX and $USERPROFILE on
-	// Windows, so redirecting only one leaves the module resolving the real
-	// home on the other platform.
-	const restore = {HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE}
-	process.env.HOME = home
-	process.env.USERPROFILE = home
-	try {
-		// Distinct specifier so Bun evaluates a fresh copy of the module.
-		return await import(`../../electron/settingsStore.ts?t=${counter++}`)
-	} finally {
-		for (const key of ['HOME', 'USERPROFILE'] as const) {
-			const value = restore[key]
-			if (value === undefined) delete process.env[key]
-			else process.env[key] = value
-		}
-	}
+	// Distinct specifier so Bun evaluates a fresh copy of the module; that also
+	// means the override below cannot leak into another test file.
+	const store = await import(`../../electron/settingsStore.ts?t=${counter++}`)
+	// Redirect through the seam, not $HOME / $USERPROFILE: Bun resolves
+	// `os.homedir()` once at process start, so an environment override does not
+	// move the settings dir and these tests would write to the real
+	// ~/.involvex-term.
+	store.setSettingsHome(home)
+	activeStore = store
+	return store
 }
 
 afterEach(() => {
+	activeStore?.setSettingsHome(null)
+	activeStore = null
 	while (scratchDirs.length) {
 		fs.rmSync(scratchDirs.pop()!, {recursive: true, force: true})
 	}
@@ -242,9 +239,9 @@ describe('prototype-polluting keys in a settings document', () => {
 describe('rejection reporting', () => {
 	it('records the paths a load had to reject', async () => {
 		const store = await storeWithScratchHome()
-		fs.mkdirSync(store.SETTINGS_DIR, {recursive: true})
+		fs.mkdirSync(store.settingsDir(), {recursive: true})
 		fs.writeFileSync(
-			store.SETTINGS_FILE,
+			store.settingsFile(),
 			JSON.stringify({theme: {fontSize: '14'}, terminal: {scrollback: 1}}),
 		)
 
@@ -283,9 +280,9 @@ describe('rejection reporting', () => {
 
 	it('reports nothing when the file is entirely valid', async () => {
 		const store = await storeWithScratchHome()
-		fs.mkdirSync(store.SETTINGS_DIR, {recursive: true})
+		fs.mkdirSync(store.settingsDir(), {recursive: true})
 		fs.writeFileSync(
-			store.SETTINGS_FILE,
+			store.settingsFile(),
 			JSON.stringify({theme: {bg: '#002b36'}}),
 		)
 
@@ -312,9 +309,9 @@ describe('rejection reports are capped', () => {
 	it('caps the path list while reporting the true total', async () => {
 		const store = await storeWithScratchHome()
 		const n = LIMIT * 5
-		fs.mkdirSync(store.SETTINGS_DIR, {recursive: true})
+		fs.mkdirSync(store.settingsDir(), {recursive: true})
 		fs.writeFileSync(
-			store.SETTINGS_FILE,
+			store.settingsFile(),
 			JSON.stringify(pathologicalHotkeys(n)),
 		)
 
@@ -335,9 +332,9 @@ describe('rejection reports are capped', () => {
 		// on harmless input.
 		const payloadFor = async (n: number) => {
 			const store = await storeWithScratchHome()
-			fs.mkdirSync(store.SETTINGS_DIR, {recursive: true})
+			fs.mkdirSync(store.settingsDir(), {recursive: true})
 			fs.writeFileSync(
-				store.SETTINGS_FILE,
+				store.settingsFile(),
 				JSON.stringify(pathologicalHotkeys(n)),
 			)
 			store.loadSettings()
@@ -357,9 +354,9 @@ describe('rejection reports are capped', () => {
 		// path: `[...set].slice(0, n)` walks the whole set and allocates an
 		// array of all of it to return a prefix.
 		const store = await storeWithScratchHome()
-		fs.mkdirSync(store.SETTINGS_DIR, {recursive: true})
+		fs.mkdirSync(store.settingsDir(), {recursive: true})
 		fs.writeFileSync(
-			store.SETTINGS_FILE,
+			store.settingsFile(),
 			JSON.stringify(pathologicalHotkeys(LIMIT * 20)),
 		)
 		store.loadSettings()
@@ -368,9 +365,9 @@ describe('rejection reports are capped', () => {
 		// instead: repeated calls must cost the same whether the file had
 		// 4x the bad values, because the retained data is capped.
 		const small = await storeWithScratchHome()
-		fs.mkdirSync(small.SETTINGS_DIR, {recursive: true})
+		fs.mkdirSync(small.settingsDir(), {recursive: true})
 		fs.writeFileSync(
-			small.SETTINGS_FILE,
+			small.settingsFile(),
 			JSON.stringify(pathologicalHotkeys(LIMIT)),
 		)
 		small.loadSettings()
@@ -382,9 +379,9 @@ describe('rejection reports are capped', () => {
 
 	it('de-duplicates paths rejected by two sources', async () => {
 		const store = await storeWithScratchHome()
-		fs.mkdirSync(store.SETTINGS_DIR, {recursive: true})
+		fs.mkdirSync(store.settingsDir(), {recursive: true})
 		const doc = {theme: {fontSize: '14'}}
-		fs.writeFileSync(store.SETTINGS_FILE, JSON.stringify(doc))
+		fs.writeFileSync(store.settingsFile(), JSON.stringify(doc))
 
 		store.loadSettings()
 		// A save of the same bad value rejects the same path again.
@@ -399,9 +396,9 @@ describe('rejection reports are capped', () => {
 
 	it('does not cap when the file is only mildly broken', async () => {
 		const store = await storeWithScratchHome()
-		fs.mkdirSync(store.SETTINGS_DIR, {recursive: true})
+		fs.mkdirSync(store.settingsDir(), {recursive: true})
 		fs.writeFileSync(
-			store.SETTINGS_FILE,
+			store.settingsFile(),
 			JSON.stringify({theme: {fontSize: '14'}, terminal: {scrollback: 1}}),
 		)
 

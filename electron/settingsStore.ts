@@ -10,9 +10,36 @@ import {
 } from './shellProfiles.js'
 import type {SessionState} from './types.js'
 
-export const SETTINGS_DIR = path.join(os.homedir(), '.involvex-term')
-export const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.json')
-export const SESSION_FILE = path.join(SETTINGS_DIR, 'session.json')
+/**
+ * Where settings, the session snapshot and the sync token live.
+ *
+ * A function rather than a module constant so tests can relocate it. Bun
+ * resolves `os.homedir()` once at process start and ignores later changes to
+ * $HOME, so pointing the environment at a temp dir does *not* move this — the
+ * suite would otherwise read and overwrite the developer's real
+ * `~/.involvex-term`. Passing an explicit root is the only reliable seam.
+ */
+let settingsRoot = path.join(os.homedir(), '.involvex-term')
+
+/** Relocate the settings directory. Pass null to restore the home default. */
+export function setSettingsHome(dir: string | null): void {
+	settingsRoot =
+		dir === null
+			? path.join(os.homedir(), '.involvex-term')
+			: path.join(dir, '.involvex-term')
+}
+
+export function settingsDir(): string {
+	return settingsRoot
+}
+
+export function settingsFile(): string {
+	return path.join(settingsRoot, 'settings.json')
+}
+
+export function sessionFile(): string {
+	return path.join(settingsRoot, 'session.json')
+}
 
 const ThemeSchema = z.object({
 	bg: z.string().default('#1e1e1e'),
@@ -484,14 +511,14 @@ function warnRejected(source: string, all: Set<string>): void {
 
 export function loadSettings(): AppSettings {
 	try {
-		if (!fs.existsSync(SETTINGS_DIR))
-			fs.mkdirSync(SETTINGS_DIR, {recursive: true})
-		if (!fs.existsSync(SETTINGS_FILE)) {
+		if (!fs.existsSync(settingsDir()))
+			fs.mkdirSync(settingsDir(), {recursive: true})
+		if (!fs.existsSync(settingsFile())) {
 			const d = defaultSettings()
-			writeJsonAtomic(SETTINGS_FILE, d)
+			writeJsonAtomic(settingsFile(), d)
 			return d
 		}
-		const raw = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'))
+		const raw = JSON.parse(fs.readFileSync(settingsFile(), 'utf-8'))
 		const {settings: parsed, rejected} = parseSettingsLenient(raw)
 		warnRejected('settings.json', rejected)
 		return parsed
@@ -538,9 +565,9 @@ function writeJsonAtomic(file: string, data: unknown): void {
 export function saveSettings(next: AppSettings): AppSettings {
 	const {settings: parsed, rejected} = parseSettingsLenient(next)
 	warnRejected('save', rejected)
-	if (!fs.existsSync(SETTINGS_DIR))
-		fs.mkdirSync(SETTINGS_DIR, {recursive: true})
-	writeJsonAtomic(SETTINGS_FILE, parsed)
+	if (!fs.existsSync(settingsDir()))
+		fs.mkdirSync(settingsDir(), {recursive: true})
+	writeJsonAtomic(settingsFile(), parsed)
 	return parsed
 }
 
@@ -642,8 +669,8 @@ function isValidSessionTab(t: unknown): t is {title: unknown; root: unknown} {
 
 export function loadSession(): SessionState | null {
 	try {
-		if (!fs.existsSync(SESSION_FILE)) return null
-		const raw = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf-8')) as {
+		if (!fs.existsSync(sessionFile())) return null
+		const raw = JSON.parse(fs.readFileSync(sessionFile(), 'utf-8')) as {
 			tabs?: unknown
 		}
 		if (!raw || !Array.isArray(raw.tabs)) return null
@@ -673,8 +700,8 @@ export function loadSession(): SessionState | null {
 
 export function saveSession(next: SessionState): void {
 	try {
-		if (!fs.existsSync(SETTINGS_DIR))
-			fs.mkdirSync(SETTINGS_DIR, {recursive: true})
+		if (!fs.existsSync(settingsDir()))
+			fs.mkdirSync(settingsDir(), {recursive: true})
 		const tabs = Array.isArray(next?.tabs)
 			? next.tabs.filter(isValidSessionTab).map(t => {
 					const rec = t as {
@@ -694,7 +721,7 @@ export function saveSession(next: SessionState): void {
 					}
 				})
 			: []
-		fs.writeFileSync(SESSION_FILE, JSON.stringify({version: 1, tabs}))
+		fs.writeFileSync(sessionFile(), JSON.stringify({version: 1, tabs}))
 	} catch {
 		/* session persistence is best-effort */
 	}

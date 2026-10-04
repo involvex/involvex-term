@@ -65,7 +65,7 @@ import {
 	rejectedSettingsReport,
 	saveSession,
 	saveSettings,
-	SETTINGS_FILE,
+	settingsFile,
 } from './settingsStore.js'
 import {
 	bumpLocalUpdatedAt,
@@ -823,7 +823,7 @@ function applyWindowMaterial(browser: BrowserWindow, s: typeof settings): void {
 
 function watchSettingsFile() {
 	try {
-		const w = chokidar.watch(SETTINGS_FILE, {ignoreInitial: true})
+		const w = chokidar.watch(settingsFile(), {ignoreInitial: true})
 		w.on('all', () => {
 			try {
 				settings = loadSettings()

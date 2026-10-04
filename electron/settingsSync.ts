@@ -8,13 +8,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import {z} from 'zod'
-import {
-	type AppSettings,
-	SETTINGS_DIR,
-	SettingsSchema,
-} from './settingsStore.js'
+import {type AppSettings, settingsDir, SettingsSchema} from './settingsStore.js'
 
-export const SYNC_FILE = path.join(SETTINGS_DIR, 'sync.json')
+/** Lazily derived so a relocated settings dir is honoured. */
+const syncFile = (): string => path.join(settingsDir(), 'sync.json')
 export const GIST_FILENAME = 'involvex-term-settings.json'
 
 /**
@@ -234,8 +231,8 @@ export function hasExplicitClientId(state: SyncState): boolean {
 
 export function loadSyncState(): SyncState {
 	try {
-		if (!fs.existsSync(SYNC_FILE)) return SyncStateSchema.parse({})
-		const raw = JSON.parse(fs.readFileSync(SYNC_FILE, 'utf8'))
+		if (!fs.existsSync(syncFile())) return SyncStateSchema.parse({})
+		const raw = JSON.parse(fs.readFileSync(syncFile(), 'utf8'))
 		const parsed = SyncStateSchema.parse(raw ?? {})
 		return normalizeSyncState(parsed)
 	} catch {
@@ -257,14 +254,14 @@ function normalizeSyncState(s: SyncState): SyncState {
 
 export function saveSyncState(next: SyncState): SyncState {
 	const parsed = normalizeSyncState(SyncStateSchema.parse(next))
-	if (!fs.existsSync(SETTINGS_DIR))
-		fs.mkdirSync(SETTINGS_DIR, {recursive: true})
-	fs.writeFileSync(SYNC_FILE, JSON.stringify(parsed, null, 2), {
+	if (!fs.existsSync(settingsDir()))
+		fs.mkdirSync(settingsDir(), {recursive: true})
+	fs.writeFileSync(syncFile(), JSON.stringify(parsed, null, 2), {
 		encoding: 'utf8',
 		mode: 0o600,
 	})
 	try {
-		fs.chmodSync(SYNC_FILE, 0o600)
+		fs.chmodSync(syncFile(), 0o600)
 	} catch {
 		/* Windows may ignore mode */
 	}

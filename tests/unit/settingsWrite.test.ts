@@ -16,36 +16,31 @@ import path from 'node:path'
 
 let counter = 0
 const scratchDirs: string[] = []
+let activeStore: typeof import('../../electron/settingsStore.ts') | null = null
 
 async function storeWithScratchHome(): Promise<
 	typeof import('../../electron/settingsStore.ts')
 > {
 	const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ivx-write-'))
 	scratchDirs.push(home)
-	// Both variables, because `os.homedir()` reads $HOME on POSIX and
-	// $USERPROFILE on Windows.
-	//
-	// NOTE: this is best effort. Bun resolves `os.homedir()` once at process
-	// start and ignores later changes to either variable, so under `bun test`
-	// on Linux the module still resolves the real home and these tests write
-	// to the developer's actual settings dir. Verified on WSL: setting HOME
-	// mid-process does not move it, while node does. Fixed properly by making
-	// the settings dir injectable rather than derived from the environment.
-	const restore = {HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE}
-	process.env.HOME = home
-	process.env.USERPROFILE = home
-	try {
-		return await import(`../../electron/settingsStore.ts?w=${counter++}`)
-	} finally {
-		for (const key of ['HOME', 'USERPROFILE'] as const) {
-			const value = restore[key]
-			if (value === undefined) delete process.env[key]
-			else process.env[key] = value
-		}
-	}
+	// Distinct specifier so Bun evaluates a fresh copy of the module; that also
+	// means the override below cannot leak into another test file.
+	const store = await import(`../../electron/settingsStore.ts?w=${counter++}`)
+	// Redirect through the seam rather than $HOME / $USERPROFILE: Bun resolves
+	// `os.homedir()` once at process start and ignores later changes to either
+	// (verified on WSL — node honours them, Bun does not), so an environment
+	// override does not move the settings dir and these tests would read and
+	// overwrite the developer's real ~/.involvex-term.
+	store.setSettingsHome(home)
+	activeStore = store
+	return store
 }
 
 afterEach(() => {
+	// Put the copy back on the home default before its temp dir goes away, so
+	// a later test in this file cannot touch a deleted directory.
+	activeStore?.setSettingsHome(null)
+	activeStore = null
 	while (scratchDirs.length) {
 		fs.rmSync(scratchDirs.pop()!, {recursive: true, force: true})
 	}
@@ -57,11 +52,24 @@ function settingsDirEntries(dir: string): string[] {
 }
 
 describe('saveSettings writes atomically', () => {
+	it('resolves the settings dir inside the scratch home', async () => {
+		// Guards the isolation the whole suite depends on. Without the seam the
+		// settings dir came from `os.homedir()`, which Bun fixes at process
+		// start, so redirecting the environment did nothing and these tests
+		// silently ran against — and overwrote — the developer's real settings.
+		const store = await storeWithScratchHome()
+
+		expect(store.settingsDir().startsWith(os.tmpdir())).toBe(true)
+		expect(store.settingsDir().startsWith(os.homedir())).toBe(false)
+		// And nothing was created in the real location.
+		expect(fs.existsSync(store.settingsDir())).toBe(false)
+	})
+
 	it('leaves no temp file behind after a successful save', async () => {
 		const store = await storeWithScratchHome()
 		store.saveSettings(store.defaultSettings())
 
-		expect(settingsDirEntries(store.SETTINGS_DIR)).toEqual(['settings.json'])
+		expect(settingsDirEntries(store.settingsDir())).toEqual(['settings.json'])
 	})
 
 	it('leaves no temp file behind across repeated saves', async () => {
@@ -75,14 +83,14 @@ describe('saveSettings writes atomically', () => {
 			})
 		}
 
-		expect(settingsDirEntries(store.SETTINGS_DIR)).toEqual(['settings.json'])
+		expect(settingsDirEntries(store.settingsDir())).toEqual(['settings.json'])
 	})
 
 	it('produces a complete, parseable file', async () => {
 		const store = await storeWithScratchHome()
 		store.saveSettings(store.defaultSettings())
 
-		const raw = fs.readFileSync(store.SETTINGS_FILE, 'utf-8')
+		const raw = fs.readFileSync(store.settingsFile(), 'utf-8')
 		expect(() => JSON.parse(raw)).not.toThrow()
 		// The rename must have moved the whole document, not an empty file.
 		expect(JSON.parse(raw).theme.fontSize).toBe(
@@ -97,7 +105,7 @@ describe('saveSettings writes atomically', () => {
 		const store = await storeWithScratchHome()
 		const good = store.defaultSettings()
 		store.saveSettings(good)
-		const before = fs.readFileSync(store.SETTINGS_FILE, 'utf-8')
+		const before = fs.readFileSync(store.settingsFile(), 'utf-8')
 
 		const realRename = fs.renameSync
 		// @ts-expect-error - deliberately swapping the implementation
@@ -121,7 +129,7 @@ describe('saveSettings writes atomically', () => {
 		}
 
 		// Byte-identical: a direct writeFileSync would have truncated this.
-		expect(fs.readFileSync(store.SETTINGS_FILE, 'utf-8')).toBe(before)
+		expect(fs.readFileSync(store.settingsFile(), 'utf-8')).toBe(before)
 		// And still loadable, which is the whole point - a corrupt file here
 		// would reset every setting on the next launch.
 		expect(store.loadSettings().theme.fontSize).toBe(good.theme.fontSize)
@@ -146,7 +154,7 @@ describe('saveSettings writes atomically', () => {
 
 		// A leaked temp would be mistaken for real settings on the next launch
 		// and would make every later save fail against the wrong target.
-		expect(settingsDirEntries(store.SETTINGS_DIR)).toEqual(['settings.json'])
+		expect(settingsDirEntries(store.settingsDir())).toEqual(['settings.json'])
 	})
 
 	it('does not corrupt settings.json across many saves', async () => {
@@ -159,7 +167,7 @@ describe('saveSettings writes atomically', () => {
 				...d,
 				terminal: {...d.terminal, scrollback: 1000 + i},
 			})
-			const onDisk = JSON.parse(fs.readFileSync(store.SETTINGS_FILE, 'utf-8'))
+			const onDisk = JSON.parse(fs.readFileSync(store.settingsFile(), 'utf-8'))
 			expect(onDisk.terminal.scrollback).toBe(1000 + i)
 		}
 	})
