@@ -952,19 +952,27 @@ export default function TerminalView({
 					if (t && isSpawnableGeometry(t.cols, t.rows))
 						termApi()?.ptyResize(paneId, t.cols, t.rows)
 				}
-				// Skip the focus grab while the tab bar holds *keyboard* focus. The
-				// tab bar moves focus with the arrow keys, and yanking it back
-				// here made every arrow press work exactly once.
+				// Skip the focus grab while a *tab* holds keyboard focus. The tab
+				// bar moves focus with the arrow keys, and yanking it back here
+				// made every arrow press work exactly once.
 				//
-				// :focus-visible is what separates the two cases: clicking a tab
-				// focuses it too (it has tabIndex now), but Chromium does not
-				// mark a pointer click focus-visible, whereas arrow navigation
-				// does. So a mouse user still gets the caret in the terminal.
+				// Matched on the tab element itself, not on an ancestor of the
+				// tab bar: `[role=tablist]` is the whole `.tabbar` container, so
+				// `closest()` from it also matches the close, `+`, quick-command
+				// and menu buttons inside it. Scoped that way, this guard
+				// suppressed the focus grab for those too, and Ctrl+Shift+T
+				// spawned a tab that never received keyboard focus - the user's
+				// next keystrokes went to the `+` button and were dropped.
+				//
+				// :focus-visible is what separates keyboard from pointer: clicking
+				// a tab focuses it too (it has tabIndex now), but Chromium does not
+				// mark a pointer click focus-visible, whereas arrow navigation does.
+				// So a mouse user still gets the caret in the terminal.
 				const ae = document.activeElement
 				if (
 					ae instanceof HTMLElement &&
 					ae.matches(':focus-visible') &&
-					ae.closest('[role="tablist"]')
+					ae.matches('[role="tab"]')
 				)
 					return
 				termRef.current?.focus()
