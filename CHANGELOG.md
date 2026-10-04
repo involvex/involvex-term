@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.8.6] - 2026-10-04
+
+### Added
+
+- keyboard resizing for split dividers
+- transitions for hover and state changes
+- keyboard navigation for the tab bar
+- add a themed focus ring for keyboard navigation
+- surface rejected settings paths in the UI
+- derive chrome tokens from settings.theme
+
+### Fixed
+
+- lock node-pty's pty registry, drop the assert that aborted the app
+- settings banner blames only the file it names
+- the settings rejection banner could never be hidden
+- stop reporting a settings.json that is no longer invalid
+- let only the settings write decide whether a save succeeded
+- guard renderer sends against a destroyed window
+- report settings write failures instead of swallowing them
+- make the settings directory injectable so tests are isolated
+- make the settings test suite pass on Linux
+- one Tab stop for the tab strip, NaN-safe split ratios
+- write settings.json atomically
+- ignore prototype-polluting keys when merging settings
+- import must not install executable shell profiles
+- focus guard matched the tab bar, not the tab
+- make the chrome font theme-driven
+- make client-id field reachable, reject unknown actions
+- fall back per field instead of resetting the file
+- release pty state on natural exit and teardown on quit
+- kill stale pty before re-spawn with reused pane id
+
+### Changed
+
+- test: isolate pluginManager through the settings seam
+- perf: cap the settings rejection report
+- perf: redundant pane focus no longer rebuilds every tab
+- refactor: introduce design tokens for app chrome
+- perf: diff-guard pane agent labels against poll ticks
+- perf: throttle pane divider drag writes
+- ci: run bun test and ignore generated coverage output
+
 ## [0.8.5] - 2026-10-03
 
 ### Added
