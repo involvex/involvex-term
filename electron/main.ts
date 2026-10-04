@@ -33,7 +33,7 @@ import {
 	notifyPtyExit,
 	notifyPtySpawn,
 	pluginCommandList,
-	PLUGINS_DIR,
+	pluginsDir,
 	pluginStatus,
 	pluginStatusBarList,
 	runPluginCommand,
@@ -783,8 +783,8 @@ function registerIpc() {
 		runPluginCommand(id),
 	)
 	ipcMain.handle('plugin:openDir', async () => {
-		fs.mkdirSync(PLUGINS_DIR, {recursive: true})
-		return shell.openPath(PLUGINS_DIR)
+		fs.mkdirSync(pluginsDir(), {recursive: true})
+		return shell.openPath(pluginsDir())
 	})
 	ipcMain.handle('plugin:reload', async () => {
 		if (settings.plugins.enabled) await loadPlugins(app.getVersion())

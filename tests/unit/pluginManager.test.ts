@@ -3,11 +3,15 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-// pluginManager reads PLUGINS_DIR from os.homedir() at import time via a
-// module-level constant, so point HOME at a scratch dir before importing.
 const scratchHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ivx-term-plugins-'))
-process.env['HOME'] = scratchHome
-process.env['USERPROFILE'] = scratchHome
+
+const settingsStore = await import('../../electron/settingsStore.ts')
+// Redirect through the seam rather than $HOME / $USERPROFILE. Bun resolves
+// `os.homedir()` once at process start and ignores later changes to either, so
+// the previous environment override moved nothing: these tests created — and
+// then deleted — a `plugins` directory in the developer's real
+// ~/.involvex-term on every run.
+settingsStore.setSettingsHome(scratchHome)
 
 const {
 	initPluginHost,
@@ -17,18 +21,30 @@ const {
 	pluginStatusBarList,
 	runPluginCommand,
 	unloadPlugins,
-	PLUGINS_DIR,
+	pluginsDir,
 } = await import('../../electron/pluginManager.ts')
 
 function writePlugin(name: string, source: string): void {
-	const dir = path.join(PLUGINS_DIR, name)
+	const dir = path.join(pluginsDir(), name)
 	fs.mkdirSync(dir, {recursive: true})
 	fs.writeFileSync(path.join(dir, 'index.mjs'), source)
 }
 
 describe('pluginManager', () => {
+	it('resolves the plugins dir inside the scratch home', () => {
+		// Guards the isolation. Plugins live inside the settings directory, so
+		// relocating that directory has to move them too; if `pluginsDir()`
+		// ever went back to reading `os.homedir()` directly, these tests would
+		// pass while still touching the real home.
+		expect(pluginsDir()).toBe(
+			path.join(scratchHome, '.involvex-term', 'plugins'),
+		)
+		expect(pluginsDir().startsWith(os.tmpdir())).toBe(true)
+		expect(pluginsDir().startsWith(os.homedir())).toBe(false)
+	})
+
 	beforeEach(() => {
-		fs.rmSync(PLUGINS_DIR, {recursive: true, force: true})
+		fs.rmSync(pluginsDir(), {recursive: true, force: true})
 		initPluginHost({
 			settingsSnapshot: () => ({
 				version: '9.9.9',
@@ -40,7 +56,7 @@ describe('pluginManager', () => {
 
 	afterEach(async () => {
 		await unloadPlugins()
-		fs.rmSync(PLUGINS_DIR, {recursive: true, force: true})
+		fs.rmSync(pluginsDir(), {recursive: true, force: true})
 	})
 
 	it('loads a plugin and registers its command', async () => {

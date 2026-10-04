@@ -1,5 +1,4 @@
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import {pathToFileURL} from 'node:url'
 import type {
@@ -12,8 +11,22 @@ import type {
 	PluginStatusBarSegment,
 	PtySpawnInfo,
 } from './pluginTypes.js'
+import {settingsDir} from './settingsStore.js'
 
-export const PLUGINS_DIR = path.join(os.homedir(), '.involvex-term', 'plugins')
+/**
+ * Where plugins are loaded from: inside the settings directory.
+ *
+ * Derived from `settingsDir()` rather than `os.homedir()` so relocating the
+ * settings directory moves the plugins with it. Plugins sit inside that
+ * directory, so deriving from the same root is what makes a single seam
+ * (`setSettingsHome`) cover both — and it stops the tests from creating a
+ * stray `~/.involvex-term` in the developer's real home.
+ *
+ * A function rather than a constant because the value has to follow that seam.
+ */
+export function pluginsDir(): string {
+	return path.join(settingsDir(), 'plugins')
+}
 
 type Listener<T extends unknown[]> = (...args: T) => void
 
@@ -178,11 +191,11 @@ function findEntry(dir: string): string | null {
 export async function loadPlugins(appVersion: string): Promise<void> {
 	unloadAll()
 	ready = true
-	if (!fs.existsSync(PLUGINS_DIR)) return
+	if (!fs.existsSync(pluginsDir())) return
 	let names: string[]
 	try {
 		names = fs
-			.readdirSync(PLUGINS_DIR, {withFileTypes: true})
+			.readdirSync(pluginsDir(), {withFileTypes: true})
 			.filter(d => d.isDirectory())
 			.map(d => d.name)
 	} catch (e) {
@@ -190,7 +203,7 @@ export async function loadPlugins(appVersion: string): Promise<void> {
 		return
 	}
 	for (const name of names) {
-		const dir = path.join(PLUGINS_DIR, name)
+		const dir = path.join(pluginsDir(), name)
 		const entry = findEntry(dir)
 		if (!entry) continue
 		try {
@@ -224,7 +237,7 @@ export async function unloadPlugins(): Promise<void> {
 
 export function pluginStatus(enabled: boolean): PluginStatus {
 	return {
-		dir: PLUGINS_DIR,
+		dir: pluginsDir(),
 		enabled: enabled && ready,
 		loaded: loaded.map(p => ({name: p.name, commands: [...p.commandIds]})),
 		errors,
