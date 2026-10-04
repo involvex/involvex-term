@@ -638,9 +638,15 @@ export default function App() {
 				setActiveId(t.id)
 			})
 			.finally(() => setBootstrapped(true))
-		const off = api.onSettingsChanged(s =>
-			setSettings({...DEFAULT_SETTINGS, ...(s as AppSettings)}),
-		)
+		const off = api.onSettingsChanged(s => {
+			// Also refresh the rollback target. This fires when the file is
+			// edited outside the app, so the previous value is no longer what
+			// is on disk, and rolling back to it would put the UI in
+			// disagreement with the file.
+			const merged = {...DEFAULT_SETTINGS, ...(s as AppSettings)}
+			persistedRef.current = merged
+			setSettings(merged)
+		})
 		return off
 	}, [])
 

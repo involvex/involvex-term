@@ -765,26 +765,40 @@ function registerIpc() {
 		}
 	})
 	ipcMain.handle('settings:set', async (_e, next: typeof settings) => {
+		// Only the write decides whether this save succeeded.
+		//
 		// `saveSettings` throws when the write fails (read-only file, disk
 		// full, permissions). That used to reject the IPC promise and the
 		// renderer discarded it, so a failed save looked exactly like a
 		// successful one and the change silently reappeared on the next
-		// launch. Report it instead of letting it vanish.
+		// launch.
+		const pluginsToggled = next.plugins?.enabled !== settings.plugins?.enabled
+		let saved: typeof settings
 		try {
-			const pluginsToggled = next.plugins?.enabled !== settings.plugins?.enabled
-			settings = saveSettings(next)
-			bumpLocalUpdatedAt()
-			if (pluginsToggled) await applyPluginsEnabled()
-			if (win) {
-				await applyLoadedSettings()
-			}
-			return {ok: true as const, settings}
+			saved = saveSettings(next)
 		} catch (err) {
 			return {
 				ok: false as const,
 				error: err instanceof Error ? err.message : String(err),
 			}
 		}
+		settings = saved
+		bumpLocalUpdatedAt()
+
+		// Everything past this point happens after the file is written, so a
+		// failure here says nothing about persistence. Reporting it as a
+		// failed save would roll the renderer's UI back to the previous
+		// settings while the file holds the new ones - the app disagreeing
+		// with its own disk, which is the exact problem this handler exists
+		// to remove. Apply failures are logged instead, and the renderer can
+		// still re-read the file.
+		try {
+			if (pluginsToggled) await applyPluginsEnabled()
+			if (win) await applyLoadedSettings()
+		} catch (e) {
+			console.warn('[settings:set] saved, but applying the result failed:', e)
+		}
+		return {ok: true as const, settings: saved}
 	})
 
 	ipcMain.handle('plugin:list', () => ({
