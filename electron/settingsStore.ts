@@ -455,44 +455,33 @@ export function rejectedSettingsReport(source: string): RejectedReport {
 }
 
 /**
- * Report across every source, for `settings:get`.
+ * What the settings rejection banner should say: settings.json as it is now.
  *
- * `paths` is capped because the renderer fetches this on every startup, so it
- * must not scale with how broken the file is.
+ * The banner's wording is fixed to "in settings.json"
+ * (`src/components/SettingsModal.tsx`), so the report has to describe that file
+ * and nothing else. Two decisions, both load-bearing:
  *
- * `total` sums the per-source counts, so a path that both the on-disk file and
- * a later save rejected is counted twice. That is deliberate: an exact
- * cross-source count would need every path from every source retained, which
- * is the unbounded cost being removed. Overcounting is the safe direction for a
- * diagnostic — it never tells the user they have fewer problems than they do.
+ * 1. Only the `settings.json` source is reported. A value rejected by a `save`
+ *    or an `import` is not in the file - `saveSettings` writes the normalised
+ *    result, so the file the user is being told to open is clean. Reporting
+ *    those under the file's name accused a correct file, and after a renderer
+ *    reload the user saw a warning about a file with nothing wrong with it and
+ *    no way to act on it. Their own sources remain reachable: `settings:import`
+ *    reports `import`, and `save` is logged.
+ *
+ * 2. The file is re-read first. The snapshot otherwise dates from init, while a
+ *    save rewrites the file with the normalised values - `persistWindowBounds`
+ *    does exactly that on every window move - so a stale "invalid" report
+ *    outlived the problem it described and survived the reload that surfaced
+ *    it. Re-reading ties the report to the file the banner names.
+ *
+ * Callers keep using their own running settings snapshot; the value re-read
+ * here is deliberately not returned, since `settings` is what the rest of the
+ * main process is running on.
  */
-export function allRejectedSettingsReport(): RejectedReport {
-	let total = 0
-	for (const n of rejectedTotalBySource.values()) total += n
-
-	// Rebuilt from the per-source snapshots on every call rather than
-	// accumulated, because this report has to describe the current state of the
-	// settings, not everything ever rejected.
-	//
-	// Accumulating made a path a permanent accusation. A file with one bad
-	// value, corrected a moment later by a save or by hand, left its path in
-	// the union for the rest of the session - so a perfectly valid
-	// settings.json was still reported as invalid. It also produced a
-	// self-contradictory report: total 0 (the source snapshot had been
-	// replaced) alongside a path, which the renderer then turned back into a
-	// count via Math.max and displayed as a warning.
-	//
-	// Still bounded: three sources of at most REJECTED_LIMIT paths each, and
-	// the Set stops growing at REJECTED_LIMIT.
-	const union = new Set<string>()
-	for (const sample of rejectedBySource.values()) {
-		for (const p of sample) {
-			if (union.size >= REJECTED_LIMIT) break
-			union.add(p)
-		}
-	}
-
-	return {paths: [...union], total}
+export function currentFileRejectedReport(): RejectedReport {
+	loadSettings()
+	return rejectedSettingsReport('settings.json')
 }
 
 /**
@@ -515,8 +504,9 @@ function warnRejected(source: string, all: Set<string>): void {
 	const sample = take(all, REJECTED_LIMIT)
 	// Replace this source's snapshot outright. Setting it to an empty sample
 	// when nothing was rejected is what makes the report reflect the present
-	// rather than the past - `allRejectedSettingsReport` derives its union from
-	// these, so there is nothing else to keep in step.
+	// rather than the past - `currentFileRejectedReport` reads the
+	// `settings.json` snapshot on every `settings:get`, so there is nothing
+	// else to keep in step.
 	rejectedBySource.set(source, sample)
 	rejectedTotalBySource.set(source, all.size)
 	if (!all.size) return
@@ -533,6 +523,13 @@ export function loadSettings(): AppSettings {
 		if (!fs.existsSync(settingsFile())) {
 			const d = defaultSettings()
 			writeJsonAtomic(settingsFile(), d)
+			// Clear the snapshot even though nothing was rejected. This branch
+			// returns before `warnRejected`, so without this the last rejections
+			// seen survive - and since `currentFileRejectedReport` trusts the
+			// snapshot, a deleted settings.json would keep reporting the values
+			// it used to hold, against a file that was just written with clean
+			// defaults.
+			warnRejected('settings.json', new Set())
 			return d
 		}
 		const raw = JSON.parse(fs.readFileSync(settingsFile(), 'utf-8'))
@@ -540,8 +537,15 @@ export function loadSettings(): AppSettings {
 		warnRejected('settings.json', rejected)
 		return parsed
 	} catch (err) {
-		// Unreadable file or malformed JSON — nothing to salvage field by field.
+		// Unreadable file or malformed JSON - nothing to salvage field by field.
 		console.warn('[settings] could not read settings.json; using defaults', err)
+		// Every value did go to its default, so the banner's claim is true, but
+		// there is no field path to name. What matters is replacing the previous
+		// snapshot: `currentFileRejectedReport` trusts it, so leaving it would
+		// report paths from an earlier, readable version of the file against one
+		// that now has none of them. One synthetic entry keeps the alarm without
+		// inventing a field that does not exist.
+		warnRejected('settings.json', new Set(['(unreadable settings.json)']))
 		return defaultSettings()
 	}
 }

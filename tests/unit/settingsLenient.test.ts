@@ -254,11 +254,11 @@ describe('rejection reporting', () => {
 			'terminal.scrollback',
 			'theme.fontSize',
 		])
-		expect(store.allRejectedSettingsReport().paths.sort()).toEqual([
+		expect(store.currentFileRejectedReport().paths.sort()).toEqual([
 			'terminal.scrollback',
 			'theme.fontSize',
 		])
-		expect(store.allRejectedSettingsReport().total).toBe(2)
+		expect(store.currentFileRejectedReport().total).toBe(2)
 	})
 
 	it('keeps an import report when the save that follows it reports nothing', async () => {
@@ -288,8 +288,8 @@ describe('rejection reporting', () => {
 
 		store.loadSettings()
 
-		expect(store.allRejectedSettingsReport().paths).toEqual([])
-		expect(store.allRejectedSettingsReport().total).toBe(0)
+		expect(store.currentFileRejectedReport().paths).toEqual([])
+		expect(store.currentFileRejectedReport().total).toBe(0)
 	})
 })
 
@@ -316,7 +316,7 @@ describe('rejection reports are capped', () => {
 		)
 
 		store.loadSettings()
-		const report = store.allRejectedSettingsReport()
+		const report = store.currentFileRejectedReport()
 
 		expect(report.paths.length).toBe(LIMIT)
 		// The total is what the UI shows, so it must not be capped too —
@@ -339,7 +339,7 @@ describe('rejection reports are capped', () => {
 			)
 			store.loadSettings()
 			return Buffer.byteLength(
-				JSON.stringify(store.allRejectedSettingsReport().paths),
+				JSON.stringify(store.currentFileRejectedReport().paths),
 			)
 		}
 
@@ -372,12 +372,16 @@ describe('rejection reports are capped', () => {
 		)
 		small.loadSettings()
 
-		expect(small.allRejectedSettingsReport().paths.length).toBe(LIMIT)
-		expect(store.allRejectedSettingsReport().paths.length).toBe(LIMIT)
-		expect(store.allRejectedSettingsReport().total).toBe(LIMIT * 20)
+		expect(small.currentFileRejectedReport().paths.length).toBe(LIMIT)
+		expect(store.currentFileRejectedReport().paths.length).toBe(LIMIT)
+		expect(store.currentFileRejectedReport().total).toBe(LIMIT * 20)
 	})
 
-	it('de-duplicates paths rejected by two sources', async () => {
+	it('does not double-count a path the file and a save both rejected', async () => {
+		// The old report summed per-source totals, so one bad value loaded and
+		// then saved came back as "2 value(s) in settings.json are invalid".
+		// The report now describes one source, and that source's snapshot is
+		// replaced on every read rather than accumulated.
 		const store = await storeWithScratchHome()
 		fs.mkdirSync(store.settingsDir(), {recursive: true})
 		const doc = {theme: {fontSize: '14'}}
@@ -387,11 +391,10 @@ describe('rejection reports are capped', () => {
 		// A save of the same bad value rejects the same path again.
 		store.saveSettings(doc as never)
 
-		const report = store.allRejectedSettingsReport()
-		expect(report.paths).toEqual(['theme.fontSize'])
-		// Summed per-source totals, so this is 2. Documented as an
-		// overcount: a diagnostic should never under-report.
-		expect(report.total).toBe(2)
+		expect(store.rejectedSettingsReport('save').total).toBe(1)
+		// The save rewrote the file with the normalised value, so there is
+		// nothing left in it for the banner to report.
+		expect(store.currentFileRejectedReport()).toEqual({paths: [], total: 0})
 	})
 
 	it('does not cap when the file is only mildly broken', async () => {
@@ -403,7 +406,7 @@ describe('rejection reports are capped', () => {
 		)
 
 		store.loadSettings()
-		const report = store.allRejectedSettingsReport()
+		const report = store.currentFileRejectedReport()
 
 		expect(report.paths.sort()).toEqual([
 			'terminal.scrollback',

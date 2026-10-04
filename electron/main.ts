@@ -59,7 +59,7 @@ import {
 } from './quake.js'
 import {safeSend} from './safeSend.js'
 import {
-	allRejectedSettingsReport,
+	currentFileRejectedReport,
 	loadSession,
 	loadSettings,
 	parseImportedSettings,
@@ -755,9 +755,11 @@ function registerIpc() {
 	})
 
 	ipcMain.handle('settings:get', () => {
-		// The union is the shape that grows without bound, and this is the
-		// path the renderer calls at startup, so it is capped here too.
-		const report = allRejectedSettingsReport()
+		// The banner names settings.json, so the report must describe that file
+		// and nothing else - a value only a `save` or an `import` rejected was
+		// never in it. `currentFileRejectedReport` also re-reads the file, so a
+		// report cannot outlive the save that corrected the file it describes.
+		const report = currentFileRejectedReport()
 		return {
 			settings,
 			rejected: report.paths,
