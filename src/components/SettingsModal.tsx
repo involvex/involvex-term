@@ -1,5 +1,11 @@
-import {useEffect, useState, type DragEvent} from 'react'
+import {useEffect, useMemo, useState, type DragEvent} from 'react'
 import {defaultAgentTools} from '../lib/agents'
+import {
+	REJECTED_PATH_PREVIEW,
+	rejectedBannerKey,
+	rejectedCountFor,
+	shouldShowRejectedBanner,
+} from '../lib/rejectedBanner'
 import {THEME_PRESETS} from '../lib/themePresets'
 import {
 	termApi,
@@ -478,9 +484,6 @@ const SETTINGS_TABS = [
 ] as const
 type SettingsTabId = (typeof SETTINGS_TABS)[number]['id']
 
-/** Cap on rejected paths listed inline before collapsing into "and N more". */
-const REJECTED_PATH_PREVIEW = 8
-
 export default function SettingsModal({
 	settings,
 	rejected,
@@ -501,14 +504,14 @@ export default function SettingsModal({
 	 * different list re-shows the banner with no effect to reset it.
 	 */
 	const [dismissedKey, setDismissedKey] = useState<string | null>(null)
-	const rejectedPaths = rejected ?? []
-	// `rejectedPaths` is a capped sample, so it is not the count to show: a
-	// truncated list reported as `length` would read as "these were all of
-	// them". Prefer the true total and fall back to the sample only for older
-	// main processes that do not send one.
-	const rejectedCount = Math.max(rejectedTotal ?? 0, rejectedPaths.length)
-	const rejectedKey = `${rejectedCount}\n${rejectedPaths.join('\n')}`
-	const showRejected = rejectedKey !== '\n' && dismissedKey !== rejectedKey
+	const rejectedFinding = useMemo(
+		() => ({paths: rejected ?? [], total: rejectedTotal}),
+		[rejected, rejectedTotal],
+	)
+	const rejectedPaths = rejectedFinding.paths
+	const rejectedCount = rejectedCountFor(rejectedFinding)
+	const rejectedKey = rejectedBannerKey(rejectedFinding)
+	const showRejected = shouldShowRejectedBanner(rejectedFinding, dismissedKey)
 	const dismissRejected = () => setDismissedKey(rejectedKey)
 
 	/** Shared by the two "Import settings…" buttons in the sync section. */
