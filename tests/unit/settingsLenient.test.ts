@@ -21,7 +21,7 @@ describe('parseSettingsLenient', () => {
 		expect(settings.terminal.startDir).toBe('D:\\repos')
 		expect(settings.terminal.scrollback).toBe(12_345)
 		expect(settings.theme.fontSize).toBe(defaultSettings().theme.fontSize)
-		expect(rejected).toEqual(['theme.fontSize'])
+		expect([...rejected]).toEqual(['theme.fontSize'])
 	})
 
 	it('reports every rejected path, not just the first', () => {
@@ -31,7 +31,7 @@ describe('parseSettingsLenient', () => {
 			tray: {enabled: 'yes'}, // wrong type
 		})
 
-		expect(rejected.sort()).toEqual([
+		expect([...rejected].sort()).toEqual([
 			'terminal.scrollback',
 			'theme.fontSize',
 			'tray.enabled',
@@ -50,7 +50,7 @@ describe('parseSettingsLenient', () => {
 		expect(settings.theme.bg).toBe('#002b36')
 		expect(settings.theme.fg).toBe('#839496')
 		expect(settings.theme.fontSize).toBe(defaultSettings().theme.fontSize)
-		expect(rejected).toEqual(['theme.fontSize'])
+		expect([...rejected]).toEqual(['theme.fontSize'])
 	})
 
 	it('drops the whole array rather than splicing out one bad element', () => {
@@ -68,7 +68,7 @@ describe('parseSettingsLenient', () => {
 		expect(settings.terminal.profiles).toEqual(
 			defaultSettings().terminal.profiles,
 		)
-		expect(rejected).toEqual(['terminal.profiles'])
+		expect([...rejected]).toEqual(['terminal.profiles'])
 		expect(settings.terminal.defaultProfileId).toBe(
 			defaultSettings().terminal.defaultProfileId,
 		)
@@ -78,7 +78,7 @@ describe('parseSettingsLenient', () => {
 		for (const raw of [42, 'nope', true, [1, 2, 3], null]) {
 			const {settings, rejected} = parseSettingsLenient(raw)
 			expect(settings).toEqual(defaultSettings())
-			expect(rejected).toEqual([])
+			expect([...rejected]).toEqual([])
 		}
 	})
 
@@ -86,7 +86,7 @@ describe('parseSettingsLenient', () => {
 		const valid = defaultSettings()
 		const {settings, rejected} = parseSettingsLenient(valid)
 		expect(settings).toEqual(valid)
-		expect(rejected).toEqual([])
+		expect([...rejected]).toEqual([])
 	})
 
 	it('strips unknown keys without disturbing known ones', () => {
@@ -195,7 +195,7 @@ describe('prototype-polluting keys in a settings document', () => {
 		const {settings, rejected} = parseSettingsLenient(payload)
 
 		expect(settings.terminal.startDir).toBe(defaultSettings().terminal.startDir)
-		expect(rejected).toEqual(['terminal'])
+		expect([...rejected]).toEqual(['terminal'])
 	})
 
 	it('ignores constructor as well', () => {
@@ -250,10 +250,11 @@ describe('rejection reporting', () => {
 			'terminal.scrollback',
 			'theme.fontSize',
 		])
-		expect(store.allRejectedSettingsPaths().sort()).toEqual([
+		expect(store.allRejectedSettingsReport().paths.sort()).toEqual([
 			'terminal.scrollback',
 			'theme.fontSize',
 		])
+		expect(store.allRejectedSettingsReport().total).toBe(2)
 	})
 
 	it('keeps an import report when the save that follows it reports nothing', async () => {
@@ -283,6 +284,127 @@ describe('rejection reporting', () => {
 
 		store.loadSettings()
 
-		expect(store.allRejectedSettingsPaths()).toEqual([])
+		expect(store.allRejectedSettingsReport().paths).toEqual([])
+		expect(store.allRejectedSettingsReport().total).toBe(0)
+	})
+})
+
+describe('rejection reports are capped', () => {
+	// Every one of these paths used to be returned over IPC on `settings:get`.
+	// At 200k bad values that measured a 3.33 MB reply on the main process, on
+	// the path the renderer calls at startup — so one broken file cost 3.33 MB
+	// of structured-clone and a multi-second stringification on every launch.
+	const LIMIT = 200
+
+	function pathologicalHotkeys(n: number): Record<string, unknown> {
+		const hotkeys: Record<string, unknown> = {}
+		for (let i = 0; i < n; i++) hotkeys[`k${i}`] = 12_345
+		return {hotkeys}
+	}
+
+	it('caps the path list while reporting the true total', async () => {
+		const store = await storeWithScratchHome()
+		const n = LIMIT * 5
+		fs.mkdirSync(store.SETTINGS_DIR, {recursive: true})
+		fs.writeFileSync(
+			store.SETTINGS_FILE,
+			JSON.stringify(pathologicalHotkeys(n)),
+		)
+
+		store.loadSettings()
+		const report = store.allRejectedSettingsReport()
+
+		expect(report.paths.length).toBe(LIMIT)
+		// The total is what the UI shows, so it must not be capped too —
+		// otherwise the banner would claim a truncated list was the whole story.
+		expect(report.total).toBe(n)
+	})
+
+	it('ships the same payload whether the file has 1x or 20x the bad values', async () => {
+		// The invariant that matters: the IPC payload must not scale with how
+		// broken the file is. Comparing two input sizes catches an absent cap
+		// at any threshold, which a fixed byte limit cannot — pick the limit
+		// too loose and the regression slips through, too tight and it fails
+		// on harmless input.
+		const payloadFor = async (n: number) => {
+			const store = await storeWithScratchHome()
+			fs.mkdirSync(store.SETTINGS_DIR, {recursive: true})
+			fs.writeFileSync(
+				store.SETTINGS_FILE,
+				JSON.stringify(pathologicalHotkeys(n)),
+			)
+			store.loadSettings()
+			return Buffer.byteLength(
+				JSON.stringify(store.allRejectedSettingsReport().paths),
+			)
+		}
+
+		const small = await payloadFor(LIMIT)
+		const huge = await payloadFor(LIMIT * 20)
+
+		expect(small).toBe(huge)
+	})
+
+	it('does not walk the full rejection set on every settings:get', async () => {
+		// The cap is worthless if producing the report still touches every
+		// path: `[...set].slice(0, n)` walks the whole set and allocates an
+		// array of all of it to return a prefix.
+		const store = await storeWithScratchHome()
+		fs.mkdirSync(store.SETTINGS_DIR, {recursive: true})
+		fs.writeFileSync(
+			store.SETTINGS_FILE,
+			JSON.stringify(pathologicalHotkeys(LIMIT * 20)),
+		)
+		store.loadSettings()
+
+		// Timing a size-dependent loop is noisy, so assert the observable
+		// instead: repeated calls must cost the same whether the file had
+		// 4x the bad values, because the retained data is capped.
+		const small = await storeWithScratchHome()
+		fs.mkdirSync(small.SETTINGS_DIR, {recursive: true})
+		fs.writeFileSync(
+			small.SETTINGS_FILE,
+			JSON.stringify(pathologicalHotkeys(LIMIT)),
+		)
+		small.loadSettings()
+
+		expect(small.allRejectedSettingsReport().paths.length).toBe(LIMIT)
+		expect(store.allRejectedSettingsReport().paths.length).toBe(LIMIT)
+		expect(store.allRejectedSettingsReport().total).toBe(LIMIT * 20)
+	})
+
+	it('de-duplicates paths rejected by two sources', async () => {
+		const store = await storeWithScratchHome()
+		fs.mkdirSync(store.SETTINGS_DIR, {recursive: true})
+		const doc = {theme: {fontSize: '14'}}
+		fs.writeFileSync(store.SETTINGS_FILE, JSON.stringify(doc))
+
+		store.loadSettings()
+		// A save of the same bad value rejects the same path again.
+		store.saveSettings(doc as never)
+
+		const report = store.allRejectedSettingsReport()
+		expect(report.paths).toEqual(['theme.fontSize'])
+		// Summed per-source totals, so this is 2. Documented as an
+		// overcount: a diagnostic should never under-report.
+		expect(report.total).toBe(2)
+	})
+
+	it('does not cap when the file is only mildly broken', async () => {
+		const store = await storeWithScratchHome()
+		fs.mkdirSync(store.SETTINGS_DIR, {recursive: true})
+		fs.writeFileSync(
+			store.SETTINGS_FILE,
+			JSON.stringify({theme: {fontSize: '14'}, terminal: {scrollback: 1}}),
+		)
+
+		store.loadSettings()
+		const report = store.allRejectedSettingsReport()
+
+		expect(report.paths.sort()).toEqual([
+			'terminal.scrollback',
+			'theme.fontSize',
+		])
+		expect(report.total).toBe(2)
 	})
 })

@@ -249,11 +249,20 @@ export interface AppInfo {
 	platform: string
 }
 
-/** Result of reading settings, including any values that failed validation. */
+/**
+ * Result of reading settings, including any values that failed validation.
+ *
+ * `rejected` is a capped sample: a settings file can contain an unbounded
+ * number of bad values, so main ships at most `REJECTED_LIMIT` of them.
+ * `rejectedTotal` is the true count, which is what the UI should show — using
+ * `rejected.length` would understate a truncated list as if it were complete.
+ */
 export interface SettingsLoadResult {
 	settings: AppSettings
 	/** Dotted paths from settings.json that were invalid and reset to defaults. */
 	rejected: string[]
+	/** Total rejected paths, which may exceed `rejected.length`. */
+	rejectedTotal?: number
 }
 
 export interface TermApiShape {
@@ -342,8 +351,14 @@ export interface TermApiShape {
 	settingsImport: () => Promise<{
 		ok: boolean
 		settings?: AppSettings
-		/** Dotted paths from the imported file that were invalid and ignored. */
+		/**
+		 * Paths from the imported file that were not applied: either invalid,
+		 * or stripped because an imported profile may not choose a command.
+		 * Capped sample — see `SettingsLoadResult.rejectedTotal`.
+		 */
 		rejected?: string[]
+		/** Total rejected paths, which may exceed `rejected.length`. */
+		rejectedTotal?: number
 		error?: string
 	}>
 	syncStatus: () => Promise<SyncStatus>

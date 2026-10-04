@@ -12,8 +12,13 @@ import {
 
 interface Props {
 	settings: AppSettings
-	/** Dotted settings.json paths that failed validation and reset to defaults. */
+	/**
+	 * Dotted settings.json paths that failed validation and reset to defaults.
+	 * A capped sample — a file can contain an unbounded number of bad values.
+	 */
 	rejected?: string[]
+	/** True count of rejected paths, which may exceed `rejected.length`. */
+	rejectedTotal?: number
 	onChange: (next: AppSettings) => void
 	onClose: () => void
 }
@@ -479,6 +484,7 @@ const REJECTED_PATH_PREVIEW = 8
 export default function SettingsModal({
 	settings,
 	rejected,
+	rejectedTotal,
 	onChange,
 	onClose,
 }: Props) {
@@ -496,8 +502,13 @@ export default function SettingsModal({
 	 */
 	const [dismissedKey, setDismissedKey] = useState<string | null>(null)
 	const rejectedPaths = rejected ?? []
-	const rejectedKey = rejectedPaths.join('\n')
-	const showRejected = rejectedKey !== '' && dismissedKey !== rejectedKey
+	// `rejectedPaths` is a capped sample, so it is not the count to show: a
+	// truncated list reported as `length` would read as "these were all of
+	// them". Prefer the true total and fall back to the sample only for older
+	// main processes that do not send one.
+	const rejectedCount = Math.max(rejectedTotal ?? 0, rejectedPaths.length)
+	const rejectedKey = `${rejectedCount}\n${rejectedPaths.join('\n')}`
+	const showRejected = rejectedKey !== '\n' && dismissedKey !== rejectedKey
 	const dismissRejected = () => setDismissedKey(rejectedKey)
 
 	/** Shared by the two "Import settings…" buttons in the sync section. */
@@ -531,6 +542,14 @@ export default function SettingsModal({
 					if (invalid.length)
 						lines.push(
 							`${invalid.length} value(s) were invalid and ignored:\n\n${invalid.join('\n')}`,
+						)
+					// `r.rejected` is a capped sample, so the counts above are
+					// counts of what was listed. Say so rather than letting a
+					// truncated list read as the complete set.
+					const importTotal = Math.max(r.rejectedTotal ?? 0, r.rejected.length)
+					if (importTotal > r.rejected.length)
+						lines.push(
+							`Only the first ${r.rejected.length} are listed; ${importTotal - r.rejected.length} more were not applied. Fix the listed ones first - the rest are usually the same mistake.`,
 						)
 					window.alert(`Imported, but:\n\n${lines.join('\n\n')}`)
 				}
@@ -582,18 +601,20 @@ export default function SettingsModal({
 					>
 						<div className="settings-warning-body">
 							<strong>
-								{rejectedPaths.length === 1
+								{rejectedCount === 1
 									? '1 value in settings.json is invalid'
-									: `${rejectedPaths.length} values in settings.json are invalid`}
+									: `${rejectedCount} values in settings.json are invalid`}
 							</strong>{' '}
-							and {rejectedPaths.length === 1 ? 'was' : 'were'} reset to{' '}
-							{rejectedPaths.length === 1 ? 'its' : 'their'} default. Everything
-							else was kept.
+							and {rejectedCount === 1 ? 'was' : 'were'} reset to{' '}
+							{rejectedCount === 1 ? 'its' : 'their'} default. Everything else
+							was kept.
 							<div className="settings-warning-paths">
 								{rejectedPaths.slice(0, REJECTED_PATH_PREVIEW).join(', ')}
-								{rejectedPaths.length > REJECTED_PATH_PREVIEW
-									? ` and ${rejectedPaths.length - REJECTED_PATH_PREVIEW} more`
-									: ''}
+								{rejectedCount > rejectedPaths.length
+									? ` and ${rejectedCount - rejectedPaths.length} more not shown`
+									: rejectedPaths.length > REJECTED_PATH_PREVIEW
+										? ` and ${rejectedPaths.length - REJECTED_PATH_PREVIEW} more`
+										: ''}
 							</div>
 						</div>
 						<button

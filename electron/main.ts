@@ -58,11 +58,11 @@ import {
 	unregisterToggleApp,
 } from './quake.js'
 import {
-	allRejectedSettingsPaths,
+	allRejectedSettingsReport,
 	loadSession,
 	loadSettings,
 	parseImportedSettings,
-	rejectedSettingsPaths,
+	rejectedSettingsReport,
 	saveSession,
 	saveSettings,
 	SETTINGS_FILE,
@@ -677,7 +677,13 @@ function registerIpc() {
 			await applyLoadedSettings()
 			// Read the 'import' bucket, not the shared one: the save above
 			// reports its own (empty) result and would clear the import's.
-			return {ok: true, settings, rejected: rejectedSettingsPaths('import')}
+			const report = rejectedSettingsReport('import')
+			return {
+				ok: true,
+				settings,
+				rejected: report.paths,
+				rejectedTotal: report.total,
+			}
 		} catch (e) {
 			return {ok: false, error: e instanceof Error ? e.message : String(e)}
 		}
@@ -747,10 +753,16 @@ function registerIpc() {
 		}
 	})
 
-	ipcMain.handle('settings:get', () => ({
-		settings,
-		rejected: allRejectedSettingsPaths(),
-	}))
+	ipcMain.handle('settings:get', () => {
+		// The union is the shape that grows without bound, and this is the
+		// path the renderer calls at startup, so it is capped here too.
+		const report = allRejectedSettingsReport()
+		return {
+			settings,
+			rejected: report.paths,
+			rejectedTotal: report.total,
+		}
+	})
 	ipcMain.handle('settings:set', async (_e, next: typeof settings) => {
 		const pluginsToggled = next.plugins?.enabled !== settings.plugins?.enabled
 		settings = saveSettings(next)

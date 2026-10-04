@@ -197,6 +197,7 @@ export default function App() {
 	const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
 	/** Dotted settings.json paths that failed validation and reset to defaults. */
 	const [settingsRejected, setSettingsRejected] = useState<string[]>([])
+	const [settingsRejectedTotal, setSettingsRejectedTotal] = useState(0)
 	const [showSettings, setShowSettings] = useState(false)
 	const [showAbout, setShowAbout] = useState(false)
 	const [showProcesses, setShowProcesses] = useState(false)
@@ -548,6 +549,7 @@ export default function App() {
 				// Values that failed validation reset to defaults; Settings
 				// shows which, so a typo doesn't look like the app ignoring you.
 				setSettingsRejected(s.rejected ?? [])
+				setSettingsRejectedTotal(s.rejectedTotal ?? s.rejected?.length ?? 0)
 
 				const openFresh = () => {
 					const profileId =
@@ -1727,6 +1729,7 @@ export default function App() {
 					<SettingsModal
 						settings={settings}
 						rejected={settingsRejected}
+						rejectedTotal={settingsRejectedTotal}
 						onChange={saveSettings}
 						onClose={handleCloseSettings}
 					/>

@@ -316,10 +316,38 @@ function dropLeaf(
  * Returns the settings plus the dotted paths that were rejected, so callers can
  * tell the user what was ignored instead of quietly discarding their file.
  */
-export function parseSettingsLenient(raw: unknown): {
+/**
+ * Hard cap on how many rejected paths are retained.
+ *
+ * The count is caller-controlled: a settings file with 200k malformed hotkeys
+ * measured a 963 ms synchronous parse and a 3.33 MB `settings:get` reply — on
+ * the main process, on a path the renderer calls at startup. Both scale with
+ * the number of bad values, so without a cap one bad file degrades the app.
+ *
+ * Truncation is reported, never silent: the true total rides alongside the
+ * capped list so the renderer can say "and N more" honestly instead of
+ * implying the sample it shows is complete. The total is a plain number
+ * rather than a marker entry in the array, because the UI counts and
+ * stringifies these entries directly and a sentinel would be counted as a
+ * path.
+ */
+const REJECTED_LIMIT = 200
+
+/**
+ * Result of a lenient parse. `rejected` is the *uncapped* set: capping happens
+ * once, in `warnRejected`, so there is a single place that decides what leaves
+ * the process. Callers that need a display list should go through
+ * `rejectedSettingsReport` rather than slicing it themselves.
+ *
+ * The set is dropped as soon as `warnRejected` has taken a sample and the
+ * count, so nothing retains every rejected path.
+ */
+export interface LenientParseResult {
 	settings: AppSettings
-	rejected: string[]
-} {
+	rejected: Set<string>
+}
+
+export function parseSettingsLenient(raw: unknown): LenientParseResult {
 	const base = defaultSettings() as unknown as Record<string, unknown>
 	const over =
 		raw && typeof raw === 'object' && !Array.isArray(raw)
@@ -334,7 +362,7 @@ export function parseSettingsLenient(raw: unknown): {
 	const rejected = new Set<string>()
 	for (;;) {
 		const result = SettingsSchema.safeParse(candidate)
-		if (result.success) return {settings: result.data, rejected: [...rejected]}
+		if (result.success) return {settings: result.data, rejected}
 		let dropped = false
 		for (const issue of result.error.issues) {
 			const path = truncateAtArray(issue.path)
@@ -348,7 +376,7 @@ export function parseSettingsLenient(raw: unknown): {
 		// at all). Bail to defaults rather than spin.
 		if (!dropped) break
 	}
-	return {settings: defaultSettings(), rejected: [...rejected]}
+	return {settings: defaultSettings(), rejected}
 }
 
 /**
@@ -364,21 +392,89 @@ export function parseSettingsLenient(raw: unknown): {
  */
 const rejectedBySource = new Map<string, string[]>()
 
+/**
+ * Exact rejection counts per source.
+ *
+ * A count cannot be recovered from a truncated list, so it is recorded at
+ * parse time and the paths themselves are then dropped. Keeping the full sets
+ * would have made `total` exact too, but at the cost of holding every rejected
+ * path for the process lifetime and re-spreading them on every `settings:get`
+ * — trading one unbounded cost for two.
+ */
+const rejectedTotalBySource = new Map<string, number>()
+
+/**
+ * De-duplicated sample across sources, also capped.
+ *
+ * A Set rather than an array so a path rejected by two sources is listed once.
+ * Bounded because `REJECTED_LIMIT` sources times `REJECTED_LIMIT` paths each
+ * is still bounded, and there are only three sources.
+ */
+const rejectedUnionSample = new Set<string>()
+
 /** Rejected paths recorded for one source ('settings.json', 'import', 'save'). */
 export function rejectedSettingsPaths(source: string): string[] {
 	return [...(rejectedBySource.get(source) ?? [])]
 }
 
-/** Every rejected path recorded so far, de-duplicated and ordered. */
-export function allRejectedSettingsPaths(): string[] {
-	return [...new Set([...rejectedBySource.values()].flat())]
+export interface RejectedReport {
+	/** Capped sample of paths, for display. */
+	paths: string[]
+	/** True count, which may exceed `paths.length`. */
+	total: number
 }
 
-function warnRejected(source: string, rejected: string[]): void {
-	rejectedBySource.set(source, [...rejected])
-	if (!rejected.length) return
+/** Report for one source: a capped sample plus the exact total. */
+export function rejectedSettingsReport(source: string): RejectedReport {
+	return {
+		paths: rejectedSettingsPaths(source),
+		total: rejectedTotalBySource.get(source) ?? 0,
+	}
+}
+
+/**
+ * Report across every source, for `settings:get`.
+ *
+ * `paths` is capped because the renderer fetches this on every startup, so it
+ * must not scale with how broken the file is.
+ *
+ * `total` sums the per-source counts, so a path that both the on-disk file and
+ * a later save rejected is counted twice. That is deliberate: an exact
+ * cross-source count would need every path from every source retained, which
+ * is the unbounded cost being removed. Overcounting is the safe direction for a
+ * diagnostic — it never tells the user they have fewer problems than they do.
+ */
+export function allRejectedSettingsReport(): RejectedReport {
+	let total = 0
+	for (const n of rejectedTotalBySource.values()) total += n
+	return {paths: take(rejectedUnionSample, REJECTED_LIMIT), total}
+}
+
+/**
+ * First `limit` values of an iterable, without materialising the rest.
+ *
+ * `[...set].slice(0, n)` walks the whole set and allocates an array of every
+ * element to return a prefix, which is O(size) in exactly the case the cap
+ * exists to bound.
+ */
+function take(iterable: Iterable<string>, limit: number): string[] {
+	const out: string[] = []
+	for (const v of iterable) {
+		if (out.length >= limit) break
+		out.push(v)
+	}
+	return out
+}
+
+function warnRejected(source: string, all: Set<string>): void {
+	const sample = take(all, REJECTED_LIMIT)
+	rejectedBySource.set(source, sample)
+	rejectedTotalBySource.set(source, all.size)
+	for (const p of sample) rejectedUnionSample.add(p)
+	if (!all.size) return
+	// Join the capped sample only; the total carries the rest.
 	console.warn(
-		`[settings] ignored ${rejected.length} value(s) in ${source}: ${rejected.join(', ')}`,
+		`[settings] ignored ${all.size} value(s) in ${source}: ${sample.join(', ')}`,
 	)
 }
 
@@ -456,7 +552,7 @@ function stripProfileCommands(settings: AppSettings): string[] {
 /** Merge unknown JSON onto defaults and validate (for import). */
 export function parseImportedSettings(raw: unknown): AppSettings {
 	const {settings, rejected} = parseSettingsLenient(raw)
-	rejected.push(...stripProfileCommands(settings))
+	for (const p of stripProfileCommands(settings)) rejected.add(p)
 	warnRejected('import', rejected)
 	return settings
 }
