@@ -18,7 +18,13 @@ import {
 	type PaneInsertPosition,
 	type PaneNode,
 } from '../lib/panes'
-import {isTabNavKey, resolveTabNav, TAB_PANEL_ID, tabDomId} from '../lib/tabNav'
+import {
+	isTabCloseKey,
+	isTabNavKey,
+	resolveTabNav,
+	TAB_PANEL_ID,
+	tabDomId,
+} from '../lib/tabNav'
 import type {QuickCommand, ShellProfile} from '../types'
 import TermContextMenu, {
 	type ContextMenuItem,
@@ -144,6 +150,18 @@ export default memo(function TabBar({
 		// The rename field lives inside a tab and handles its own keys.
 		if ((e.target as HTMLElement).closest('.tab-rename')) return
 		if (e.altKey || e.ctrlKey || e.metaKey) return
+		// Delete/Backspace closes the focused tab. Handled here rather than by
+		// leaving the close buttons focusable: the strip is a single Tab stop,
+		// so a focusable button per tab means tabbing past it costs two stops
+		// per tab. This listener only runs while focus is inside the tablist,
+		// so it cannot shadow Backspace-as-DEL in the terminal.
+		if (isTabCloseKey(e.key)) {
+			const activeId = e.currentTarget.dataset.active
+			if (!activeId) return
+			e.preventDefault()
+			onClose(activeId)
+			return
+		}
 		if (!isTabNavKey(e.key)) return
 		const from = tabs.findIndex(t => t.id === e.currentTarget.dataset.active)
 		const next = resolveTabNav(e.key, from, tabs.length)
@@ -531,6 +549,11 @@ export default memo(function TabBar({
 							type="button"
 							className="tab-close"
 							aria-label={`Close tab ${t.title}`}
+							// Not a Tab stop: the strip is one stop via roving
+							// tabindex, and a focusable close button per tab
+							// doubles the cost of tabbing past it. Reachable by
+							// Delete/Backspace on the strip instead.
+							tabIndex={-1}
 							onClick={e => {
 								e.stopPropagation()
 								onClose(t.id)

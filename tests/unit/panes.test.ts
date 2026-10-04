@@ -144,6 +144,47 @@ describe('Pane tree model', () => {
 			)
 		})
 
+		it('ignores a NaN ratio instead of clamping it', () => {
+			// The clamp cannot catch this: Math.max(0.1, NaN) is NaN and
+			// Math.min passes it through, so one NaN ratio poisons the split
+			// permanently and survives a session round-trip as null.
+			const tree = nested()
+			const next = updateSplitRatio(tree, 's1', Number.NaN)
+
+			expect(findSplitRatio(next, 's1')).toBe(findSplitRatio(tree, 's1'))
+			// Returning the identical node keeps the memoized PaneLayout from
+			// re-rendering the whole tree for a divider drag that changed
+			// nothing.
+			expect(next).toBe(tree)
+		})
+
+		it('ignores infinite ratios too', () => {
+			const tree = nested()
+			for (const bad of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+				const next = updateSplitRatio(tree, 's1', bad)
+				expect(findSplitRatio(next, 's1')).toBe(findSplitRatio(tree, 's1'))
+			}
+		})
+
+		it('still applies a valid ratio after rejecting a bad one', () => {
+			// One bad pointer event must not wedge the divider permanently.
+			const bad = updateSplitRatio(nested(), 's1', Number.NaN)
+			const good = updateSplitRatio(bad, 's1', 0.42)
+
+			expect(findSplitRatio(good, 's1')).toBeCloseTo(0.42, 6)
+		})
+
+		it('does not let a NaN ratio into a session snapshot', () => {
+			// JSON has no NaN, so it would serialise to null and fail schema
+			// validation on the next launch, costing the user every tab.
+			const poisoned = updateSplitRatio(nested(), 's1', Number.NaN)
+
+			expect(JSON.stringify(poisoned)).not.toContain('null')
+			expect(() =>
+				normalizeSessionRoot(JSON.parse(JSON.stringify(poisoned))),
+			).not.toThrow()
+		})
+
 		it('returns the identical root for an unknown splitId', () => {
 			const root = nested()
 			// The old implementation always rebuilt the root, so this asserted

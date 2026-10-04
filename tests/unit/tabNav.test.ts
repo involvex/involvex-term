@@ -1,5 +1,6 @@
 import {describe, expect, it} from 'bun:test'
 import {
+	isTabCloseKey,
 	isTabNavKey,
 	resolveTabNav,
 	TAB_PANEL_ID,
@@ -96,5 +97,44 @@ describe('tab DOM ids', () => {
 	it('names the panel the tabs reference', () => {
 		expect(TAB_PANEL_ID).toBe('ivx-tabpanel')
 		expect(tabDomId('tab-1')).not.toBe(TAB_PANEL_ID)
+	})
+})
+
+describe('isTabCloseKey', () => {
+	// The close buttons are tabIndex={-1} so the strip stays a single Tab
+	// stop, so these keys are the only way a keyboard user closes a tab from
+	// the strip. Losing them silently removes the ability to close a tab
+	// without a mouse or a global hotkey.
+	it('recognises Delete and Backspace', () => {
+		expect(isTabCloseKey('Delete')).toBe(true)
+		expect(isTabCloseKey('Backspace')).toBe(true)
+	})
+
+	it('does not claim the navigation keys', () => {
+		// Overlap would be a real bug: the handler checks close before nav,
+		// so a nav key matching here would close the tab instead of moving.
+		expect(isTabCloseKey('ArrowLeft')).toBe(false)
+		expect(isTabCloseKey('ArrowRight')).toBe(false)
+		expect(isTabCloseKey('Home')).toBe(false)
+		expect(isTabCloseKey('End')).toBe(false)
+	})
+
+	it('does not claim typing keys', () => {
+		// Backspace-as-DEL matters: this is checked only while focus is
+		// inside the tablist, and these guards keep ordinary typing out.
+		for (const key of ['Enter', ' ', 'Tab', 'Escape', 'a', 'F2'])
+			expect(isTabCloseKey(key)).toBe(false)
+	})
+
+	it('keeps the two key sets disjoint', () => {
+		for (const key of [
+			'Delete',
+			'Backspace',
+			'ArrowLeft',
+			'ArrowRight',
+			'Home',
+			'End',
+		])
+			expect(isTabCloseKey(key)).not.toBe(isTabNavKey(key))
 	})
 })

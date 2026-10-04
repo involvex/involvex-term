@@ -360,8 +360,16 @@ export function updateSplitRatio(
 	ratio: number,
 ): PaneNode {
 	if (node.kind === 'leaf') return node
-	if (node.id === splitId)
+	if (node.id === splitId) {
+		// Reject a non-finite ratio rather than clamping it. The clamp cannot
+		// catch one: `Math.max(0.1, NaN)` is NaN and `Math.min` passes it
+		// through, so a single NaN poisons the split permanently and survives a
+		// session round-trip as `null` (JSON has no NaN), which then fails
+		// validation and costs the user every tab. A zero-width container or a
+		// divide-by-zero in the divider's pointer maths produces one.
+		if (!Number.isFinite(ratio)) return node
 		return {...node, ratio: Math.min(0.9, Math.max(0.1, ratio))}
+	}
 	// Descend one branch only. The previous shape recursed into both and
 	// reallocated the untouched sibling on every call, which during a divider
 	// drag meant rebuilding the whole subtree per pointermove.

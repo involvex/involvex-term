@@ -42,6 +42,20 @@ export function isTabNavKey(key: string): key is TabNavKey {
 	)
 }
 
+/**
+ * Keys that act on the focused tab rather than moving focus.
+ *
+ * The strip is a single Tab stop (roving tabindex), so the per-tab close
+ * buttons are `tabIndex={-1}` — otherwise tabbing past the strip costs two
+ * stops per tab and a screen-reader user walks the whole list twice. These keys
+ * are how a keyboard user still closes a tab without leaving the strip.
+ */
+export type TabCloseKey = 'Delete' | 'Backspace'
+
+export function isTabCloseKey(key: string): key is TabCloseKey {
+	return key === 'Delete' || key === 'Backspace'
+}
+
 /** Id of the element that holds the active tab's panes. */
 export const TAB_PANEL_ID = 'ivx-tabpanel'
 
