@@ -157,6 +157,81 @@ afterEach(() => {
 	}
 })
 
+describe('prototype-polluting keys in a settings document', () => {
+	// `JSON.parse` makes `__proto__` a real own property, so `Object.entries`
+	// sees it and `out.__proto__ = value` fires the prototype setter instead
+	// of defining a key. The damage is subtler than a plain overwrite: the
+	// repair loop deletes the rejected leaf, and it then resolves through the
+	// injected prototype — so the app reports "reset to default" while the
+	// attacker's value is what actually lands.
+	//
+	// Scope note: this is value substitution within the parsed object, not
+	// global pollution. zod v4 builds null-prototype records, so nothing
+	// reaches `Object.prototype` for other code to trip over.
+
+	it('ignores __proto__ so a rejected leaf really falls back to its default', () => {
+		// The exact payload: `theme: null` forces the schema to reject theme,
+		// which is what let the injected prototype take effect.
+		const payload = JSON.parse(
+			'{"theme":null,"__proto__":{"theme":{"bg":"#00ff00","fontSize":31}}}',
+		) as unknown
+
+		const {settings} = parseSettingsLenient(payload)
+
+		const d = defaultSettings().theme
+		expect(settings.theme.bg).toBe(d.bg)
+		expect(settings.theme.fontSize).toBe(d.fontSize)
+	})
+
+	it('ignores __proto__ when a sibling section is rejected', () => {
+		// Second confirmed-vulnerable shape, found by probing rather than
+		// assumed: `terminal: null` rejects the whole section, and `startDir`
+		// then resolves through the injected prototype. The report said
+		// ["terminal"] while startDir held the attacker's value.
+		const payload = JSON.parse(
+			'{"terminal":null,"__proto__":{"terminal":{"startDir":"C:\\\\evil"}}}',
+		) as unknown
+
+		const {settings, rejected} = parseSettingsLenient(payload)
+
+		expect(settings.terminal.startDir).toBe(defaultSettings().terminal.startDir)
+		expect(rejected).toEqual(['terminal'])
+	})
+
+	it('ignores constructor as well', () => {
+		// No payload was found that abuses `constructor` here — zod's output
+		// never dereferences it, so it currently has no effect. Kept as a cheap
+		// canary so the day that changes, the guard is already there.
+		const payload = JSON.parse(
+			'{"constructor":{"prototype":{"theme":{"bg":"#00ff00"}}}}',
+		) as unknown
+
+		const {settings} = parseSettingsLenient(payload)
+
+		expect(settings.theme.bg).toBe(defaultSettings().theme.bg)
+	})
+
+	it('does not pollute Object.prototype globally', () => {
+		const payload = JSON.parse('{"__proto__":{"polluted":"yes"}}') as unknown
+
+		parseSettingsLenient(payload)
+
+		expect(({} as Record<string, unknown>)['polluted']).toBeUndefined()
+	})
+
+	it('still applies legitimate settings alongside a __proto__ payload', () => {
+		// The guard must skip only the unsafe key, not abandon the document.
+		const payload = JSON.parse(
+			'{"terminal":{"startDir":"D:\\\\kept"},"__proto__":{"theme":{"bg":"#00ff00"}}}',
+		) as unknown
+
+		const {settings} = parseSettingsLenient(payload)
+
+		expect(settings.terminal.startDir).toBe('D:\\kept')
+		expect(settings.theme.bg).toBe(defaultSettings().theme.bg)
+	})
+})
+
 describe('rejection reporting', () => {
 	it('records the paths a load had to reject', async () => {
 		const store = await storeWithScratchHome()

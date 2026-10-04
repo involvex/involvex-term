@@ -223,12 +223,26 @@ export function defaultSettings(): AppSettings {
 	return SettingsSchema.parse({})
 }
 
+/**
+ * Keys that must never be copied from a parsed document.
+ *
+ * `JSON.parse` creates `__proto__` as a real *own* property, so `Object.entries`
+ * sees it, and `out.__proto__ = value` fires the prototype setter rather than
+ * defining a key. The result is worse than a plain overwrite: the rejected
+ * leaf is deleted by the repair loop and then resolves through the injected
+ * prototype, so the app reports "reset to default" while the attacker's value
+ * is what actually lands. `constructor` is blocked for the same reason — it
+ * reaches `Object` and from there `constructor.prototype`.
+ */
+const UNSAFE_MERGE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
 function deepMergeDefaults(
 	base: Record<string, unknown>,
 	over: Record<string, unknown>,
 ): Record<string, unknown> {
 	const out: Record<string, unknown> = {...base}
 	for (const [k, v] of Object.entries(over ?? {})) {
+		if (UNSAFE_MERGE_KEYS.has(k)) continue
 		const b = base[k]
 		if (
 			v &&
