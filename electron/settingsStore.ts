@@ -434,15 +434,6 @@ const rejectedBySource = new Map<string, string[]>()
  */
 const rejectedTotalBySource = new Map<string, number>()
 
-/**
- * De-duplicated sample across sources, also capped.
- *
- * A Set rather than an array so a path rejected by two sources is listed once.
- * Bounded because `REJECTED_LIMIT` sources times `REJECTED_LIMIT` paths each
- * is still bounded, and there are only three sources.
- */
-const rejectedUnionSample = new Set<string>()
-
 /** Rejected paths recorded for one source ('settings.json', 'import', 'save'). */
 export function rejectedSettingsPaths(source: string): string[] {
 	return [...(rejectedBySource.get(source) ?? [])]
@@ -478,7 +469,30 @@ export function rejectedSettingsReport(source: string): RejectedReport {
 export function allRejectedSettingsReport(): RejectedReport {
 	let total = 0
 	for (const n of rejectedTotalBySource.values()) total += n
-	return {paths: take(rejectedUnionSample, REJECTED_LIMIT), total}
+
+	// Rebuilt from the per-source snapshots on every call rather than
+	// accumulated, because this report has to describe the current state of the
+	// settings, not everything ever rejected.
+	//
+	// Accumulating made a path a permanent accusation. A file with one bad
+	// value, corrected a moment later by a save or by hand, left its path in
+	// the union for the rest of the session - so a perfectly valid
+	// settings.json was still reported as invalid. It also produced a
+	// self-contradictory report: total 0 (the source snapshot had been
+	// replaced) alongside a path, which the renderer then turned back into a
+	// count via Math.max and displayed as a warning.
+	//
+	// Still bounded: three sources of at most REJECTED_LIMIT paths each, and
+	// the Set stops growing at REJECTED_LIMIT.
+	const union = new Set<string>()
+	for (const sample of rejectedBySource.values()) {
+		for (const p of sample) {
+			if (union.size >= REJECTED_LIMIT) break
+			union.add(p)
+		}
+	}
+
+	return {paths: [...union], total}
 }
 
 /**
@@ -499,9 +513,12 @@ function take(iterable: Iterable<string>, limit: number): string[] {
 
 function warnRejected(source: string, all: Set<string>): void {
 	const sample = take(all, REJECTED_LIMIT)
+	// Replace this source's snapshot outright. Setting it to an empty sample
+	// when nothing was rejected is what makes the report reflect the present
+	// rather than the past - `allRejectedSettingsReport` derives its union from
+	// these, so there is nothing else to keep in step.
 	rejectedBySource.set(source, sample)
 	rejectedTotalBySource.set(source, all.size)
-	for (const p of sample) rejectedUnionSample.add(p)
 	if (!all.size) return
 	// Join the capped sample only; the total carries the rest.
 	console.warn(
