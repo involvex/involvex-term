@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.7] - 2026-10-05
+
+### Changed
+
+- ci: refuse to cut an empty release in scripts/release.mjs
+
 ## [0.8.6] - 2026-10-04
 
 ### Added
