@@ -34,6 +34,7 @@ function usage() {
 			'  --version X.Y.Z           explicit target version (wins over --bump)',
 			'  --dry-run                 print the plan, change nothing',
 			'  --no-push                 commit + tag locally, skip push/gh release',
+			'  --force-empty             allow a release with no new commits since last tag',
 			'  --yes                     skip the confirm prompt',
 			'  --help                    print this help',
 			'',
@@ -74,11 +75,13 @@ function parseArgs(argv) {
 		noPush: false,
 		yes: false,
 		help: false,
+		forceEmpty: false,
 	}
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i]
 		if (arg === '--dry-run') opts.dryRun = true
 		else if (arg === '--no-push') opts.noPush = true
+		else if (arg === '--force-empty') opts.forceEmpty = true
 		else if (arg === '--yes' || arg === '-y') opts.yes = true
 		else if (arg === '--help' || arg === '-h') opts.help = true
 		else if (arg.startsWith('--bump=')) opts.bump = arg.slice('--bump='.length)
@@ -239,6 +242,14 @@ const {updated, notes} = buildChangelog(changelog, target, groups)
 console.log(`[release] ${currentVersion} → ${target} (${tag})`)
 console.log(`[release] range: ${ref ?? '(no tags, full history)'}..HEAD`)
 console.log(`[release] commits: ${subjects.length}`)
+if (!subjects.length && !opts.dryRun && !opts.forceEmpty) {
+	fail(
+		`no new commits since ${ref ?? '(first tag)'} — refusing to cut an empty release
+  inspect first: bun run release -- --bump ${opts.bump} --dry-run
+  permit it:     bun run release -- --bump ${opts.bump} --force-empty --yes
+  or wait until new commits land`,
+	)
+}
 if (!subjects.length) {
 	console.log(
 		'[release] no new commits since last tag — changelog keeps its entries',
