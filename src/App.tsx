@@ -24,6 +24,12 @@ import {defaultAgentTools, resolveActiveAgent} from './lib/agents'
 import {focusPaneInTabs} from './lib/focusPane'
 import {matchHotkey} from './lib/hotkeys'
 import {
+	MAX_PANES_PER_TAB,
+	MAX_TABS,
+	MAX_TOTAL_PANES,
+	totalPanes,
+} from './lib/paneBudget'
+import {
 	collectLeaves,
 	countLeaves,
 	findLeaf,
@@ -825,6 +831,16 @@ export default function App() {
 
 	const addTab = useCallback(
 		(cwdToUse?: string, profileId?: string) => {
+			if (tabsRef.current.length >= MAX_TABS) {
+				showToast(`Tab limit reached (${MAX_TABS}). Close a tab first.`)
+				return
+			}
+			if (totalPanes(tabsRef.current) >= MAX_TOTAL_PANES) {
+				showToast(
+					`Shell limit reached (${MAX_TOTAL_PANES} panes). Close a pane or tab first.`,
+				)
+				return
+			}
 			const startDir = settingsRef.current.terminal.startDir.trim()
 			const pid = profileId || settingsRef.current.terminal.defaultProfileId
 			const nt = newTab(
@@ -834,7 +850,7 @@ export default function App() {
 			setTabs(prev => [...prev, nt])
 			setActiveId(nt.id)
 		},
-		[git?.cwd, cwd],
+		[git?.cwd, cwd, showToast],
 	)
 
 	// leaf.cwd is only the spawn dir; main tracks the live one via OSC 7 / 9;9.
@@ -994,6 +1010,18 @@ export default function App() {
 		) => {
 			const tab = tabsRef.current.find(t => t.id === tabId)
 			if (!tab) return
+			if (countLeaves(tab.root) >= MAX_PANES_PER_TAB) {
+				showToast(
+					`Pane limit reached (${MAX_PANES_PER_TAB} per tab). Close a pane first.`,
+				)
+				return
+			}
+			if (totalPanes(tabsRef.current) >= MAX_TOTAL_PANES) {
+				showToast(
+					`Shell limit reached (${MAX_TOTAL_PANES} panes). Close a pane or tab first.`,
+				)
+				return
+			}
 			const paneId = targetPaneId ?? tab.activePaneId
 			const target = findLeaf(tab.root, paneId)
 			if (!target) return
@@ -1018,7 +1046,7 @@ export default function App() {
 				),
 			)
 		},
-		[livePaneCwd],
+		[livePaneCwd, showToast],
 	)
 
 	const splitPane = useCallback(

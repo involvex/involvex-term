@@ -654,10 +654,12 @@ export default function TerminalView({
 			if (spawned) return
 			spawned = true
 			// Stagger concurrent spawns: 5 tabs × 3 panes = 15 pwsh7
-			// profiles + ConPTYs at once freezes the UI. Spread them.
+			// profiles + ConPTYs at once freezes the UI and OOMs the app.
+			// Uncapped linear backoff spreads a full session restore over
+			// seconds instead of firing every pane in the same 600ms window.
 			try {
-				const slot = globalSpawnSlot++ % 5
-				if (slot > 0) await new Promise(r => setTimeout(r, slot * 150))
+				const slot = globalSpawnSlot++
+				if (slot > 0) await new Promise(r => setTimeout(r, slot * 200))
 				if (disposed) return
 			} catch {
 				/* noop */

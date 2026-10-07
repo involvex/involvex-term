@@ -45,6 +45,7 @@ import {
 	getPty,
 	killAllPtys,
 	killPty,
+	ptyCount,
 	resolveSpawnCwd,
 	setCwd,
 	spawnPty,
@@ -183,6 +184,30 @@ const gitWatchers = new Map<string, {watcher: FSWatcher; panes: Set<string>}>()
 const pendingGitRefresh = new Map<string, NodeJS.Timeout>()
 /** Coalesce concurrent git refreshes for the same cwd (multi-pane repos). */
 const inFlightGit = new Map<string, Promise<void>>()
+
+/**
+ * Serial spawn queue: session restore mounts every tab at once (5 tabs ×
+ * 2–3 panes = 13 concurrent pwsh + ConPTY + git spawns), which OOM-crashed
+ * the app. One shell at a time with a small gap keeps the storm sequential.
+ */
+let spawnQueue: Promise<unknown> = Promise.resolve()
+let lastSpawnAt = 0
+const SPAWN_SPACING_MS = 300
+
+function enqueueSpawn<T>(work: () => Promise<T>): Promise<T> {
+	const next = spawnQueue.then(async () => {
+		const gap = SPAWN_SPACING_MS - (Date.now() - lastSpawnAt)
+		if (gap > 0) await new Promise(r => setTimeout(r, gap))
+		try {
+			return await work()
+		} finally {
+			lastSpawnAt = Date.now()
+		}
+	})
+	// A rejected spawn must not poison the queue for the panes behind it.
+	spawnQueue = next.catch(() => undefined)
+	return next
+}
 
 async function refreshGitForTab(tabId: string, cwd: string) {
 	if (!win) return
@@ -357,81 +382,91 @@ function registerIpc() {
 				profileId?: string
 			},
 		) => {
-			const start = resolveSpawnCwd(
-				(cwd && cwd.trim()) ||
-					settings.terminal.startDir?.trim() ||
-					os.homedir(),
-			)
-			const hooks = settings.agent?.envHooks ?? {
-				enabled: false,
-				includeGit: true,
-			}
-			let git = null as Awaited<ReturnType<typeof getGitStatus>> | null
-			let remoteUrl: string | null = null
-			if (hooks.enabled && hooks.includeGit) {
-				try {
-					git = await getGitStatus(start)
-					if (git.repoRoot) {
-						remoteUrl = await getRemoteUrl(git.repoRoot).catch(() => null)
-					}
-				} catch {
-					git = null
-					remoteUrl = null
+			return enqueueSpawn(async () => {
+				const start = resolveSpawnCwd(
+					(cwd && cwd.trim()) ||
+						settings.terminal.startDir?.trim() ||
+						os.homedir(),
+				)
+				const hooks = settings.agent?.envHooks ?? {
+					enabled: false,
+					includeGit: true,
 				}
-			}
-			const extraEnv = buildEnvHooks(hooks, {
-				paneId: id,
-				cwd: start,
-				appVersion: app.getVersion(),
-				git,
-				remoteUrl,
-			})
-			const entry = spawnPty(id, start, cols, rows, {
-				profileId,
-				profiles: settings.terminal.profiles as never,
-				defaultProfileId: settings.terminal.defaultProfileId,
-				extraEnv,
-			})
-			entry.pty.onData((data: string) => {
-				// sniffCwd's onChange fires per chunk that carried a prompt OSC
-				// (7/633/9;9) — the renderer's completion signal. Same-cwd
-				// re-prompts fire too, which is exactly what we want.
-				let sawPrompt = false
-				const cleaned = sniffCwd(id, data, (tabId, newCwd) => {
-					sawPrompt = true
-					setCwd(tabId, newCwd)
-					scheduleGitRefresh(tabId, newCwd)
+				let git = null as Awaited<ReturnType<typeof getGitStatus>> | null
+				let remoteUrl: string | null = null
+				if (hooks.enabled && hooks.includeGit) {
+					try {
+						// Best-effort with a timeout: a restore storm must not park
+						// 13 concurrent git.exe probes behind one slow repo.
+						git = await withTimeout(getGitStatus(start), 3000, null)
+						if (git?.repoRoot) {
+							remoteUrl = await withTimeout(
+								getRemoteUrl(git.repoRoot).catch(() => null),
+								3000,
+								null,
+							)
+						}
+					} catch {
+						git = null
+						remoteUrl = null
+					}
+				}
+				const extraEnv = buildEnvHooks(hooks, {
+					paneId: id,
+					cwd: start,
+					appVersion: app.getVersion(),
+					git,
+					remoteUrl,
 				})
-				safeSend(win, `pty:data-${id}`, cleaned)
-				if (sawPrompt)
-					safeSend(win, `pty:prompt-${id}`, {
-						// Regex test scans without copying; cleaned.trim()
-						// allocated a full duplicate per prompt chunk.
-						// eslint-disable-next-line no-control-regex
-						hadOutput: /[^\s\x1b]/.test(cleaned),
+				const entry = spawnPty(id, start, cols, rows, {
+					profileId,
+					profiles: settings.terminal.profiles as never,
+					defaultProfileId: settings.terminal.defaultProfileId,
+					extraEnv,
+				})
+				entry.pty.onData((data: string) => {
+					// sniffCwd's onChange fires per chunk that carried a prompt OSC
+					// (7/633/9;9) — the renderer's completion signal. Same-cwd
+					// re-prompts fire too, which is exactly what we want.
+					let sawPrompt = false
+					const cleaned = sniffCwd(id, data, (tabId, newCwd) => {
+						sawPrompt = true
+						setCwd(tabId, newCwd)
+						scheduleGitRefresh(tabId, newCwd)
 					})
-				notifyPtyData(id, cleaned)
+					safeSend(win, `pty:data-${id}`, cleaned)
+					if (sawPrompt)
+						safeSend(win, `pty:prompt-${id}`, {
+							// Regex test scans without copying; cleaned.trim()
+							// allocated a full duplicate per prompt chunk.
+							// eslint-disable-next-line no-control-regex
+							hadOutput: /[^\s\x1b]/.test(cleaned),
+						})
+					notifyPtyData(id, cleaned)
+				})
+				entry.pty.onExit(() => {
+					// A re-spawn under the same pane id supersedes the previous pty
+					// (renderer reload / session restore). That predecessor is killed by
+					// spawnPty, so ignore its exit: the replacement owns the pane now
+					// and must not be told it exited, nor have "[process exited]"
+					// written into the fresh shell by the renderer's onPtyExit.
+					if (getPty(id) !== entry) return
+					safeSend(win, `pty:exit-${id}`)
+					notifyPtyExit(id)
+					// Natural exit: node-pty already tore the process down, so just
+					// forget the entry. Without this the PtyEntry (net.Socket +
+					// ConPTY handle) is pinned for the life of the app, and the
+					// per-pane git watcher / cwd-tracker row are never released —
+					// ensureGitWatcher happily re-adds a dead pane id.
+					forgetPty(id)
+					releasePaneResources(id)
+					console.log(`[pty] exit ${id} (live=${ptyCount()})`)
+				})
+				scheduleGitRefresh(id, entry.cwd)
+				notifyPtySpawn({paneId: id, cwd: entry.cwd, shell: entry.shell})
+				console.log(`[pty] spawn ${id} (${entry.shell}, live=${ptyCount()})`)
+				return {id, cwd: entry.cwd, shell: entry.shell}
 			})
-			entry.pty.onExit(() => {
-				// A re-spawn under the same pane id supersedes the previous pty
-				// (renderer reload / session restore). That predecessor is killed by
-				// spawnPty, so ignore its exit: the replacement owns the pane now
-				// and must not be told it exited, nor have "[process exited]"
-				// written into the fresh shell by the renderer's onPtyExit.
-				if (getPty(id) !== entry) return
-				safeSend(win, `pty:exit-${id}`)
-				notifyPtyExit(id)
-				// Natural exit: node-pty already tore the process down, so just
-				// forget the entry. Without this the PtyEntry (net.Socket +
-				// ConPTY handle) is pinned for the life of the app, and the
-				// per-pane git watcher / cwd-tracker row are never released —
-				// ensureGitWatcher happily re-adds a dead pane id.
-				forgetPty(id)
-				releasePaneResources(id)
-			})
-			scheduleGitRefresh(id, entry.cwd)
-			notifyPtySpawn({paneId: id, cwd: entry.cwd, shell: entry.shell})
-			return {id, cwd: entry.cwd, shell: entry.shell}
 		},
 	)
 
