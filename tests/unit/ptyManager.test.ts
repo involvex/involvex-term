@@ -204,3 +204,50 @@ describe('spawnPty profile availability', () => {
 		expect(fake.spawned).toBe(1)
 	})
 })
+
+describe('ptyManager live-pty budget', () => {
+	beforeEach(() => {
+		fake = {spawned: 0, killed: 0}
+		setPtyModule(makeFakeModule())
+	})
+
+	afterEach(() => {
+		for (const id of ptyIds()) killPty(id)
+		setPtyModule(null)
+	})
+
+	it('refuses brand-new ids once the budget is exhausted', async () => {
+		const {MAX_LIVE_PTYS, ptyCount} =
+			await import('../../electron/ptyManager.ts')
+		expect(MAX_LIVE_PTYS).toBeGreaterThan(0)
+		for (let i = 0; i < MAX_LIVE_PTYS; i++) {
+			spawnPty(`pane-budget-${i}`, cwd, 80, 24)
+		}
+		expect(ptyCount()).toBe(MAX_LIVE_PTYS)
+		expect(() => spawnPty('pane-over-budget', cwd, 80, 24)).toThrow(
+			/Too many shells open/,
+		)
+		// The rejected spawn must not register a half-entry.
+		expect(ptyCount()).toBe(MAX_LIVE_PTYS)
+	})
+
+	it('lets a pane id re-spawn even at the budget ceiling', async () => {
+		const {MAX_LIVE_PTYS} = await import('../../electron/ptyManager.ts')
+		for (let i = 0; i < MAX_LIVE_PTYS; i++) {
+			spawnPty(`pane-reuse-${i}`, cwd, 80, 24)
+		}
+		// Reload/session-restore reuses ids; that must keep working when full.
+		expect(() => spawnPty('pane-reuse-0', cwd, 80, 24)).not.toThrow()
+	})
+
+	it('frees budget on kill so new panes can spawn again', async () => {
+		const {MAX_LIVE_PTYS, ptyCount} =
+			await import('../../electron/ptyManager.ts')
+		for (let i = 0; i < MAX_LIVE_PTYS; i++) {
+			spawnPty(`pane-free-${i}`, cwd, 80, 24)
+		}
+		killPty('pane-free-0')
+		expect(ptyCount()).toBe(MAX_LIVE_PTYS - 1)
+		expect(() => spawnPty('pane-freed-slot', cwd, 80, 24)).not.toThrow()
+	})
+})

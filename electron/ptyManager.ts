@@ -26,6 +26,20 @@ export interface PtyEntry {
 const entries = new Map<string, PtyEntry>()
 
 /**
+ * Hard ceiling on concurrent shells. Each live pty pins a ConPTY pair plus a
+ * full shell process (pwsh7 ≈ 100–200MB); beyond ~a dozen the spawn storm
+ * OOMs the app (seen: 5 tabs × 2–3 panes → 13 pwsh → 728MB crash dump).
+ * The renderer enforces a lower soft budget with a toast; this is the last
+ * line of defense that turns a silent crash into a readable spawn error.
+ */
+export const MAX_LIVE_PTYS = 24
+
+/** Live pty count — used by the spawn guard and diagnostics. */
+export function ptyCount(): number {
+	return entries.size
+}
+
+/**
  * Test seam: lets tests substitute a fake node-pty so the registry invariants
  * can be exercised without spawning real shells. Production leaves this null.
  */
@@ -144,6 +158,12 @@ export function spawnPty(
 	if (!mod)
 		throw new Error(
 			'node-pty native module unavailable. Run: bun run rebuild (requires Python 3.11 + VS Build Tools).',
+		)
+	// Re-spawns reuse their pane id (killed below), so only brand-new ids
+	// count against the budget.
+	if (!entries.has(id) && entries.size >= MAX_LIVE_PTYS)
+		throw new Error(
+			`Too many shells open (${entries.size}/${MAX_LIVE_PTYS}). Close a pane or tab first.`,
 		)
 	const envOverride =
 		process.env['INVOLVEX_SHELL'] ?? process.env['INVOVEX_SHELL']
