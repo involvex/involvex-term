@@ -6,6 +6,22 @@ export function trimTrail(s: string): string {
 	return s.replace(/[.,;:!?)]+$/g, '')
 }
 
+/**
+ * Windows Terminal style: follow links only with Ctrl+click.
+ * On macOS, Cmd (metaKey) also counts; on Windows the Win key must not.
+ */
+export function isLinkOpenClick(event: MouseEvent): boolean {
+	const isWindows =
+		typeof navigator !== 'undefined' &&
+		/win/i.test(
+			(navigator as Navigator & {userAgentData?: {platform?: string}})
+				.userAgentData?.platform ??
+				navigator.platform ??
+				'',
+		)
+	return event.ctrlKey || (event.metaKey && !isWindows)
+}
+
 export async function openTarget(raw: string): Promise<void> {
 	const target = trimTrail(raw.trim())
 	if (!target) return
@@ -38,7 +54,7 @@ function pushMatch(
 	text: string,
 	y: number,
 	re: RegExp,
-	activate: (t: string) => void,
+	activate: (event: MouseEvent, t: string) => void,
 ): void {
 	re.lastIndex = 0
 	let m: RegExpExecArray | null
@@ -54,14 +70,14 @@ function pushMatch(
 				end: {x: end, y},
 			},
 			text: cleaned,
-			activate: (_e, t) => activate(t),
+			activate: (e, t) => activate(e, t),
 		})
 	}
 }
 
 /**
- * Ctrl+click (or click) local paths: `D:\foo`, `\\server\share`, `/home/...`,
- * and `file://` URIs. HTTP(S) is handled by WebLinksAddon.
+ * Ctrl+click (Cmd+click on macOS) local paths: `D:\foo`, `\\server\share`,
+ * `/home/...`, and `file://` URIs. HTTP(S) is handled by WebLinksAddon.
  */
 export function createPathLinkProvider(term: Terminal): ILinkProvider {
 	return {
@@ -73,7 +89,8 @@ export function createPathLinkProvider(term: Terminal): ILinkProvider {
 			}
 			const text = line.translateToString(true)
 			const links: ILink[] = []
-			const open = (t: string) => {
+			const open = (event: MouseEvent, t: string) => {
+				if (!isLinkOpenClick(event)) return
 				void openTarget(t)
 			}
 			// Windows drive / UNC
@@ -87,7 +104,8 @@ export function createPathLinkProvider(term: Terminal): ILinkProvider {
 	}
 }
 
-/** WebLinksAddon handler — open http(s)/mailto via Electron. */
-export function webLinkHandler(_event: MouseEvent, uri: string): void {
+/** WebLinksAddon handler — open http(s)/mailto only on Ctrl+click. */
+export function webLinkHandler(event: MouseEvent, uri: string): void {
+	if (!isLinkOpenClick(event)) return
 	void openTarget(uri)
 }
