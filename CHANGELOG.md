@@ -1,8 +1,24 @@
 # Changelog
 
-## [0.9.0] - Unreleased
+## [0.9.0] - 2026-10-13
 
 ### Added
+
+- palette v2, buffer/WebGL, git pending, update UX
+
+### Fixed
+
+- require Ctrl+click to open terminal links
+- guard multi-tab pty spawn storm that OOM-crashed the app
+
+### Changed
+
+- perf: lazy pane hydration on first focus
+- build(deps-dev): bump eslint from 10.11.0 to 10.12.0
+- build(deps-dev): bump electron from 44.5.1 to 44.7.0
+- build(deps-dev): bump @vitejs/plugin-react from 6.1.1 to 6.1.2
+- build(deps-dev): bump typescript-eslint from 8.71.0 to 8.71.1
+- build(deps-dev): bump vite from 8.3.2 to 8.3.3
 
 - palette: ranked fuzzy search, MRU ordering, OpenCode sessions + git checkout rows
 - settings: optional WebGL terminal renderer for smoother output floods
