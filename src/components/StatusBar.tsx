@@ -102,10 +102,13 @@ function FooterMenu({
 
 export const GitWidget = memo(function GitWidget({
 	status,
+	pending,
 	onRefreshed,
 	onToast,
 }: {
 	status: GitStatus | null
+	/** Pane just focused — status not yet known; don't flash "no repo". */
+	pending?: boolean
 	onRefreshed?: (s: GitStatus) => void
 	onToast?: (msg: string) => void
 }) {
@@ -120,6 +123,18 @@ export const GitWidget = memo(function GitWidget({
 	/** Last completed details fetch per cwd — re-opens within TTL reuse it. */
 	const detailsFetchedAt = useRef(new Map<string, number>())
 	const DETAILS_TTL_MS = 10_000
+
+	if (pending) {
+		return (
+			<span
+				className="footer-item footer-dim footer-git-pending"
+				title="Reading git status…"
+				aria-busy="true"
+			>
+				⎇ …
+			</span>
+		)
+	}
 
 	if (!status || !status.repoRoot) {
 		return (
@@ -685,6 +700,7 @@ function StatusBarEditItem({
 
 export default memo(function StatusBar({
 	git,
+	gitPending = false,
 	sys,
 	opencode,
 	settings,
@@ -697,6 +713,7 @@ export default memo(function StatusBar({
 	pluginSegments = [],
 }: {
 	git: GitStatus | null
+	gitPending?: boolean
 	sys: SysStats | null
 	opencode: OpencodeStatus | null
 	settings: AppSettings
@@ -784,6 +801,7 @@ export default memo(function StatusBar({
 			m === 'git' && visible ? (
 				<GitWidget
 					status={git}
+					pending={gitPending}
 					onRefreshed={onGitRefreshed}
 					onToast={onToast}
 				/>

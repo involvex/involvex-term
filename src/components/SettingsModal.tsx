@@ -1067,11 +1067,29 @@ export default function SettingsModal({
 										/>{' '}
 										Show scrollbar
 									</label>
+									<label>
+										<input
+											type="checkbox"
+											checked={settings.terminal.webgl === true}
+											onChange={e =>
+												set({
+													terminal: {
+														...settings.terminal,
+														webgl: e.target.checked,
+													},
+												})
+											}
+										/>{' '}
+										WebGL terminal renderer
+									</label>
 									<p className="footer-dim">
-										New tabs use the default profile. Use ▾ next to + (or the
-										command palette) for another shell. Custom profiles live in
-										settings.json under <code>terminal.profiles</code>.
-										Ctrl+click URLs and local paths to open them.
+										WebGL smooths large output floods (GPU). Applies to newly
+										started panes; falls back to canvas if the context is
+										unavailable. New tabs use the default profile. Use ▾ next to
+										+ (or the command palette) for another shell. Custom
+										profiles live in settings.json under{' '}
+										<code>terminal.profiles</code>. Ctrl+click URLs and local
+										paths to open them.
 									</p>
 								</section>
 

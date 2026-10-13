@@ -1,5 +1,10 @@
 import {useEffect, useMemo, useRef, useState} from 'react'
-import {filterCommands, type PaletteCommand} from '../commands'
+import {
+	filterCommands,
+	loadPaletteMru,
+	rememberPaletteCommand,
+	type PaletteCommand,
+} from '../commands'
 import {focusTerm} from '../lib/focusTerm'
 
 interface Props {
@@ -11,12 +16,13 @@ interface Props {
 export default function CommandPalette({tabId, commands, onClose}: Props) {
 	const [filter, setFilter] = useState('')
 	const [index, setIndex] = useState(0)
+	const [mru, setMru] = useState(() => loadPaletteMru())
 	const inputRef = useRef<HTMLInputElement>(null)
 	const listRef = useRef<HTMLDivElement>(null)
 
 	const visible = useMemo(
-		() => filterCommands(commands, filter),
-		[commands, filter],
+		() => filterCommands(commands, filter, mru),
+		[commands, filter, mru],
 	)
 
 	useEffect(() => {
@@ -35,6 +41,8 @@ export default function CommandPalette({tabId, commands, onClose}: Props) {
 
 	const run = (cmd: PaletteCommand | undefined) => {
 		if (!cmd) return
+		rememberPaletteCommand(cmd.id)
+		setMru(loadPaletteMru())
 		onClose()
 		focusTerm(tabId)
 		cmd.run()
@@ -55,7 +63,7 @@ export default function CommandPalette({tabId, commands, onClose}: Props) {
 					ref={inputRef}
 					type="text"
 					value={filter}
-					placeholder="Type a command or search tabs…"
+					placeholder="Type a command, branch, session, or tab…"
 					aria-label="Command palette"
 					onChange={e => {
 						setFilter(e.target.value)
@@ -64,7 +72,7 @@ export default function CommandPalette({tabId, commands, onClose}: Props) {
 					onKeyDown={e => {
 						if (e.key === 'ArrowDown') {
 							e.preventDefault()
-							setIndex(i => Math.min(i + 1, visible.length - 1))
+							setIndex(i => Math.min(i + 1, Math.max(0, visible.length - 1)))
 						} else if (e.key === 'ArrowUp') {
 							e.preventDefault()
 							setIndex(i => Math.max(i - 1, 0))

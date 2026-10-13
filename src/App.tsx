@@ -59,6 +59,7 @@ import {
 	isElectron,
 	termApi,
 	type AppSettings,
+	type BranchList,
 	type CliCommand,
 	type GitStatus,
 	type OpencodeStatus,
@@ -143,6 +144,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 		completionBell: true,
 		scrollback: 5000,
 		scrollbar: true,
+		webgl: false,
 		snippets: [
 			{
 				id: 'git-status',
@@ -223,7 +225,11 @@ export default function App() {
 		PluginStatusBarSegment[]
 	>([])
 	const [git, setGit] = useState<GitStatus | null>(null)
+	/** Pane id the current `git` snapshot belongs to (pending when it lags focus). */
+	const [gitPaneId, setGitPaneId] = useState<string | null>(null)
 	const [sys, setSys] = useState<SysStats | null>(null)
+	/** Branches loaded while the palette is open (for checkout commands). */
+	const [paletteBranches, setPaletteBranches] = useState<string[]>([])
 	const [cwd, setCwd] = useState('')
 	const [searchOpen, setSearchOpen] = useState(false)
 	const [paletteOpen, setPaletteOpen] = useState(false)
@@ -517,6 +523,33 @@ export default function App() {
 		api.ptyWrite(paneId, sendEnter ? `${command}\r` : command)
 	}, [])
 
+	const checkoutBranch = useCallback(
+		async (branch: string) => {
+			const api = termApi()
+			const dir = git?.cwd || cwd
+			if (!api || !dir) return
+			const res = await api.gitCheckout(dir, branch)
+			if (res.ok) {
+				showToast(`Checked out ${res.branch || branch}`)
+				try {
+					const next = await api.gitGet(dir)
+					setGit(next)
+					setGitPaneId(
+						activeRef.current
+							? (tabsRef.current.find(t => t.id === activeRef.current)
+									?.activePaneId ?? null)
+							: null,
+					)
+				} catch {
+					/* footer will catch up on next OSC */
+				}
+			} else {
+				showToast(res.error || 'Checkout failed', TOAST_ERROR_MS)
+			}
+		},
+		[git?.cwd, cwd, showToast],
+	)
+
 	const activePaneActions = useCallback(() => {
 		const tab = tabsRef.current.find(t => t.id === activeRef.current)
 		if (!tab?.activePaneId) return undefined
@@ -704,11 +737,14 @@ export default function App() {
 
 	// Git status for the active pane: subscribe per-pane + global events.
 	// Main tracks cwd per pty (= pane) id; the owning tab gets the title.
+	// `gitPending` is derived so pane switches never flash the previous branch.
 	const activePaneId = activeTab?.activePaneId ?? ''
+	const gitPending = Boolean(activePaneId) && gitPaneId !== activePaneId
 	useEffect(() => {
 		const api = termApi()
 		if (!api || !activeId || !activePaneId) return
 		const off1 = api.onGitChangedFor(activePaneId, st => {
+			setGitPaneId(activePaneId)
 			setGit(st as GitStatus)
 			setCwd((st as GitStatus).cwd || '')
 			// Bail out when nothing visible changed: rebuilding `tabs`
@@ -730,6 +766,7 @@ export default function App() {
 		const off2 = api.onGitChanged(msg => {
 			const owner = tabsRef.current.find(t => findLeaf(t.root, msg.tabId))
 			if (!owner || owner.id !== activeRef.current) return
+			setGitPaneId(msg.tabId)
 			setGit(msg as unknown as GitStatus)
 			const g = msg as unknown as GitStatus
 			setCwd(g.cwd || '')
@@ -739,6 +776,32 @@ export default function App() {
 			off2()
 		}
 	}, [activeId, activePaneId])
+
+	// Palette branch list: fetch when opened so checkout rows stay fresh
+	// without polling on every prompt.
+	useEffect(() => {
+		if (!paletteOpen) return
+		const api = termApi()
+		const dir = git?.cwd || cwd
+		if (!api || !dir || !git?.repoRoot) return
+		let cancelled = false
+		void api
+			.gitBranches(dir)
+			.then((list: BranchList) => {
+				if (cancelled) return
+				const all = [
+					...list.local,
+					...list.remote.filter(b => !list.local.includes(b)),
+				]
+				setPaletteBranches(all.slice(0, 40))
+			})
+			.catch(() => {
+				if (!cancelled) setPaletteBranches([])
+			})
+		return () => {
+			cancelled = true
+		}
+	}, [paletteOpen, git?.cwd, git?.repoRoot, cwd])
 
 	const closeTab = useCallback(async (id: string) => {
 		const tab = tabsRef.current.find(t => t.id === id)
@@ -1518,6 +1581,25 @@ export default function App() {
 						: activeAgent.continueCommand || activeAgent.command,
 				run: () => continueAgent(opencode?.latest?.id),
 			},
+			...(activeAgent.sessionProvider === 'opencode'
+				? (opencode?.sessions ?? []).slice(0, 16).map(s => ({
+						id: `cmd:oc-session-${s.id}`,
+						title: `Continue session: ${shortOcHint(s.title, 48)}`,
+						hint: s.directory,
+						run: () => continueAgent(s.id),
+					}))
+				: []),
+			...paletteBranches.map(branch => ({
+				id: `cmd:git-checkout-${branch}`,
+				title: `Checkout: ${branch}`,
+				hint:
+					git?.branch === branch
+						? 'current'
+						: branch.startsWith('origin/')
+							? 'remote'
+							: 'local',
+				run: () => void checkoutBranch(branch),
+			})),
 			{
 				id: 'cmd:clear-buffer',
 				title: 'Clear buffer',
@@ -1631,6 +1713,9 @@ export default function App() {
 			activeAgent.sessionProvider,
 			activeAgent.continueCommand,
 			activeAgent.command,
+			paletteBranches,
+			checkoutBranch,
+			git?.branch,
 			saveSettings,
 		],
 	)
@@ -1638,6 +1723,12 @@ export default function App() {
 	// Stable per-render callbacks: inline arrows in JSX would defeat the
 	// memo() on PaneLayout/StatusBar (new fn identity every sys/git tick).
 	const handleGitRefreshed = useCallback((s: GitStatus) => {
+		setGitPaneId(
+			activeRef.current
+				? (tabsRef.current.find(t => t.id === activeRef.current)
+						?.activePaneId ?? null)
+				: null,
+		)
 		setGit(s)
 		if (s.cwd) setCwd(s.cwd)
 	}, [])
@@ -1777,6 +1868,7 @@ export default function App() {
 								completionBell={settings.terminal.completionBell}
 								scrollback={settings.terminal.scrollback}
 								scrollbar={settings.terminal.scrollbar}
+								webgl={settings.terminal.webgl === true}
 								paneAgents={emptyAgents}
 								onFocusPane={b.focusPane}
 								onResizeSplit={b.resizeSplit}
@@ -1796,6 +1888,7 @@ export default function App() {
 					)}
 					<StatusBar
 						git={git}
+						gitPending={gitPending}
 						sys={sys}
 						opencode={settings.footer.showOpencode ? opencode : null}
 						settings={settings}
@@ -1822,7 +1915,11 @@ export default function App() {
 			)}
 			{showAbout && (
 				<Suspense fallback={null}>
-					<AboutModal onClose={handleCloseAbout} />
+					<AboutModal
+						onClose={handleCloseAbout}
+						onCheckUpdates={checkUpdates}
+						onToast={handleToast}
+					/>
 				</Suspense>
 			)}
 			{showProcesses && (

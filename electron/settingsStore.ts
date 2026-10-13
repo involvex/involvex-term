@@ -153,6 +153,11 @@ const TerminalSchema = z.object({
 	scrollback: z.number().min(200).max(50000).default(5000),
 	/** Show the terminal viewport scrollbar. */
 	scrollbar: z.boolean().default(true),
+	/**
+	 * Prefer the WebGL xterm renderer when the GPU context is available.
+	 * Falls back to canvas automatically on failure.
+	 */
+	webgl: z.boolean().default(false),
 	/** Quick-run commands for the palette. */
 	snippets: z.array(SnippetSchema).default(defaultSnippets()),
 	/** Compact buttons on the tab bar (left of agent). */

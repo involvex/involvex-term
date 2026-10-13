@@ -1,6 +1,7 @@
 import {FitAddon} from '@xterm/addon-fit'
 import {SearchAddon} from '@xterm/addon-search'
 import {WebLinksAddon} from '@xterm/addon-web-links'
+import {WebglAddon} from '@xterm/addon-webgl'
 import {Terminal} from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import {useEffect, useRef, useState} from 'react'
@@ -81,6 +82,8 @@ interface Props {
 	completionBell?: boolean
 	scrollback?: number
 	scrollbar?: boolean
+	/** Prefer WebGL renderer when the GPU context is available. */
+	webgl?: boolean
 	onFocusPane: (paneId: string) => void
 	onBackgroundPrompt?: (paneId: string) => void
 	/** Resolved spawn cwd from main (title honesty before first OSC7). */
@@ -142,6 +145,7 @@ export default function TerminalView({
 	completionBell = true,
 	scrollback = 5000,
 	scrollbar = true,
+	webgl = false,
 	onFocusPane,
 	onBackgroundPrompt,
 	onResolvedCwd,
@@ -222,6 +226,23 @@ export default function TerminalView({
 		term.registerLinkProvider(createPathLinkProvider(term))
 		const search = new SearchAddon()
 		term.loadAddon(search)
+		let webglAddon: WebglAddon | null = null
+		if (webgl) {
+			try {
+				webglAddon = new WebglAddon()
+				webglAddon.onContextLoss(() => {
+					try {
+						webglAddon?.dispose()
+					} catch {
+						/* noop */
+					}
+					webglAddon = null
+				})
+				term.loadAddon(webglAddon)
+			} catch {
+				webglAddon = null
+			}
+		}
 		registerSearch(paneId, search)
 		const marks = createMarkController(term)
 		registerTermActions(paneId, {
@@ -586,6 +607,49 @@ export default function TerminalView({
 		let writeScheduled = false
 		const WRITE_BACKLOG_MAX = 512 * 1024
 		const WRITE_SLICE = 64 * 1024
+		/** Yield to the browser when a flood would blow the frame budget. */
+		const WRITE_FRAME_BUDGET_MS = 8
+		const flushWriteQueue = () => {
+			writeScheduled = false
+			if (disposed) {
+				writeParts = []
+				writeLen = 0
+				return
+			}
+			const started = performance.now()
+			while (writeParts.length > 0) {
+				const part = writeParts.shift()!
+				writeLen -= part.length
+				try {
+					for (let i = 0; i < part.length;) {
+						const end = Math.min(i + WRITE_SLICE, part.length)
+						term.write(part.slice(i, end))
+						i = end
+						if (
+							i < part.length &&
+							performance.now() - started > WRITE_FRAME_BUDGET_MS
+						) {
+							const rest = part.slice(i)
+							writeParts.unshift(rest)
+							writeLen += rest.length
+							writeScheduled = true
+							requestAnimationFrame(flushWriteQueue)
+							return
+						}
+					}
+				} catch {
+					/* noop */
+				}
+				if (
+					writeParts.length > 0 &&
+					performance.now() - started > WRITE_FRAME_BUDGET_MS
+				) {
+					writeScheduled = true
+					requestAnimationFrame(flushWriteQueue)
+					return
+				}
+			}
+		}
 		let offPrompt: (() => void) | undefined
 		let readyTimer: ReturnType<typeof setTimeout> | null = null
 		let readyRo: ResizeObserver | null = null
@@ -751,27 +815,7 @@ export default function TerminalView({
 				writeLen += data.length
 				if (!writeScheduled) {
 					writeScheduled = true
-					requestAnimationFrame(() => {
-						writeScheduled = false
-						if (disposed) {
-							writeParts = []
-							writeLen = 0
-							return
-						}
-						const parts = writeParts
-						writeParts = []
-						writeLen = 0
-						if (parts.length > 0) {
-							try {
-								const chunk = parts.length === 1 ? parts[0] : parts.join('')
-								for (let i = 0; i < chunk.length; i += WRITE_SLICE) {
-									term.write(chunk.slice(i, i + WRITE_SLICE))
-								}
-							} catch {
-								/* noop */
-							}
-						}
-					})
+					requestAnimationFrame(flushWriteQueue)
 				}
 				if (!completionBellRef.current || !onBgPromptRef.current) return
 				const bgPane = !tabActiveRef.current || !focusedRef.current
@@ -912,11 +956,18 @@ export default function TerminalView({
 			unregisterSearch(paneId)
 			unregisterTermActions(paneId)
 			marks.dispose()
+			try {
+				webglAddon?.dispose()
+			} catch {
+				/* noop */
+			}
 			term.dispose()
 			termRef.current = null
 			// Tear down the pty when this pane unmounts (tab close / session replace).
 			api?.ptyKill(paneId)
 		}
+		// webgl is sampled at hydrate time — toggling it applies to new panes
+		// without killing a live shell mid-session.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [paneId, hydrated])
 

@@ -362,6 +362,39 @@ select,
 	letter-spacing: 0.02em;
 }
 
+.footer-git-pending {
+	letter-spacing: 0.04em;
+}
+
+.about-update {
+	margin: 0 0 14px;
+	padding: 10px 12px;
+	border: 1px solid var(--surface-strip, #333);
+	border-radius: 6px;
+}
+
+.about-update-status {
+	margin: 0 0 8px;
+}
+
+.about-update-bar {
+	height: 4px;
+	margin: 0 0 10px;
+	border-radius: 2px;
+	background: var(--surface-strip, #333);
+	overflow: hidden;
+}
+
+.about-update-bar-fill {
+	height: 100%;
+	background: var(--accent, #4fc1ff);
+	transition: width 120ms linear;
+}
+
+.about-update-actions {
+	margin: 0;
+}
+
 .snippet-row {
 	display: flex;
 	flex-wrap: wrap;

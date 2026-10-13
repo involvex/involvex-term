@@ -132,6 +132,8 @@ export interface AppSettings {
 		completionBell: boolean
 		scrollback: number
 		scrollbar: boolean
+		/** Use @xterm/addon-webgl when available (smoother floods; GPU). */
+		webgl: boolean
 		snippets: CommandSnippet[]
 		quickCommands: QuickCommand[]
 	}

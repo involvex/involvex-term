@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react'
-import {termApi, type AppInfo} from '../types'
+import {termApi, type AppInfo, type UpdateStatus} from '../types'
 
 const LINKS: Array<{label: string; text: string; url: string}> = [
 	{
@@ -31,16 +31,27 @@ const LINKS: Array<{label: string; text: string; url: string}> = [
 
 interface Props {
 	onClose: () => void
+	onCheckUpdates?: () => Promise<void>
+	onToast?: (msg: string) => void
 }
 
-export default function AboutModal({onClose}: Props) {
+export default function AboutModal({onClose, onCheckUpdates, onToast}: Props) {
 	const [info, setInfo] = useState<AppInfo | null>(null)
+	const [update, setUpdate] = useState<UpdateStatus | null>(null)
+	const [busy, setBusy] = useState(false)
 
 	useEffect(() => {
 		termApi()
 			?.appInfo()
 			.then(setInfo)
 			.catch(() => setInfo(null))
+		const api = termApi()
+		if (!api) return
+		void api
+			.updateStatus()
+			.then(setUpdate)
+			.catch(() => undefined)
+		return api.onUpdateStatus(s => setUpdate(s as UpdateStatus))
 	}, [])
 
 	useEffect(() => {
@@ -60,6 +71,77 @@ export default function AboutModal({onClose}: Props) {
 	const runtime = info
 		? `Electron ${info.electron} · Chromium ${info.chrome} · Node ${info.node} · ${info.platform}`
 		: ''
+
+	const updateLabel = (() => {
+		if (!update) return 'Checking updates…'
+		switch (update.state) {
+			case 'idle':
+				return `Current: ${update.currentVersion}`
+			case 'checking':
+				return update.message || 'Checking for updates…'
+			case 'available':
+				return update.message || `Update ${update.version} available`
+			case 'not-available':
+				return update.message || `Up to date (${update.currentVersion})`
+			case 'downloading':
+				return (
+					update.message ||
+					`Downloading… ${update.percent != null ? `${update.percent}%` : ''}`
+				)
+			case 'downloaded':
+				return (
+					update.message ||
+					`Update ${update.version} ready — restart to install`
+				)
+			case 'error':
+				return update.message || 'Update check failed'
+			default:
+				return update.message || ''
+		}
+	})()
+
+	const runCheck = async () => {
+		if (busy) return
+		setBusy(true)
+		try {
+			if (onCheckUpdates) await onCheckUpdates()
+			else {
+				const api = termApi()
+				if (!api) return
+				const s = await api.updateCheck()
+				setUpdate(s)
+				onToast?.(s.message || 'Checked for updates')
+			}
+			const api = termApi()
+			if (api) setUpdate(await api.updateStatus())
+		} finally {
+			setBusy(false)
+		}
+	}
+
+	const runDownload = async () => {
+		const api = termApi()
+		if (!api || busy) return
+		setBusy(true)
+		try {
+			const s = await api.updateDownload()
+			setUpdate(s)
+			onToast?.(s.message || 'Download started')
+		} finally {
+			setBusy(false)
+		}
+	}
+
+	const runInstall = async () => {
+		const api = termApi()
+		if (!api || busy) return
+		setBusy(true)
+		try {
+			await api.updateInstall()
+		} finally {
+			setBusy(false)
+		}
+	}
 
 	return (
 		<div
@@ -98,6 +180,55 @@ export default function AboutModal({onClose}: Props) {
 				<p className="about-tagline">
 					Minimalist dark Git-aware terminal (Electron + xterm.js + node-pty)
 				</p>
+				<div className="about-update">
+					<p className="about-update-status footer-dim">{updateLabel}</p>
+					{update?.state === 'downloading' && update.percent != null && (
+						<div
+							className="about-update-bar"
+							role="progressbar"
+							aria-valuenow={update.percent}
+							aria-valuemin={0}
+							aria-valuemax={100}
+						>
+							<div
+								className="about-update-bar-fill"
+								style={{
+									width: `${Math.min(100, Math.max(0, update.percent))}%`,
+								}}
+							/>
+						</div>
+					)}
+					<div className="settings-btn-row about-update-actions">
+						<button
+							type="button"
+							className="settings-btn"
+							disabled={busy || update?.state === 'downloading'}
+							onClick={() => void runCheck()}
+						>
+							Check for updates
+						</button>
+						{update?.state === 'available' && (
+							<button
+								type="button"
+								className="settings-btn"
+								disabled={busy}
+								onClick={() => void runDownload()}
+							>
+								Download {update.version}
+							</button>
+						)}
+						{update?.state === 'downloaded' && (
+							<button
+								type="button"
+								className="settings-btn"
+								disabled={busy}
+								onClick={() => void runInstall()}
+							>
+								Restart to install
+							</button>
+						)}
+					</div>
+				</div>
 				<dl className="about-links">
 					{LINKS.map(l => (
 						<div

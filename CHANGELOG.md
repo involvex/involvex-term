@@ -1,11 +1,22 @@
 # Changelog
 
-## [Unreleased] — 0.9.0
+## [0.9.0] - Unreleased
+
+### Added
+
+- palette: ranked fuzzy search, MRU ordering, OpenCode sessions + git checkout rows
+- settings: optional WebGL terminal renderer for smoother output floods
+- about: update check / download progress / restart-to-install controls
 
 ### Changed
 
-- perf: lazy pane hydration — spawn xterm/ConPTY only when a pane is first focused on the active tab (restored sessions paint immediately without a multi-tab spawn storm)
-- fix: require Ctrl+click (Cmd+click on macOS) to open terminal URLs and local paths
+- perf: lazy pane hydration — spawn xterm/ConPTY only when a pane is first focused on the active tab
+- perf: frame-budget PTY → xterm write flushing under output floods
+- git footer shows a pending “⎇ …” state on pane switch instead of a stale branch or false “no repo”
+
+### Fixed
+
+- require Ctrl+click (Cmd+click on macOS) to open terminal URLs and local paths
 
 ## [0.8.7] - 2026-10-05
 
