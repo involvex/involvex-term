@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased] — 0.9.0
+
+### Changed
+
+- perf: lazy pane hydration — spawn xterm/ConPTY only when a pane is first focused on the active tab (restored sessions paint immediately without a multi-tab spawn storm)
+- fix: require Ctrl+click (Cmd+click on macOS) to open terminal URLs and local paths
+
 ## [0.8.7] - 2026-10-05
 
 ### Changed

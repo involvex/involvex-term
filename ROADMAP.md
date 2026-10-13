@@ -51,6 +51,13 @@ Shipped in tree (see CHANGELOG 0.2.0 unreleased):
 3. ~~Optional AI-agnostic env hooks only (no competing chat UI)~~
 4. ~~Agent-aware pane labels (session title on tab/pane chrome)~~
 
+## v0.9 — Instant feel
+
+1. Lazy pane hydration (spawn only on first focus of active-tab panes)
+2. Palette v2 speed (MRU + ranked fuzzy)
+3. Git footer honesty (debounced refresh, no stale branch flash)
+4. Update UX polish (download progress in chrome)
+
 ## Explicitly out of scope
 
 - Built-in SSH session manager (use `ssh` in the shell)

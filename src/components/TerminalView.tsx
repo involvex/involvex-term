@@ -122,7 +122,11 @@ const IS_WINDOWS =
 			'',
 	)
 
-/** Stagger slot for concurrent pty spawns (multi-tab thundering herd). */
+/**
+ * Stagger concurrent pty spawns. With lazy hydration most restores only
+ * spawn the focused pane of the active tab; the slot still spaces out a
+ * burst when the user flips tabs or focuses several panes quickly.
+ */
 let globalSpawnSlot = 0
 
 export default function TerminalView({
@@ -163,6 +167,18 @@ export default function TerminalView({
 		if (!tabActive && ctxMenu) setCtxMenu(null)
 	}
 
+	/**
+	 * Sticky lazy hydration: xterm + ConPTY stay cold until this pane is
+	 * focused on the active tab. Once warm they stay mounted so buffers
+	 * survive tab switches. Restored sessions paint titles/cwds immediately
+	 * without a multi-tab spawn storm.
+	 *
+	 * Adjusted during render (same pattern as menuTabActive) so the first
+	 * focused frame mounts the container instead of flashing the placeholder.
+	 */
+	const [hydrated, setHydrated] = useState(() => tabActive && focused)
+	if (tabActive && focused && !hydrated) setHydrated(true)
+
 	useEffect(() => {
 		focusedRef.current = focused
 		tabActiveRef.current = tabActive
@@ -183,6 +199,7 @@ export default function TerminalView({
 	}, [onToast])
 
 	useEffect(() => {
+		if (!hydrated) return
 		const el = containerRef.current
 		if (!el) return
 		const api = termApi()
@@ -901,7 +918,7 @@ export default function TerminalView({
 			api?.ptyKill(paneId)
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [paneId])
+	}, [paneId, hydrated])
 
 	// Focus requests from overlays (search bar, palette) closing.
 	useEffect(() => {
@@ -983,6 +1000,34 @@ export default function TerminalView({
 			}
 		})
 	}, [focused, tabActive, paneId])
+
+	if (!hydrated) {
+		return (
+			<div
+				className="term-pending"
+				role="button"
+				tabIndex={0}
+				title="Focus this pane to start the shell"
+				style={{
+					display: tabActive ? 'flex' : 'none',
+					background: bg,
+					color: fg,
+				}}
+				onMouseDown={e => {
+					e.preventDefault()
+					onFocusPane(paneId)
+				}}
+				onKeyDown={e => {
+					if (e.key === 'Enter' || e.key === ' ') {
+						e.preventDefault()
+						onFocusPane(paneId)
+					}
+				}}
+			>
+				<span className="term-pending-label">Focus to start shell</span>
+			</div>
+		)
+	}
 
 	return (
 		<>

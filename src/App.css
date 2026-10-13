@@ -340,6 +340,28 @@ select,
 	height: 0;
 }
 
+/* Lazy pane: cold until focused — no xterm/ConPTY yet. */
+.term-pending {
+	width: 100%;
+	height: 100%;
+	align-items: center;
+	justify-content: center;
+	cursor: default;
+	user-select: none;
+	opacity: 0.55;
+}
+
+.term-pending:focus-visible {
+	outline: 1px solid var(--focus-ring, #264f78);
+	outline-offset: -2px;
+	opacity: 0.85;
+}
+
+.term-pending-label {
+	font-size: 12px;
+	letter-spacing: 0.02em;
+}
+
 .snippet-row {
 	display: flex;
 	flex-wrap: wrap;
