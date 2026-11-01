@@ -60,7 +60,7 @@
 		"react": "^19",
 		"react-dom": "^19",
 		"simple-git": "^4",
-		"systeminformation": "^5.27.9",
+		"systeminformation": "^5.33.18",
 		"zod": "^4"
 	},
 	"devDependencies": {
