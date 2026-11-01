@@ -69,7 +69,7 @@
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
 		"@vitejs/plugin-react": "^6",
-		"electron": "^44",
+		"electron": "^45",
 		"electron-builder": "^26",
 		"electron-rebuild": "^3.2.9",
 		"eslint": "^10",
