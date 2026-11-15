@@ -18,7 +18,7 @@ const ASSETS = path.join(OUT, 'Assets')
 /**
  * @param {string} cmd
  * @param {string[]} args
- * @param {{cwd?: string}} [opts]
+ * @param {{cwd?: string, env?: NodeJS.ProcessEnv}} [opts]
  */
 function run(cmd, args, opts = {}) {
 	console.log(`> ${cmd} ${args.join(' ')}`)
@@ -27,6 +27,7 @@ function run(cmd, args, opts = {}) {
 		shell: false,
 		stdio: 'inherit',
 		cwd: opts.cwd,
+		env: opts.env,
 	})
 	if (r.status !== 0) {
 		throw new Error(`${cmd} exited ${r.status}`)
@@ -172,7 +173,11 @@ function main() {
 	}
 
 	// Staging layout for sparse package: manifest + Assets only (AllowExternalContent).
-	const stage = path.join(OUT, 'msix-stage')
+	// Use cwd-relative names for makeappx argv so abs paths from import.meta.url
+	// do not flow into spawnSync (CodeQL js/shell-command-injection-from-environment).
+	const stageName = 'msix-stage'
+	const msixName = 'InvolvexTermExplorerCommand.msix'
+	const stage = path.join(OUT, stageName)
 	fs.rmSync(stage, {recursive: true, force: true})
 	fs.mkdirSync(path.join(stage, 'Assets'), {recursive: true})
 	fs.copyFileSync(
@@ -183,9 +188,15 @@ function main() {
 		fs.copyFileSync(logoDst, path.join(stage, 'Assets', 'StoreLogo.png'))
 	}
 
-	const msix = path.join(OUT, 'InvolvexTermExplorerCommand.msix')
+	const msix = path.join(OUT, msixName)
 	if (fs.existsSync(msix)) fs.unlinkSync(msix)
-	run(makeappx, ['pack', '/d', stage, '/p', msix, '/nv'])
+	run('makeappx.exe', ['pack', '/d', stageName, '/p', msixName, '/nv'], {
+		cwd: OUT,
+		env: {
+			...process.env,
+			PATH: `${path.dirname(makeappx)}${path.delimiter}${process.env.PATH || ''}`,
+		},
+	})
 
 	// Optional signing. Never read INVOLVEX_SIGN_PASSWORD into JS (CodeQL
 	// clear-text-logging / env→argv). The bat expands %INVOLVEX_SIGN_PASSWORD%.
