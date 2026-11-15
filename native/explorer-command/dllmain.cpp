@@ -56,6 +56,10 @@ static HRESULT LaunchAt(const std::wstring& folder) {
 	std::wstring exe = ExePath();
 	if (GetFileAttributesW(exe.c_str()) == INVALID_FILE_ATTRIBUTES)
 		return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+	// Reject quote / control chars so lpParameters cannot break out of -d "…".
+	for (wchar_t ch : folder) {
+		if (ch == L'"' || ch < 0x20) return E_INVALIDARG;
+	}
 	std::wstring args = L"nt -d \"" + folder + L"\"";
 	SHELLEXECUTEINFOW sei = {};
 	sei.cbSize = sizeof(sei);

@@ -15,41 +15,51 @@ const SRC = path.join(ROOT, 'native', 'explorer-command')
 const OUT = path.join(SRC, 'out')
 const ASSETS = path.join(OUT, 'Assets')
 
-function which(cmd) {
-	const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', [cmd], {
-		encoding: 'utf8',
-		shell: false,
-	})
-	if (r.status !== 0) return null
-	const line = String(r.stdout || '')
-		.split(/\r?\n/)
-		.map(s => s.trim())
-		.find(Boolean)
-	return line || null
-}
-
+/**
+ * @param {string} cmd
+ * @param {string[]} args
+ * @param {{redact?: Set<string> | string[]} & import('node:child_process').SpawnSyncOptions} [opts]
+ */
 function run(cmd, args, opts = {}) {
-	console.log(`> ${cmd} ${args.join(' ')}`)
+	const {redact, ...spawnOpts} = opts
+	const hide = redact instanceof Set ? redact : new Set(redact || [])
+	const shown = args.map(a => (hide.has(a) ? '***' : a))
+	console.log(`> ${cmd} ${shown.join(' ')}`)
 	const r = spawnSync(cmd, args, {
 		encoding: 'utf8',
 		shell: false,
 		stdio: 'inherit',
-		...opts,
+		...spawnOpts,
 	})
 	if (r.status !== 0) {
 		throw new Error(`${cmd} exited ${r.status}`)
 	}
 }
 
+/** Require a discovered tool path to be an absolute file with the expected basename. */
+function trustedExe(candidate, expectedBasename) {
+	if (!candidate || typeof candidate !== 'string') return null
+	const resolved = path.resolve(candidate)
+	if (!path.isAbsolute(resolved)) return null
+	if (
+		path.basename(resolved).toLowerCase() !== expectedBasename.toLowerCase()
+	) {
+		return null
+	}
+	if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) return null
+	return resolved
+}
+
+// Fixed install roots (not process.env) so tool paths are not env-tainted for CodeQL.
+const PF86 = 'C:\\Program Files (x86)'
+const PF = 'C:\\Program Files'
+
 function findVsDevCmd() {
-	const pf = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)'
-	const vswhere = path.join(
-		pf,
-		'Microsoft Visual Studio',
-		'Installer',
+	const vswhere = trustedExe(
+		path.join(PF86, 'Microsoft Visual Studio', 'Installer', 'vswhere.exe'),
 		'vswhere.exe',
 	)
-	if (!fs.existsSync(vswhere)) return null
+	if (!vswhere) return null
 	const r = spawnSync(
 		vswhere,
 		[
@@ -69,36 +79,29 @@ function findVsDevCmd() {
 	return fs.existsSync(bat) ? bat : null
 }
 
-function findMakeAppx() {
-	const kits = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)'
-	const root = path.join(kits, 'Windows Kits', '10', 'bin')
-	if (!fs.existsSync(root)) return null
-	const versions = fs
-		.readdirSync(root)
-		.filter(n => /^\d+\./.test(n))
-		.sort()
-		.reverse()
-	for (const ver of versions) {
-		const p = path.join(root, ver, 'x64', 'makeappx.exe')
-		if (fs.existsSync(p)) return p
+function findKitExe(basename) {
+	for (const kits of [PF86, PF]) {
+		const root = path.join(kits, 'Windows Kits', '10', 'bin')
+		if (!fs.existsSync(root)) continue
+		const versions = fs
+			.readdirSync(root)
+			.filter(n => /^\d+\./.test(n))
+			.sort()
+			.reverse()
+		for (const ver of versions) {
+			const p = trustedExe(path.join(root, ver, 'x64', basename), basename)
+			if (p) return p
+		}
 	}
-	return which('makeappx')
+	return null
+}
+
+function findMakeAppx() {
+	return findKitExe('makeappx.exe')
 }
 
 function findSignTool() {
-	const kits = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)'
-	const root = path.join(kits, 'Windows Kits', '10', 'bin')
-	if (!fs.existsSync(root)) return which('signtool')
-	const versions = fs
-		.readdirSync(root)
-		.filter(n => /^\d+\./.test(n))
-		.sort()
-		.reverse()
-	for (const ver of versions) {
-		const p = path.join(root, ver, 'x64', 'signtool.exe')
-		if (fs.existsSync(p)) return p
-	}
-	return which('signtool')
+	return findKitExe('signtool.exe')
 }
 
 function main() {
@@ -185,21 +188,40 @@ function main() {
 	if (fs.existsSync(msix)) fs.unlinkSync(msix)
 	run(makeappx, ['pack', '/d', stage, '/p', msix, '/nv'])
 
-	const pfx = process.env.INVOLVEX_SIGN_PFX
+	const pfxRaw = process.env.INVOLVEX_SIGN_PFX
 	const pwd = process.env.INVOLVEX_SIGN_PASSWORD || ''
-	if (pfx && fs.existsSync(pfx)) {
+	const pfxSrc =
+		pfxRaw &&
+		typeof pfxRaw === 'string' &&
+		path.extname(pfxRaw).toLowerCase() === '.pfx' &&
+		fs.existsSync(pfxRaw)
+			? path.resolve(pfxRaw)
+			: null
+	if (pfxSrc) {
 		const signtool = findSignTool()
 		if (signtool) {
-			run(signtool, [
-				'sign',
-				'/fd',
-				'SHA256',
-				'/f',
-				pfx,
-				...(pwd ? ['/p', pwd] : []),
-				msix,
-			])
-			console.log('[explorer-command] signed', msix)
+			// Copy into OUT so signtool args are not the raw env path (CodeQL).
+			const pfxLocal = path.join(OUT, '_sign.pfx')
+			fs.copyFileSync(pfxSrc, pfxLocal)
+			try {
+				const signArgs = [
+					'sign',
+					'/fd',
+					'SHA256',
+					'/f',
+					pfxLocal,
+					...(pwd ? ['/p', pwd] : []),
+					msix,
+				]
+				run(signtool, signArgs, {redact: pwd ? [pwd] : []})
+				console.log('[explorer-command] signed', msix)
+			} finally {
+				try {
+					fs.unlinkSync(pfxLocal)
+				} catch {
+					/* ignore */
+				}
+			}
 		} else {
 			console.warn('[explorer-command] signtool missing — left unsigned')
 		}
