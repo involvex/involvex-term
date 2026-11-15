@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.9.1] - 2026-11-15
+
+### Changed
+
+- perf: coalesce PTY IPC and polish chrome tokens
+- build(deps-dev): bump prettier from 3.9.10 to 3.10.0
+- build(deps-dev): bump vite from 8.3.5 to 8.3.8
+- build(deps-dev): bump typescript-eslint from 8.72.1 to 8.72.2
+- build(deps): bump systeminformation from 5.33.18 to 5.33.19
+- build(deps-dev): bump @vitejs/plugin-react from 6.2.1 to 6.3.0
+- build(deps-dev): bump typescript-eslint from 8.71.2 to 8.72.1
+- build(deps-dev): bump @vitejs/plugin-react from 6.1.2 to 6.2.1
+- build(deps-dev): bump vite-plugin-electron from 1.1.2 to 1.2.0
+- build(deps-dev): bump eslint from 10.12.0 to 10.14.0
+- build(deps-dev): bump globals from 17.13.0 to 17.14.0
+- build(deps): bump softprops/action-gh-release from 3.0.3 to 3.0.4
+- build(deps): bump systeminformation from 5.33.15 to 5.33.18
+- build(deps-dev): bump electron-builder from 26.15.3 to 26.18.0
+- build(deps-dev): bump electron from 44.7.0 to 45.1.0
+- build(deps): bump chokidar from 5.0.0 to 6.0.0
+- build(term): switch CLI bins to dist build
+- build(deps): bump electron-updater from 6.8.9 to 6.8.11
+- build(deps-dev): bump vite from 8.3.4 to 8.3.5
+- build(deps): bump actions/setup-python from 7.0.0 to 7.1.0
+- build(deps-dev): bump prettier from 3.9.9 to 3.9.10
+- build(deps): bump zod from 4.6.5 to 4.6.7
+- build(deps-dev): bump vite from 8.3.3 to 8.3.4
+- build(deps-dev): bump typescript-eslint from 8.71.1 to 8.71.2
+
 ## [0.9.0] - 2026-10-13
 
 ### Added
