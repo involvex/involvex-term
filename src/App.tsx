@@ -145,6 +145,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 		scrollback: 5000,
 		scrollbar: true,
 		webgl: false,
+		cursorStyle: 'block',
 		snippets: [
 			{
 				id: 'git-status',
@@ -1869,6 +1870,7 @@ export default function App() {
 								scrollback={settings.terminal.scrollback}
 								scrollbar={settings.terminal.scrollbar}
 								webgl={settings.terminal.webgl === true}
+								cursorStyle={settings.terminal.cursorStyle ?? 'block'}
 								paneAgents={emptyAgents}
 								onFocusPane={b.focusPane}
 								onResizeSplit={b.resizeSplit}

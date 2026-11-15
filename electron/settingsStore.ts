@@ -100,6 +100,8 @@ const ProfileSchema = z.object({
 	kind: z.enum(['pwsh', 'powershell', 'cmd', 'wsl', 'custom']),
 	command: z.string().optional(),
 	args: z.array(z.string()).optional(),
+	/** Extra env vars merged into the PTY before agent env hooks. */
+	env: z.record(z.string(), z.string()).optional(),
 })
 
 const SnippetSchema = z.object({
@@ -158,6 +160,8 @@ const TerminalSchema = z.object({
 	 * Falls back to canvas automatically on failure.
 	 */
 	webgl: z.boolean().default(false),
+	/** xterm cursor shape. */
+	cursorStyle: z.enum(['block', 'underline', 'bar']).default('block'),
 	/** Quick-run commands for the palette. */
 	snippets: z.array(SnippetSchema).default(defaultSnippets()),
 	/** Compact buttons on the tab bar (left of agent). */

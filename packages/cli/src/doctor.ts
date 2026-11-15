@@ -31,7 +31,11 @@ export interface DoctorDeps {
 	fetchLatestTag?: () => Promise<string | null>
 	checkNetwork?: () => Promise<{ok: boolean; ms?: number}>
 	statfsFreeBytes?: (p: string) => number | null
-	contextMenuStatus?: () => {supported: boolean; installed: boolean} | null
+	contextMenuStatus?: () => {
+		supported: boolean
+		installed: boolean
+		modern?: {installed?: boolean; detail?: string | null}
+	} | null
 	resolveExe?: () => string | null
 	readConfig?: () => {exe?: string; version?: string}
 	writeConfig?: (cfg: {exe?: string; version?: string}) => void
@@ -329,15 +333,23 @@ export async function runDoctor(
 					detail: 'status unavailable',
 				})
 			} else {
+				const modern = cm.modern
+				const modernBit = modern?.installed
+					? ' · modern top-level'
+					: modern
+						? ' · classic only (Win11 top-level needs sparse MSIX / Developer Mode)'
+						: ''
 				checks.push({
 					id: 'context-menu',
 					label: 'Explorer context menu',
 					status: cm.installed ? 'pass' : 'warn',
 					detail: cm.installed
-						? 'installed (folder · background · drive)'
+						? `installed (folder · background · drive)${modernBit}`
 						: 'not installed',
 					hint: cm.installed
-						? undefined
+						? modern?.installed
+							? undefined
+							: 'Optional: enable Developer Mode or sign the sparse package, then re-run context-menu install'
 						: 'Run: involvex-term context-menu install',
 				})
 			}

@@ -45,12 +45,12 @@ single-instance channel; if the app isn't running it starts and applies the
 command once ready. Relative `-d` paths are resolved against the CLI's own
 current directory.
 
-`context-menu install` registers “Open in involvex-term” for folders, folder
-backgrounds, and drives (HKCU — no admin needed). The NSIS installer does this
-automatically; use the CLI for portable installs or repair. On Windows 11 the
-entry appears under “Show more options” (modern top-level menu needs MSIX
-packaging, tracked as a follow-up). `context-menu status` exits non-zero when
-not (fully) installed, so it is script-friendly.
+`context-menu install` registers classic HKCU verbs for folders, folder
+backgrounds, and drives (no admin), then best-effort registers the Win11
+top-level sparse MSIX when the DLL/package ship beside the exe. The NSIS
+installer does the same. Unsigned sparse packages need Developer Mode (or a
+trusted cert). `context-menu status` reports classic + modern and exits
+non-zero when classic is not fully installed.
 
 `doctor` checks the app install, `~/.involvex-term` config, `settings.json`
 validity, shell availability, `opencode` on PATH, context-menu state,

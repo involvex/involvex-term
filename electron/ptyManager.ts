@@ -176,6 +176,8 @@ export function spawnPty(
 			: []
 		: args
 	const useConptyDll = ensureBundledConptyDll()
+	// Profile env first, then agent hooks (`extraEnv`) so hooks win on conflict.
+	const profileEnv = profile.env ?? {}
 	const extra = opts?.extraEnv ?? {}
 	const pty = mod.spawn(finalShell, finalArgs, {
 		name: 'xterm-256color',
@@ -190,6 +192,7 @@ export function spawnPty(
 			...process.env,
 			TERM: 'xterm-256color',
 			COLORTERM: 'truecolor',
+			...profileEnv,
 			...extra,
 		} as Record<string, string>,
 	})

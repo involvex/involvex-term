@@ -9,6 +9,18 @@
 		output: 'release/${version}',
 	},
 	files: ['dist', 'dist-electron'],
+	// Sparse Explorer-command artifacts (built by scripts/build-explorer-command.mjs).
+	// Empty out/ (Linux / no MSVC) simply adds nothing.
+	extraFiles: [
+		{
+			from: 'native/explorer-command/out',
+			to: '.',
+			filter: [
+				'InvolvexTermExplorerCommand.dll',
+				'InvolvexTermExplorerCommand.msix',
+			],
+		},
+	],
 	mac: {
 		target: ['dmg'],
 		artifactName: '${productName}-Mac-${version}-Installer.${ext}',

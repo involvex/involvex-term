@@ -1,5 +1,6 @@
 import {useEffect, useMemo, useState, type DragEvent} from 'react'
 import {defaultAgentTools} from '../lib/agents'
+import {envToText, textToEnv} from '../lib/profileEnv'
 import {
 	REJECTED_PATH_PREVIEW,
 	rejectedBannerKey,
@@ -11,10 +12,27 @@ import {
 	termApi,
 	type AppSettings,
 	type CommandSnippet,
+	type CursorStyle,
 	type QuickCommand,
+	type ShellProfile,
 	type SyncStatus,
 	type SyncValidation,
 } from '../types'
+
+const PROFILE_KINDS: ShellProfile['kind'][] = [
+	'pwsh',
+	'powershell',
+	'cmd',
+	'wsl',
+	'custom',
+]
+
+const FOOTER_MODULES: Array<{id: string; label: string}> = [
+	{id: 'git', label: 'Git'},
+	{id: 'opencode', label: 'Agent'},
+	{id: 'sys', label: 'PC stats'},
+	{id: 'cwd', label: 'Path (CWD)'},
+]
 
 interface Props {
 	settings: AppSettings
@@ -391,6 +409,8 @@ function ExplorerSection() {
 		supported: boolean
 		installed: boolean
 		exe: string | null
+		modern: {installed: boolean; detail: string | null}
+		modernError?: string | null
 	} | null>(null)
 	const [busy, setBusy] = useState(false)
 	const [message, setMessage] = useState<string | null>(null)
@@ -400,11 +420,26 @@ function ExplorerSection() {
 		void api
 			?.contextMenu('status')
 			.then(s => {
-				if (!cancelled) setStatus(s)
+				if (!cancelled)
+					setStatus({
+						supported: s.supported,
+						installed: s.installed,
+						exe: s.exe,
+						modern: {
+							installed: s.modern?.installed ?? false,
+							detail: s.modern?.detail ?? null,
+						},
+						modernError: s.modernError,
+					})
 			})
 			.catch(() => {
 				if (!cancelled)
-					setStatus({supported: false, installed: false, exe: null})
+					setStatus({
+						supported: false,
+						installed: false,
+						exe: null,
+						modern: {installed: false, detail: null},
+					})
 			})
 		return () => {
 			cancelled = true
@@ -416,8 +451,29 @@ function ExplorerSection() {
 		setMessage(null)
 		try {
 			const next = await api?.contextMenu(action)
-			if (next) setStatus(next)
-			setMessage(action === 'install' ? 'Installed' : 'Removed')
+			if (next) {
+				setStatus({
+					supported: next.supported,
+					installed: next.installed,
+					exe: next.exe,
+					modern: {
+						installed: next.modern?.installed ?? false,
+						detail: next.modern?.detail ?? null,
+					},
+					modernError: next.modernError,
+				})
+				if (action === 'install') {
+					setMessage(
+						next.modern?.installed
+							? 'Installed (classic + Win11 top-level)'
+							: next.modernError
+								? `Classic installed. Win11 top-level skipped: ${next.modernError}`
+								: 'Classic installed',
+					)
+				} else {
+					setMessage('Removed')
+				}
+			}
 		} catch (e) {
 			setMessage(e instanceof Error ? e.message : String(e))
 		} finally {
@@ -439,12 +495,13 @@ function ExplorerSection() {
 				<>
 					<p className="footer-dim">
 						{status.installed
-							? '“Open in involvex-term” is registered for folders, folder backgrounds, and drives.'
+							? 'Classic “Open in involvex-term” is registered for folders, folder backgrounds, and drives.'
 							: 'Not registered. Adds “Open in involvex-term” for folders, folder backgrounds, and drives.'}
 					</p>
 					<p className="footer-dim">
-						On Windows 11 the entry appears under “Show more options”. No admin
-						rights needed (per-user registration).
+						{status.modern.installed
+							? 'Win11 top-level sparse package is registered.'
+							: 'Win11 top-level menu needs the sparse MSIX (Developer Mode or a signed package). Classic still appears under “Show more options”.'}
 					</p>
 					{message && <p className="footer-dim">{message}</p>}
 					<div className="settings-btn-row">
@@ -496,6 +553,23 @@ export default function SettingsModal({
 }: Props) {
 	const [tab, setTab] = useState<SettingsTabId>('appearance')
 	const set = (patch: Partial<AppSettings>) => onChange({...settings, ...patch})
+
+	/** Replace profiles and retarget default/startup ids when a row is removed. */
+	const setProfiles = (profiles: ShellProfile[]) => {
+		if (profiles.length === 0) return
+		let defaultProfileId = settings.terminal.defaultProfileId
+		if (!profiles.some(p => p.id === defaultProfileId)) {
+			defaultProfileId = profiles[0].id
+		}
+		let startupProfileId = settings.startup.profileId
+		if (startupProfileId && !profiles.some(p => p.id === startupProfileId)) {
+			startupProfileId = ''
+		}
+		set({
+			terminal: {...settings.terminal, profiles, defaultProfileId},
+			startup: {...settings.startup, profileId: startupProfileId},
+		})
+	}
 	const [pluginStatus, setPluginStatus] = useState<{
 		dir: string
 		enabled: boolean
@@ -942,10 +1016,60 @@ export default function SettingsModal({
 										}
 									/>
 								</label>
+								<h3>Module order</h3>
 								<p className="footer-dim">
-									Right-click the status bar to toggle modules or enter
-									drag-to-reorder layout mode.
+									Up/down reorders footer modules. You can also right-click the
+									status bar to drag-reorder.
 								</p>
+								{(settings.footer.modulesOrder?.length
+									? settings.footer.modulesOrder
+									: FOOTER_MODULES.map(m => m.id)
+								).map((id, idx, order) => {
+									const label =
+										FOOTER_MODULES.find(m => m.id === id)?.label ?? id
+									return (
+										<div
+											key={id}
+											className="snippet-row"
+										>
+											<span className="footer-dim">{label}</span>
+											<button
+												type="button"
+												className="settings-btn"
+												disabled={idx === 0}
+												onClick={() => {
+													const next = [...order]
+													;[next[idx - 1], next[idx]] = [
+														next[idx],
+														next[idx - 1],
+													]
+													set({
+														footer: {...settings.footer, modulesOrder: next},
+													})
+												}}
+											>
+												Up
+											</button>
+											<button
+												type="button"
+												className="settings-btn"
+												disabled={idx === order.length - 1}
+												onClick={() => {
+													const next = [...order]
+													;[next[idx], next[idx + 1]] = [
+														next[idx + 1],
+														next[idx],
+													]
+													set({
+														footer: {...settings.footer, modulesOrder: next},
+													})
+												}}
+											>
+												Down
+											</button>
+										</div>
+									)
+								})}
 							</section>
 						)}
 						{tab === 'hotkeys' && (
@@ -1121,15 +1245,191 @@ export default function SettingsModal({
 										/>{' '}
 										WebGL terminal renderer
 									</label>
+									<label>
+										Cursor style{' '}
+										<select
+											value={settings.terminal.cursorStyle ?? 'block'}
+											onChange={e =>
+												set({
+													terminal: {
+														...settings.terminal,
+														cursorStyle: e.target.value as CursorStyle,
+													},
+												})
+											}
+										>
+											<option value="block">Block</option>
+											<option value="underline">Underline</option>
+											<option value="bar">Bar</option>
+										</select>
+									</label>
 									<p className="footer-dim">
 										WebGL smooths large output floods (GPU). Applies to newly
 										started panes; falls back to canvas if the context is
 										unavailable. New tabs use the default profile. Use ▾ next to
-										+ (or the command palette) for another shell. Custom
-										profiles live in settings.json under{' '}
-										<code>terminal.profiles</code>. Ctrl+click URLs and local
-										paths to open them.
+										+ (or the command palette) for another shell. Ctrl+click
+										URLs and local paths to open them.
 									</p>
+								</section>
+
+								<section>
+									<h3>Shell profiles</h3>
+									<p className="footer-dim">
+										Add custom shells or override built-in paths. Env lines are{' '}
+										<code>KEY=value</code> (one per line); they apply before
+										agent env hooks.
+									</p>
+									{settings.terminal.profiles.map((prof, idx) => (
+										<div
+											key={prof.id}
+											className="snippet-row"
+										>
+											<label>
+												Name{' '}
+												<input
+													type="text"
+													value={prof.name}
+													onChange={e => {
+														const profiles = [...settings.terminal.profiles]
+														profiles[idx] = {...prof, name: e.target.value}
+														setProfiles(profiles)
+													}}
+												/>
+											</label>
+											<label>
+												Kind{' '}
+												<select
+													value={prof.kind}
+													onChange={e => {
+														const profiles = [...settings.terminal.profiles]
+														profiles[idx] = {
+															...prof,
+															kind: e.target.value as ShellProfile['kind'],
+														}
+														setProfiles(profiles)
+													}}
+												>
+													{PROFILE_KINDS.map(k => (
+														<option
+															key={k}
+															value={k}
+														>
+															{k}
+														</option>
+													))}
+												</select>
+											</label>
+											<label className="wide">
+												Command{' '}
+												<input
+													type="text"
+													placeholder="Optional path override"
+													value={prof.command ?? ''}
+													onChange={e => {
+														const profiles = [...settings.terminal.profiles]
+														const command = e.target.value
+														profiles[idx] = {
+															...prof,
+															command: command || undefined,
+														}
+														setProfiles(profiles)
+													}}
+												/>
+											</label>
+											<label className="wide">
+												Args{' '}
+												<input
+													type="text"
+													placeholder="space-separated"
+													value={(prof.args ?? []).join(' ')}
+													onChange={e => {
+														const profiles = [...settings.terminal.profiles]
+														const raw = e.target.value.trim()
+														profiles[idx] = {
+															...prof,
+															args: raw ? raw.split(/\s+/) : undefined,
+														}
+														setProfiles(profiles)
+													}}
+												/>
+											</label>
+											<label className="wide">
+												Env{' '}
+												<textarea
+													rows={2}
+													placeholder={'FOO=bar\nPATH_EXTRA=...'}
+													value={envToText(prof.env)}
+													onChange={e => {
+														const profiles = [...settings.terminal.profiles]
+														profiles[idx] = {
+															...prof,
+															env: textToEnv(e.target.value),
+														}
+														setProfiles(profiles)
+													}}
+												/>
+											</label>
+											<button
+												type="button"
+												className="settings-btn"
+												disabled={settings.terminal.profiles.length <= 1}
+												onClick={() => {
+													setProfiles(
+														settings.terminal.profiles.filter(
+															(_, i) => i !== idx,
+														),
+													)
+												}}
+											>
+												Remove
+											</button>
+											<button
+												type="button"
+												className="settings-btn"
+												disabled={idx === 0}
+												onClick={() => {
+													const next = [...settings.terminal.profiles]
+													;[next[idx - 1], next[idx]] = [
+														next[idx],
+														next[idx - 1],
+													]
+													setProfiles(next)
+												}}
+											>
+												Up
+											</button>
+											<button
+												type="button"
+												className="settings-btn"
+												disabled={idx === settings.terminal.profiles.length - 1}
+												onClick={() => {
+													const next = [...settings.terminal.profiles]
+													;[next[idx], next[idx + 1]] = [
+														next[idx + 1],
+														next[idx],
+													]
+													setProfiles(next)
+												}}
+											>
+												Down
+											</button>
+										</div>
+									))}
+									<button
+										type="button"
+										className="settings-btn"
+										onClick={() => {
+											const profile: ShellProfile = {
+												id: `profile-${Date.now()}`,
+												name: 'Custom shell',
+												kind: 'custom',
+												command: '',
+											}
+											setProfiles([...settings.terminal.profiles, profile])
+										}}
+									>
+										Add profile
+									</button>
 								</section>
 
 								<section>

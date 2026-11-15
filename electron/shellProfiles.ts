@@ -11,6 +11,8 @@ export interface ShellProfile {
 	/** Absolute path for `custom` (and optional override for builtins). */
 	command?: string
 	args?: string[]
+	/** Extra env vars merged into the PTY before agent env hooks. */
+	env?: Record<string, string>
 }
 
 /**

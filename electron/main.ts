@@ -719,8 +719,7 @@ function registerIpc() {
 				if (action === 'status') return m.contextMenuStatus(exe)
 				if (action === 'install') {
 					if (!exe) throw new Error('Only available in packaged builds.')
-					m.installContextMenu(exe)
-					return m.contextMenuStatus(exe)
+					return m.installContextMenu(exe)
 				}
 				// Explicit, not fall-through: this branch used to be the implicit
 				// else, so any unrecognised action (typo, version skew, missing
@@ -728,8 +727,7 @@ function registerIpc() {
 				if (action !== 'uninstall') {
 					throw new Error(`Unknown context menu action: ${String(action)}`)
 				}
-				m.uninstallContextMenu()
-				return m.contextMenuStatus(exe)
+				return m.uninstallContextMenu()
 			})
 		},
 	)

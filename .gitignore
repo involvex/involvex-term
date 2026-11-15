@@ -17,6 +17,10 @@ coverage
 *.tsbuildinfo
 *.local
 
+# Native Explorer-command build outputs (keep out/.gitkeep)
+native/explorer-command/out/**
+!native/explorer-command/out/.gitkeep
+
 # Machine-specific npm config (PYTHON path for node-gyp), see README
 .npmrc
 
