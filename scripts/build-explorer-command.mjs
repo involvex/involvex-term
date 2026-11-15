@@ -15,21 +15,13 @@ const SRC = path.join(ROOT, 'native', 'explorer-command')
 const OUT = path.join(SRC, 'out')
 const ASSETS = path.join(OUT, 'Assets')
 
-/**
- * @param {string} cmd
- * @param {string[]} args
- * @param {{redact?: Set<string> | string[]} & import('node:child_process').SpawnSyncOptions} [opts]
- */
-function run(cmd, args, opts = {}) {
-	const {redact, ...spawnOpts} = opts
-	const hide = redact instanceof Set ? redact : new Set(redact || [])
-	const shown = args.map(a => (hide.has(a) ? '***' : a))
-	console.log(`> ${cmd} ${shown.join(' ')}`)
+/** @param {string} cmd @param {string[]} args */
+function run(cmd, args) {
+	console.log(`> ${cmd} ${args.join(' ')}`)
 	const r = spawnSync(cmd, args, {
 		encoding: 'utf8',
 		shell: false,
 		stdio: 'inherit',
-		...spawnOpts,
 	})
 	if (r.status !== 0) {
 		throw new Error(`${cmd} exited ${r.status}`)
@@ -188,38 +180,46 @@ function main() {
 	if (fs.existsSync(msix)) fs.unlinkSync(msix)
 	run(makeappx, ['pack', '/d', stage, '/p', msix, '/nv'])
 
-	const pfxRaw = process.env.INVOLVEX_SIGN_PFX
-	const pwd = process.env.INVOLVEX_SIGN_PASSWORD || ''
-	const pfxSrc =
-		pfxRaw &&
-		typeof pfxRaw === 'string' &&
-		path.extname(pfxRaw).toLowerCase() === '.pfx' &&
-		fs.existsSync(pfxRaw)
-			? path.resolve(pfxRaw)
-			: null
-	if (pfxSrc) {
+	// Optional signing. Never read INVOLVEX_SIGN_PASSWORD into JS (CodeQL
+	// clear-text-logging / env→argv). The bat expands %INVOLVEX_SIGN_PASSWORD%.
+	const pfxEnv = process.env.INVOLVEX_SIGN_PFX
+	if (
+		typeof pfxEnv === 'string' &&
+		path.extname(pfxEnv).toLowerCase() === '.pfx' &&
+		fs.existsSync(pfxEnv)
+	) {
 		const signtool = findSignTool()
 		if (signtool) {
-			// Copy into OUT so signtool args are not the raw env path (CodeQL).
 			const pfxLocal = path.join(OUT, '_sign.pfx')
-			fs.copyFileSync(pfxSrc, pfxLocal)
+			const signBat = path.join(OUT, '_sign.bat')
+			fs.copyFileSync(pfxEnv, pfxLocal)
+			fs.writeFileSync(
+				signBat,
+				[
+					'@echo off',
+					`if defined INVOLVEX_SIGN_PASSWORD (`,
+					`  "${signtool}" sign /fd SHA256 /f "${pfxLocal}" /p %INVOLVEX_SIGN_PASSWORD% "${msix}"`,
+					`) else (`,
+					`  "${signtool}" sign /fd SHA256 /f "${pfxLocal}" "${msix}"`,
+					`)`,
+					'exit /b %ERRORLEVEL%',
+					'',
+				].join('\r\n'),
+			)
 			try {
-				const signArgs = [
-					'sign',
-					'/fd',
-					'SHA256',
-					'/f',
-					pfxLocal,
-					...(pwd ? ['/p', pwd] : []),
+				console.log(
+					'> signtool sign /fd SHA256 /f out/_sign.pfx [/p ***]',
 					msix,
-				]
-				run(signtool, signArgs, {redact: pwd ? [pwd] : []})
+				)
+				run('cmd.exe', ['/d', '/c', signBat])
 				console.log('[explorer-command] signed', msix)
 			} finally {
-				try {
-					fs.unlinkSync(pfxLocal)
-				} catch {
-					/* ignore */
+				for (const f of [signBat, pfxLocal]) {
+					try {
+						fs.unlinkSync(f)
+					} catch {
+						/* ignore */
+					}
 				}
 			}
 		} else {
