@@ -77,6 +77,7 @@ interface Props {
 	scrollbar?: boolean
 	/** Prefer WebGL renderer when the GPU context is available. */
 	webgl?: boolean
+	cursorStyle?: 'block' | 'underline' | 'bar'
 	onFocusPane: (paneId: string) => void
 	onBackgroundPrompt?: (paneId: string) => void
 	/** Resolved spawn cwd from main (title honesty before first OSC7). */
@@ -139,6 +140,7 @@ export default function TerminalView({
 	scrollback = 5000,
 	scrollbar = true,
 	webgl = false,
+	cursorStyle = 'block',
 	onFocusPane,
 	onBackgroundPrompt,
 	onResolvedCwd,
@@ -215,6 +217,7 @@ export default function TerminalView({
 			fontSize,
 			scrollback,
 			cursorBlink: true,
+			cursorStyle,
 			allowTransparency: false,
 		})
 		const fit = new FitAddon()
@@ -1006,6 +1009,7 @@ export default function TerminalView({
 			t.options.fontFamily = fontFamily
 			t.options.fontSize = fontSize
 			t.options.scrollback = scrollback
+			t.options.cursorStyle = cursorStyle
 			try {
 				const fit = fitRef.current
 				const dims = fit?.proposeDimensions()
@@ -1018,7 +1022,7 @@ export default function TerminalView({
 				/* noop */
 			}
 		}
-	}, [bg, fg, fontFamily, fontSize, scrollback, paneId])
+	}, [bg, fg, fontFamily, fontSize, scrollback, cursorStyle, paneId])
 
 	// Refit + focus when this becomes the focused pane of the active tab.
 	useEffect(() => {

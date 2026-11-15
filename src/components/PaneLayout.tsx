@@ -39,6 +39,7 @@ interface Props extends Theme {
 	scrollback?: number
 	scrollbar?: boolean
 	webgl?: boolean
+	cursorStyle?: 'block' | 'underline' | 'bar'
 	paneAgents?: Record<string, PaneAgentInfo>
 	onFocusPane: (paneId: string) => void
 	onResizeSplit: (splitId: string, ratio: number) => void
@@ -84,6 +85,7 @@ export default memo(function PaneLayout({
 	scrollback,
 	scrollbar,
 	webgl,
+	cursorStyle,
 	paneAgents = {},
 	onFocusPane,
 	onResizeSplit,
@@ -251,6 +253,7 @@ export default memo(function PaneLayout({
 							scrollback={scrollback}
 							scrollbar={scrollbar}
 							webgl={webgl}
+							cursorStyle={cursorStyle}
 							onFocusPane={onFocusPane}
 							onBackgroundPrompt={onBackgroundPrompt}
 							onResolvedCwd={onResolvedCwd}

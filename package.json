@@ -26,10 +26,11 @@
 	],
 	"scripts": {
 		"prebuild": "bun run preflight",
-		"build": "tsc && vite build && bun scripts/rebuild-pty.mjs && electron-builder --publish never && bun scripts/link-latest.mjs && bun run build:cli",
+		"build": "tsc && vite build && bun scripts/rebuild-pty.mjs && bun scripts/build-explorer-command.mjs && electron-builder --publish never && bun scripts/link-latest.mjs && bun run build:cli",
 		"build:cli": "bun run --filter @involvex/term build",
 		"build:electron": "tsc --project tsconfig.node.json && vite build",
-		"build:release": "tsc && vite build && bun scripts/rebuild-pty.mjs && electron-builder --publish never",
+		"build:explorer-command": "bun scripts/build-explorer-command.mjs",
+		"build:release": "tsc && vite build && bun scripts/rebuild-pty.mjs && bun scripts/build-explorer-command.mjs && electron-builder --publish never",
 		"dev": "vite",
 		"format": "prettier . --write",
 		"format:check": "prettier . --check",

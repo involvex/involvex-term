@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- settings: in-app shell profile editor (CRUD, reorder, command/args/env)
+- settings: terminal cursor style (block / underline / bar)
+- settings: footer module order controls
+- explorer: Win11 top-level context menu via IExplorerCommand + sparse MSIX
+  (classic HKCU remains the fallback)
+
 ## [0.9.1] - 2026-11-15
 
 ### Changed

@@ -1,33 +1,38 @@
 # Involvex-Term Feature Suggestions
 
-Analysis of the involvex-term codebase (v0.7.0) - Electron + xterm.js + node-pty desktop terminal.
+Living backlog (refreshed for **v0.9.x**). Struck items shipped; keep IDs stable.
 
-## High Priority Suggestions
+## Shipped (do not re-open)
+
+| ID       | Notes                                                         |
+| -------- | ------------------------------------------------------------- |
+| FEAT-002 | Multi-pane search within a tab                                |
+| FEAT-003 | Cross-tab pane drag-and-drop                                  |
+| FEAT-004 | Lazy pane hydration (xterm/ConPTY on first focus)             |
+| FEAT-009 | Per-profile environment variables (Settings → Shell profiles) |
+| FEAT-014 | Cursor style (block / underline / bar) in Terminal settings   |
+
+## High Priority
 
 | ID       | Category      | Description                                                               | Impact | Effort |
 | -------- | ------------- | ------------------------------------------------------------------------- | ------ | ------ |
 | FEAT-001 | Git workflow  | Add git push/pull/fetch/commit/stash actions in the GitWidget footer menu | High   | Medium |
-| FEAT-002 | Productivity  | Multi-pane search: search across all panes in a tab simultaneously        | High   | Medium |
-| FEAT-003 | UX            | Tab/pane drag-and-drop reordering across tabs                             | High   | Medium |
-| FEAT-004 | Performance   | Lazy-load xterm terminals only for visible panes                          | High   | Medium |
 | FEAT-005 | Security      | Warn before running plugins from untrusted sources (signature check)      | Medium | Low    |
 | FEAT-006 | Configuration | Import/export profiles independently of full settings                     | Medium | Low    |
 
-## Medium Priority Suggestions
+## Medium Priority
 
 | ID       | Category      | Description                                                      | Impact | Effort |
 | -------- | ------------- | ---------------------------------------------------------------- | ------ | ------ |
 | FEAT-007 | Accessibility | Text-to-speech readout for background pane completion            | Medium | Low    |
 | FEAT-008 | Productivity  | Command history search (Ctrl+R reverse-i-search style)           | Medium | Medium |
-| FEAT-009 | Configuration | Per-profile environment variables in shell profiles              | Medium | Low    |
 | FEAT-010 | Git workflow  | Inline git diff viewer in status bar menu                        | Medium | Medium |
 | FEAT-011 | Performance   | Debounce git watcher file events to avoid excessive refreshes    | Medium | Low    |
 | FEAT-012 | UX            | Remember and restore pane split ratios per tab in session        | Medium | Low    |
 | FEAT-013 | Security      | sandbox plugin filesystem access (restrict to plugin dir only)   | Medium | Medium |
-| FEAT-014 | Configuration | Default terminal cursor style per profile (block/underline/bar)  | Low    | Low    |
 | FEAT-015 | Productivity  | Clipboard history ring (Ctrl+Shift+V cycle through recent clips) | Medium | Medium |
 
-## Low Priority Suggestions
+## Low Priority
 
 | ID       | Category      | Description                                                    | Impact | Effort |
 | -------- | ------------- | -------------------------------------------------------------- | ------ | ------ |
@@ -42,6 +47,11 @@ Analysis of the involvex-term codebase (v0.7.0) - Electron + xterm.js + node-pty
 | FEAT-024 | Productivity  | Quick access to recently used directories in new-tab menu      | Low    | Low    |
 | FEAT-025 | Performance   | Reduce sys stats polling when footer is hidden                 | Low    | Low    |
 
+## Follow-ups from v0.9.2
+
+- Authenticode-sign the sparse Explorer MSIX so Win11 top-level menu works without Developer Mode
+- Linux/bash live OSC7 cwd (footer Git path honesty outside PowerShell)
+
 ---
 
 ## Analysis Notes
@@ -55,12 +65,8 @@ Analysis of the involvex-term codebase (v0.7.0) - Electron + xterm.js + node-pty
 - Comprehensive OSC7/9;9 cwd tracking with chunk reassembly (electron/cwdTracker.ts)
 - Windows Terminal-style copy/paste semantics (Ctrl+C copies only with selection)
 
-### Areas for Improvement Identified
+### Remaining gaps
 
 - No git push/pull/fetch/commit UI beyond checkout (electron/gitEngine.ts)
-- All panes mount xterm instances eagerly, even off-screen ones (src/components/PaneLayout.tsx)
-- Tab drag-drop is intra-tab reorder only; no cross-tab pane moves (src/App.tsx)
 - Plugin security is trust-based; no signature/sandboxing (electron/pluginManager.ts)
-- Git watcher fires on every file event with no debounce (electron/main.ts)
-- No clipboard history or command history feature
-- Single-pane search only (searchRegistry.ts keyed by paneId)
+- No clipboard history or shell-side command history UI

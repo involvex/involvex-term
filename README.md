@@ -45,8 +45,10 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
   checks with `--fix` / `--json`)
 - **Explorer context menu** — “Open in involvex-term” for folders, folder
   backgrounds, and drives (per-user, no admin; installed by setup, toggle in
-  Settings → Window, or `involvex-term context-menu install`; on Windows 11 it
-  lives under “Show more options”)
+  Settings → Window, or `involvex-term context-menu install`). Classic HKCU
+  verbs always work; a sparse MSIX + shell extension targets the Windows 11
+  top-level menu (needs Developer Mode or a signed package until Authenticode
+  is configured)
 - **Local plugins** (opt-in, off by default) — command-palette commands,
   status-bar text, and read-only pty hooks from
   `~/.involvex-term/plugins/<name>/`; see [`PLUGINS.md`](PLUGINS.md) and the

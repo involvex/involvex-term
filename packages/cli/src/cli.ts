@@ -284,12 +284,15 @@ async function main(): Promise<void> {
 					console.log('Explorer context menu: unsupported (Windows-only)')
 					return
 				}
-				console.log(st.installed ? 'installed' : 'not installed')
+				console.log(`classic: ${st.installed ? 'installed' : 'not installed'}`)
 				for (const r of st.roots) {
 					console.log(
 						`  ${r.installed ? '✓' : '✗'} ${r.key}${r.command ? '' : ' (missing)'}`,
 					)
 				}
+				console.log(
+					`modern: ${st.modern.installed ? 'installed' : 'not installed'}${st.modern.detail ? ` (${st.modern.detail})` : ''}`,
+				)
 				if (!st.installed) process.exitCode = 1
 				return
 			}
@@ -302,16 +305,23 @@ async function main(): Promise<void> {
 					process.exitCode = 1
 					return
 				}
-				install(exe)
+				const {modernError} = install(exe)
 				console.log(
 					'Explorer context menu installed (folder · background · drive).',
 				)
-				console.log('On Windows 11 it appears under “Show more options”.')
+				if (modernError) {
+					console.log(
+						'Win11 top-level (sparse MSIX) not registered — classic under “Show more options” still works.',
+					)
+					console.log(`  ${modernError}`)
+				} else {
+					console.log('Win11 top-level sparse package registered.')
+				}
 				return
 			}
 			if (sub === 'uninstall') {
 				uninstall()
-				console.log('Explorer context menu removed.')
+				console.log('Explorer context menu removed (classic + modern).')
 				return
 			}
 			console.error(`Unknown context-menu command: ${sub ?? ''}\n\n${HELP}`)

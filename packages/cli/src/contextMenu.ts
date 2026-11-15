@@ -1,7 +1,13 @@
-// Windows Explorer "Open in involvex-term" — classic per-user (HKCU) verbs.
-// Shows under "Show more options" on Windows 11 (modern top-level needs MSIX,
-// tracked as a follow-up). No admin required. No new dependencies: reg.exe only.
+// Windows Explorer "Open in involvex-term" — classic per-user (HKCU) verbs
+// plus best-effort sparse MSIX for the Win11 top-level menu.
 import {spawnSync} from 'node:child_process'
+import path from 'node:path'
+import {
+	getModernStatus,
+	installModern,
+	uninstallModern,
+	type ModernContextMenuStatus,
+} from './modernContextMenu.js'
 
 export const CONTEXT_MENU_KEY = 'InvolvexTerm'
 export const CONTEXT_MENU_LABEL = 'Open in involvex-term'
@@ -76,9 +82,12 @@ export interface ContextMenuRootStatus {
 
 export interface ContextMenuStatus {
 	supported: boolean
+	/** Classic HKCU verbs installed for all roots. */
 	installed: boolean
 	exe: string | null
 	roots: ContextMenuRootStatus[]
+	/** Sparse-package / Win11 top-level registration (best-effort). */
+	modern: ModernContextMenuStatus
 }
 
 function queryKey(
@@ -97,8 +106,25 @@ export function getStatus(
 	run: RegRunner = defaultRegRunner,
 	platform: NodeJS.Platform = process.platform,
 ): ContextMenuStatus {
+	const exeDir = exe ? path.dirname(exe) : null
+	// Skip the live Appx probe when tests inject a fake reg runner — PowerShell
+	// would otherwise dominate unit-test wall time.
+	const modern =
+		run === defaultRegRunner
+			? getModernStatus(exeDir, platform)
+			: ({
+					supported: platform === 'win32',
+					installed: false,
+					msixPath: exeDir
+						? path.join(exeDir, 'InvolvexTermExplorerCommand.msix')
+						: null,
+					dllPath: exeDir
+						? path.join(exeDir, 'InvolvexTermExplorerCommand.dll')
+						: null,
+					detail: 'skipped',
+				} satisfies ModernContextMenuStatus)
 	if (platform !== 'win32') {
-		return {supported: false, installed: false, exe, roots: []}
+		return {supported: false, installed: false, exe, roots: [], modern}
 	}
 	const expected = exe ? buildContextMenuCommand(exe) : null
 	const roots = contextMenuRoots().map(key => {
@@ -112,6 +138,7 @@ export function getStatus(
 		installed: roots.length > 0 && roots.every(r => r.installed),
 		exe,
 		roots,
+		modern,
 	}
 }
 
@@ -119,7 +146,7 @@ export function install(
 	exe: string,
 	run: RegRunner = defaultRegRunner,
 	platform: NodeJS.Platform = process.platform,
-): void {
+): {modernError: string | null} {
 	if (platform !== 'win32') throw new Error('Context menu is Windows-only.')
 	if (!exe) throw new Error('App executable path is required.')
 	const command = buildContextMenuCommand(exe)
@@ -139,6 +166,17 @@ export function install(
 			}
 		}
 	}
+	let modernError: string | null = null
+	// Only attempt sparse registration with the real reg runner (production /
+	// CLI). Unit tests inject fakes and must not wait on Add-AppxPackage.
+	if (run === defaultRegRunner) {
+		try {
+			installModern(path.dirname(exe), platform)
+		} catch (e) {
+			modernError = e instanceof Error ? e.message : String(e)
+		}
+	}
+	return {modernError}
 }
 
 export function uninstall(
@@ -153,6 +191,13 @@ export function uninstall(
 			throw new Error(
 				`reg delete ${key} failed: ${r.stderr || r.stdout}`.trim(),
 			)
+		}
+	}
+	if (run === defaultRegRunner) {
+		try {
+			uninstallModern(platform)
+		} catch {
+			/* classic uninstall already succeeded */
 		}
 	}
 }

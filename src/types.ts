@@ -64,7 +64,11 @@ export interface ShellProfile {
 	kind: 'pwsh' | 'powershell' | 'cmd' | 'wsl' | 'custom'
 	command?: string
 	args?: string[]
+	/** Extra env vars merged into the PTY before agent env hooks. */
+	env?: Record<string, string>
 }
+
+export type CursorStyle = 'block' | 'underline' | 'bar'
 
 export interface CommandSnippet {
 	id: string
@@ -134,6 +138,7 @@ export interface AppSettings {
 		scrollbar: boolean
 		/** Use @xterm/addon-webgl when available (smoother floods; GPU). */
 		webgl: boolean
+		cursorStyle: CursorStyle
 		snippets: CommandSnippet[]
 		quickCommands: QuickCommand[]
 	}
@@ -358,6 +363,14 @@ export interface TermApiShape {
 		installed: boolean
 		exe: string | null
 		roots: Array<{key: string; installed: boolean; command: string | null}>
+		modern: {
+			supported: boolean
+			installed: boolean
+			msixPath: string | null
+			dllPath: string | null
+			detail: string | null
+		}
+		modernError?: string | null
 	}>
 	settingsExport: () => Promise<{ok: boolean; path?: string; error?: string}>
 	settingsImport: () => Promise<{

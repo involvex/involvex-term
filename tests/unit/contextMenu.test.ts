@@ -145,6 +145,23 @@ describe.skipIf(process.platform !== 'win32')(
 			const st = getStatus(null, undefined, 'linux')
 			expect(st.supported).toBe(false)
 			expect(st.installed).toBe(false)
+			expect(st.modern.supported).toBe(false)
+		})
+
+		test('status includes modern field on Windows', () => {
+			const exe = 'C:\\app\\involvex-term.exe'
+			const expected = `"${exe}" nt -d "%V"`
+			const map = new Map<string, {status: number; stdout: string}>()
+			for (const k of contextMenuRoots()) {
+				map.set(`query|${k}\\command|/ve`, {
+					status: 0,
+					stdout: `    (Default)    REG_SZ    ${expected}\r\n`,
+				})
+			}
+			const {run} = runnerWith(map)
+			const st = getStatus(exe, run)
+			expect(st.modern).toBeDefined()
+			expect(st.modern.supported).toBe(true)
 		})
 	},
 )
