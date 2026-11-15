@@ -15,13 +15,18 @@ const SRC = path.join(ROOT, 'native', 'explorer-command')
 const OUT = path.join(SRC, 'out')
 const ASSETS = path.join(OUT, 'Assets')
 
-/** @param {string} cmd @param {string[]} args */
-function run(cmd, args) {
+/**
+ * @param {string} cmd
+ * @param {string[]} args
+ * @param {{cwd?: string}} [opts]
+ */
+function run(cmd, args, opts = {}) {
 	console.log(`> ${cmd} ${args.join(' ')}`)
 	const r = spawnSync(cmd, args, {
 		encoding: 'utf8',
 		shell: false,
 		stdio: 'inherit',
+		cwd: opts.cwd,
 	})
 	if (r.status !== 0) {
 		throw new Error(`${cmd} exited ${r.status}`)
@@ -135,7 +140,9 @@ function main() {
 
 	// Compile inside a VsDevCmd environment so cl/link are on PATH.
 	// Write a temp .bat — nested quoting of VsDevCmd via cmd /c is unreliable.
-	const bat = path.join(OUT, '_build.bat')
+	// Invoke via relative name + cwd so cmd.exe /c is not fed an abs path (CodeQL).
+	const batName = '_build.bat'
+	const bat = path.join(OUT, batName)
 	const batBody = [
 		'@echo off',
 		`call "${vsDev}" -arch=amd64 -host_arch=amd64`,
@@ -147,7 +154,7 @@ function main() {
 	].join('\r\n')
 	fs.writeFileSync(bat, batBody)
 	try {
-		run('cmd.exe', ['/d', '/c', bat])
+		run('cmd.exe', ['/d', '/c', batName], {cwd: OUT})
 	} finally {
 		try {
 			fs.unlinkSync(bat)
@@ -191,7 +198,8 @@ function main() {
 		const signtool = findSignTool()
 		if (signtool) {
 			const pfxLocal = path.join(OUT, '_sign.pfx')
-			const signBat = path.join(OUT, '_sign.bat')
+			const signBatName = '_sign.bat'
+			const signBat = path.join(OUT, signBatName)
 			fs.copyFileSync(pfxEnv, pfxLocal)
 			fs.writeFileSync(
 				signBat,
@@ -211,7 +219,7 @@ function main() {
 					'> signtool sign /fd SHA256 /f out/_sign.pfx [/p ***]',
 					msix,
 				)
-				run('cmd.exe', ['/d', '/c', signBat])
+				run('cmd.exe', ['/d', '/c', signBatName], {cwd: OUT})
 				console.log('[explorer-command] signed', msix)
 			} finally {
 				for (const f of [signBat, pfxLocal]) {
