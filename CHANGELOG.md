@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.9.2] - 2026-11-15
+
+### Added
+
+- profile editor and Win11 sparse Explorer menu
+
+### Fixed
+
+- run makeappx with cwd-relative argv only
+- invoke cmd.exe /c with relative bat names
+- keep signing password out of JS for CodeQL
+- address CodeQL and Explorer arg quoting
+
+### Changed
+
+- docs: drop stale Unreleased block before 0.9.2 cut
+
 ## [0.9.1] - 2026-11-15
 
 ### Changed
