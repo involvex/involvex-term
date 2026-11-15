@@ -149,7 +149,11 @@ export default function SearchBar({
 	return (
 		<div
 			className="searchbar"
-			style={{background: bg, color: fg, borderColor: '#3c3c3c'}}
+			style={{
+				background: bg,
+				color: fg,
+				borderColor: 'var(--border-default)',
+			}}
 		>
 			<input
 				ref={inputRef}

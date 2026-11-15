@@ -3,11 +3,13 @@ import {THEME_PRESETS} from '../../src/lib/themePresets.ts'
 import {
 	applyThemeTokens,
 	FALLBACK_FONT_STACK,
+	FALLBACK_SELECTION_BG,
 	FALLBACK_THEME_BG,
 	FALLBACK_THEME_FG,
 	isUsableColor,
 	isUsableFontStack,
 	resolveFontStack,
+	resolveSelectionBackground,
 	resolveThemeColor,
 } from '../../src/lib/themeTokens.ts'
 
@@ -138,6 +140,12 @@ describe('isUsableFontStack', () => {
 		]) {
 			expect(isUsableFontStack(v)).toBe(false)
 		}
+	})
+})
+
+describe('resolveSelectionBackground', () => {
+	it('falls back without a DOM root', () => {
+		expect(resolveSelectionBackground(null)).toBe(FALLBACK_SELECTION_BG)
 	})
 })
 

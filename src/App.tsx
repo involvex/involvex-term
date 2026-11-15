@@ -1879,7 +1879,15 @@ export default function App() {
 							/>
 						))}
 					</div>
-					{toast && <div className="completion-toast">{toast}</div>}
+					{toast && (
+						<div
+							className="completion-toast"
+							role="status"
+							aria-live="polite"
+						>
+							{toast}
+						</div>
+					)}
 					{!isElectron() && (
 						<div className="web-warning">
 							Web preview — PTY/Git/Sys need Electron. Run{' '}
@@ -1910,6 +1918,7 @@ export default function App() {
 						rejectedTotal={settingsRejectedTotal}
 						onChange={saveSettings}
 						onClose={handleCloseSettings}
+						onToast={handleToast}
 					/>
 				</Suspense>
 			)}

@@ -93,6 +93,60 @@ export function resolveFontStack(theme: ThemeInput | null | undefined): string {
 	return parts.join(', ')
 }
 
+/** Classic VS Code selection blue — matches `--selection-base` in index.css. */
+export const FALLBACK_SELECTION_BG = '#264f78'
+
+/**
+ * Resolve a CSS colour value to a hex string the canvas/xterm APIs accept.
+ *
+ * Custom properties that use `color-mix()` stay unevaluated when read via
+ * `getPropertyValue`; applying the value as an element colour and reading
+ * `getComputedStyle` forces the browser to resolve it.
+ */
+export function resolveCssColor(value: string, fallback: string): string {
+	if (typeof document === 'undefined') return fallback
+	const probe = document.createElement('span')
+	probe.style.color = value
+	probe.style.display = 'none'
+	document.documentElement.appendChild(probe)
+	const resolved = getComputedStyle(probe).color
+	probe.remove()
+	const hex = rgbToHex(resolved)
+	return hex ?? fallback
+}
+
+/** Convert `rgb()` / `rgba()` from getComputedStyle into `#rrggbb`. */
+function rgbToHex(rgb: string): string | null {
+	// Comma form (legacy) and space form (CSS Color 4), with optional alpha.
+	const m = rgb.match(
+		/^rgba?\(\s*([\d.]+)[%]?\s*[, ]\s*([\d.]+)[%]?\s*[, ]\s*([\d.]+)[%]?(?:\s*[,/]\s*[\d.%]+)?\s*\)$/i,
+	)
+	if (!m) return null
+	const toByte = (n: string) =>
+		Math.max(0, Math.min(255, Math.round(Number(n))))
+			.toString(16)
+			.padStart(2, '0')
+	return `#${toByte(m[1]!)}${toByte(m[2]!)}${toByte(m[3]!)}`
+}
+
+/**
+ * Resolved terminal selection colour for the current theme.
+ *
+ * Prefers the live `--selection-bg` token (tinted by `--theme-bg`). Falls back
+ * to the classic blue when no DOM is available (tests / pre-hydration).
+ */
+export function resolveSelectionBackground(
+	root: Element | null = typeof document === 'undefined'
+		? null
+		: document.documentElement,
+): string {
+	if (!root || typeof getComputedStyle === 'undefined')
+		return FALLBACK_SELECTION_BG
+	const raw = getComputedStyle(root).getPropertyValue('--selection-bg').trim()
+	if (!raw) return FALLBACK_SELECTION_BG
+	return resolveCssColor(raw, FALLBACK_SELECTION_BG)
+}
+
 /**
  * Write the theme's colours and font stack onto the document root.
  *

@@ -35,22 +35,15 @@ import {
 	revealHit,
 } from '../lib/termContext'
 import {createPathLinkProvider, webLinkHandler} from '../lib/termLinks'
+import {
+	FALLBACK_SELECTION_BG,
+	resolveSelectionBackground,
+} from '../lib/themeTokens'
 import {termApi} from '../types'
 import TermContextMenu, {
 	type ContextMenuItem,
 	type TermContextMenuState,
 } from './TermContextMenu'
-
-/**
- * Selection highlight inside the xterm canvas.
- *
- * Deliberately not a design token: xterm paints this itself and needs a
- * resolved colour, so it cannot read a `color-mix()` derived `--selection`.
- * Documented in index.css as theme-blind rather than duplicated inline at each
- * of the two places that set it (the constructor and the live-update effect
- * used to carry their own copy, which is how they drifted).
- */
-const SELECTION_BACKGROUND = '#264f78'
 
 export interface TerminalPaneMenu {
 	paneCount: number
@@ -158,6 +151,8 @@ export default function TerminalView({
 	const fitRef = useRef<FitAddon | null>(null)
 	const focusedRef = useRef(focused)
 	const tabActiveRef = useRef(tabActive)
+	/** Drain the rAF write queue when a background tab becomes visible again. */
+	const flushWritesRef = useRef<(() => void) | null>(null)
 	const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const completionRef = useRef(createCompletionTracker())
 	const completionBellRef = useRef(completionBell)
@@ -207,12 +202,14 @@ export default function TerminalView({
 		const el = containerRef.current
 		if (!el) return
 		const api = termApi()
+		const selectionBackground =
+			resolveSelectionBackground() || FALLBACK_SELECTION_BG
 		const term = new Terminal({
 			theme: {
 				background: bg,
 				foreground: fg,
 				cursor: fg,
-				selectionBackground: SELECTION_BACKGROUND,
+				selectionBackground,
 			},
 			fontFamily,
 			fontSize,
@@ -609,6 +606,16 @@ export default function TerminalView({
 		const WRITE_SLICE = 64 * 1024
 		/** Yield to the browser when a flood would blow the frame budget. */
 		const WRITE_FRAME_BUDGET_MS = 8
+		const scheduleFlush = () => {
+			// Inactive tabs keep buffering (capped) but skip xterm parse/paint
+			// until the tab is shown again — builds in the background otherwise
+			// burn renderer CPU with no visible benefit.
+			if (!tabActiveRef.current || writeScheduled || writeParts.length === 0)
+				return
+			writeScheduled = true
+			requestAnimationFrame(flushWriteQueue)
+		}
+		flushWritesRef.current = scheduleFlush
 		const flushWriteQueue = () => {
 			writeScheduled = false
 			if (disposed) {
@@ -616,6 +623,7 @@ export default function TerminalView({
 				writeLen = 0
 				return
 			}
+			if (!tabActiveRef.current) return
 			const started = performance.now()
 			while (writeParts.length > 0) {
 				const part = writeParts.shift()!
@@ -632,8 +640,7 @@ export default function TerminalView({
 							const rest = part.slice(i)
 							writeParts.unshift(rest)
 							writeLen += rest.length
-							writeScheduled = true
-							requestAnimationFrame(flushWriteQueue)
+							scheduleFlush()
 							return
 						}
 					}
@@ -644,8 +651,7 @@ export default function TerminalView({
 					writeParts.length > 0 &&
 					performance.now() - started > WRITE_FRAME_BUDGET_MS
 				) {
-					writeScheduled = true
-					requestAnimationFrame(flushWriteQueue)
+					scheduleFlush()
 					return
 				}
 			}
@@ -813,10 +819,7 @@ export default function TerminalView({
 				}
 				writeParts.push(data)
 				writeLen += data.length
-				if (!writeScheduled) {
-					writeScheduled = true
-					requestAnimationFrame(flushWriteQueue)
-				}
+				scheduleFlush()
 				if (!completionBellRef.current || !onBgPromptRef.current) return
 				const bgPane = !tabActiveRef.current || !focusedRef.current
 				if (!bgPane) {
@@ -942,6 +945,7 @@ export default function TerminalView({
 
 		return () => {
 			disposed = true
+			flushWritesRef.current = null
 			void disposed
 			stopGate()
 			if (resizeDebounce) clearTimeout(resizeDebounce)
@@ -982,6 +986,12 @@ export default function TerminalView({
 		return () => window.removeEventListener('involvex:focus-term', onFocusReq)
 	}, [paneId])
 
+	// Drain buffered output when switching back to a tab that was idle.
+	useEffect(() => {
+		if (!tabActive) return
+		flushWritesRef.current?.()
+	}, [tabActive])
+
 	// Apply theme/font/scrollback live
 	useEffect(() => {
 		const t = termRef.current
@@ -990,7 +1000,8 @@ export default function TerminalView({
 				background: bg,
 				foreground: fg,
 				cursor: fg,
-				selectionBackground: SELECTION_BACKGROUND,
+				selectionBackground:
+					resolveSelectionBackground() || FALLBACK_SELECTION_BG,
 			}
 			t.options.fontFamily = fontFamily
 			t.options.fontSize = fontSize

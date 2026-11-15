@@ -570,6 +570,7 @@ export default memo(function TabBar({
 					className="tab-new"
 					onClick={() => onNew()}
 					title="New tab (Ctrl+Shift+T)"
+					aria-label="New tab"
 				>
 					+
 				</button>

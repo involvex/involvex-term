@@ -22,9 +22,9 @@
  * App.css carried before this token existed, so the pre-hydration paint is
  * unchanged.
  *
- * Still theme-blind, tracked as a follow-up: the xterm selection colour
- * (SELECTION_BACKGROUND in TerminalView.tsx). xterm paints that itself and
- * needs a resolved colour, so it cannot consume a `color-mix()` like the rest.
+ * Selection uses --selection-bg (color-mix of the classic VS Code blue with
+ * --theme-bg). xterm cannot consume color-mix() directly — TerminalView reads
+ * a resolved hex via resolveSelectionBackground() in themeTokens.ts.
  *
  * Add new colours here rather than inlining literals in App.css.
  */
@@ -80,6 +80,17 @@
 	--status-warn: #e5c07b;
 	--status-error: #f48771;
 	--status-ok: #98c379;
+
+	/*
+	 * Terminal text selection. Hue stays the familiar VS Code blue; mixing with
+	 * --theme-bg keeps it from floating above Dracula / One Dark / light presets.
+	 */
+	--selection-base: #264f78;
+	--selection-bg: color-mix(
+		in srgb,
+		var(--selection-base) 82%,
+		var(--theme-bg)
+	);
 
 	/* Elevation — colour only; blur/offset stay inline since they vary per surface */
 	--shadow-color-menu: rgba(0, 0, 0, 0.45);

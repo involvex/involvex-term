@@ -27,6 +27,8 @@ interface Props {
 	rejectedTotal?: number
 	onChange: (next: AppSettings) => void
 	onClose: () => void
+	/** Short status messages (import/export/update) stay in-theme instead of alert(). */
+	onToast?: (msg: string, ms?: number) => void
 }
 
 const HOTKEY_ACTIONS: Array<{id: string; label: string}> = [
@@ -490,6 +492,7 @@ export default function SettingsModal({
 	rejectedTotal,
 	onChange,
 	onClose,
+	onToast,
 }: Props) {
 	const [tab, setTab] = useState<SettingsTabId>('appearance')
 	const set = (patch: Partial<AppSettings>) => onChange({...settings, ...patch})
@@ -504,6 +507,8 @@ export default function SettingsModal({
 	 * different list re-shows the banner with no effect to reset it.
 	 */
 	const [dismissedKey, setDismissedKey] = useState<string | null>(null)
+	/** Multi-line import notes — toast is too short for path lists. */
+	const [notice, setNotice] = useState<string | null>(null)
 	const rejectedFinding = useMemo(
 		() => ({paths: rejected ?? [], total: rejectedTotal}),
 		[rejected, rejectedTotal],
@@ -514,13 +519,25 @@ export default function SettingsModal({
 	const showRejected = shouldShowRejectedBanner(rejectedFinding, dismissedKey)
 	const dismissRejected = () => setDismissedKey(rejectedKey)
 
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key !== 'Escape') return
+			// Hotkey recorder captures Escape in the capture phase and stops
+			// propagation; this bubble listener only runs when not recording.
+			onClose()
+		}
+		window.addEventListener('keydown', onKey)
+		return () => window.removeEventListener('keydown', onKey)
+	}, [onClose])
+
 	/** Shared by the two "Import settings…" buttons in the sync section. */
 	const runImport = () => {
 		void termApi()
 			?.settingsImport()
 			.then(r => {
 				if (!r.ok) {
-					if (r.error !== 'canceled') window.alert(r.error || 'Import failed')
+					if (r.error !== 'canceled')
+						onToast?.(r.error || 'Import failed', 4000)
 					return
 				}
 				if (r.settings) onChange(r.settings as AppSettings)
@@ -540,11 +557,11 @@ export default function SettingsModal({
 					const lines: string[] = []
 					if (stripped.length)
 						lines.push(
-							`${stripped.length} shell profile command(s) were removed for safety — an imported file cannot choose what gets executed:\n\n${stripped.join('\n')}`,
+							`${stripped.length} shell profile command(s) were removed for safety — an imported file cannot choose what gets executed:\n${stripped.join(', ')}`,
 						)
 					if (invalid.length)
 						lines.push(
-							`${invalid.length} value(s) were invalid and ignored:\n\n${invalid.join('\n')}`,
+							`${invalid.length} value(s) were invalid and ignored:\n${invalid.join(', ')}`,
 						)
 					// `r.rejected` is a capped sample, so the counts above are
 					// counts of what was listed. Say so rather than letting a
@@ -554,7 +571,9 @@ export default function SettingsModal({
 						lines.push(
 							`Only the first ${r.rejected.length} are listed; ${importTotal - r.rejected.length} more were not applied. Fix the listed ones first - the rest are usually the same mistake.`,
 						)
-					window.alert(`Imported, but:\n\n${lines.join('\n\n')}`)
+					setNotice(`Imported, but:\n${lines.join('\n\n')}`)
+				} else {
+					onToast?.('Settings imported', 2800)
 				}
 			})
 	}
@@ -625,6 +644,26 @@ export default function SettingsModal({
 							className="settings-warning-dismiss"
 							onClick={dismissRejected}
 							aria-label="Dismiss settings warning"
+						>
+							×
+						</button>
+					</div>
+				)}
+				{notice && (
+					<div
+						className="settings-warning"
+						role="status"
+					>
+						<div className="settings-warning-body">
+							<div className="settings-warning-paths settings-notice-body">
+								{notice}
+							</div>
+						</div>
+						<button
+							type="button"
+							className="settings-warning-dismiss"
+							onClick={() => setNotice(null)}
+							aria-label="Dismiss notice"
 						>
 							×
 						</button>
@@ -1691,7 +1730,8 @@ export default function SettingsModal({
 													?.settingsExport()
 													.then(r => {
 														if (!r.ok && r.error !== 'canceled')
-															window.alert(r.error || 'Export failed')
+															onToast?.(r.error || 'Export failed', 4000)
+														else if (r.ok) onToast?.('Settings exported', 2800)
 													})
 											}}
 										>
@@ -1734,7 +1774,7 @@ export default function SettingsModal({
 																}
 															}
 														} else if (st.message) {
-															window.alert(st.message)
+															onToast?.(st.message, 4000)
 														}
 													})
 											}}
@@ -1788,7 +1828,8 @@ export default function SettingsModal({
 													?.settingsExport()
 													.then(r => {
 														if (!r.ok && r.error !== 'canceled')
-															window.alert(r.error || 'Export failed')
+															onToast?.(r.error || 'Export failed', 4000)
+														else if (r.ok) onToast?.('Settings exported', 2800)
 													})
 											}}
 										>
@@ -1831,7 +1872,7 @@ export default function SettingsModal({
 																}
 															}
 														} else if (st.message) {
-															window.alert(st.message)
+															onToast?.(st.message, 4000)
 														}
 													})
 											}}

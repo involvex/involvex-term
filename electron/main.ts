@@ -268,13 +268,63 @@ function releaseGitWatcher(paneId: string) {
 }
 
 /**
+ * Coalesce bursty ConPTY `onData` into one `pty:data-*` IPC send per event-loop
+ * turn. Flood output otherwise spends more time structured-cloning than the
+ * renderer spends painting; joining here pairs with the rAF write queue on the
+ * other side. Prompt chunks flush immediately so `pty:prompt-*` never races
+ * ahead of the preceding output.
+ */
+const pendingPtyData = new Map<string, string[]>()
+const scheduledPtyFlush = new Set<string>()
+
+function flushPtyData(id: string, win: BrowserWindow | null): void {
+	scheduledPtyFlush.delete(id)
+	const parts = pendingPtyData.get(id)
+	if (!parts?.length) {
+		pendingPtyData.delete(id)
+		return
+	}
+	pendingPtyData.delete(id)
+	const payload = parts.length === 1 ? parts[0]! : parts.join('')
+	safeSend(win, `pty:data-${id}`, payload)
+}
+
+function enqueuePtyData(
+	id: string,
+	data: string,
+	win: BrowserWindow | null,
+	flushNow = false,
+): void {
+	let parts = pendingPtyData.get(id)
+	if (!parts) {
+		parts = []
+		pendingPtyData.set(id, parts)
+	}
+	parts.push(data)
+	if (flushNow) {
+		flushPtyData(id, win)
+		return
+	}
+	if (scheduledPtyFlush.has(id)) return
+	scheduledPtyFlush.add(id)
+	setImmediate(() => flushPtyData(id, win))
+}
+
+function clearPtyDataPending(id: string): void {
+	pendingPtyData.delete(id)
+	scheduledPtyFlush.delete(id)
+}
+
+/**
  * Release every per-pane resource keyed by pty id: debounced git refresh,
- * chokidar watcher, and the cwd-tracker's pending OSC chunk. Shared by the
- * `pty:kill` handler and the pty `onExit` handler so the two cannot drift —
- * a path that only one of them cleaned up is a leak.
+ * chokidar watcher, the cwd-tracker's pending OSC chunk, and any coalesced
+ * PTY data still waiting to flush. Shared by the `pty:kill` handler and the
+ * pty `onExit` handler so the two cannot drift — a path that only one of them
+ * cleaned up is a leak.
  */
 function releasePaneResources(id: string): void {
 	clearCwdPending(id)
+	clearPtyDataPending(id)
 	const pending = pendingGitRefresh.get(id)
 	if (pending) {
 		clearTimeout(pending)
@@ -434,7 +484,9 @@ function registerIpc() {
 						setCwd(tabId, newCwd)
 						scheduleGitRefresh(tabId, newCwd)
 					})
-					safeSend(win, `pty:data-${id}`, cleaned)
+					// Prompt chunks flush immediately so the renderer sees output
+					// before pty:prompt; everything else joins the next turn.
+					enqueuePtyData(id, cleaned, win, sawPrompt)
 					if (sawPrompt)
 						safeSend(win, `pty:prompt-${id}`, {
 							// Regex test scans without copying; cleaned.trim()
