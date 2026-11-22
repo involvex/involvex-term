@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.3] - 2026-11-22
+
+### Added
+
+- footer git actions and Linux OSC7 cwd
+
+### Changed
+
+- build(deps-dev): bump eslint-plugin-react-refresh from 0.5.7 to 0.5.8
+- build(deps-dev): bump prettier from 3.10.0 to 3.10.1
+- build(deps-dev): bump eslint from 10.14.0 to 10.15.0
+- build(deps-dev): bump electron from 45.1.0 to 45.4.1
+- build(deps): bump simple-git from 4.0.2 to 4.1.0
+
 ## [Unreleased]
 
 ### Added
