@@ -26,6 +26,16 @@ export interface TermApi {
 		branch: string,
 	) => Promise<{ok: boolean; error?: string; branch?: string}>
 	gitRemoteUrl: (cwd: string, remote?: string) => Promise<string | null>
+	gitFetch: (cwd: string) => Promise<{ok: boolean; error?: string}>
+	gitPull: (cwd: string) => Promise<{ok: boolean; error?: string}>
+	gitPush: (cwd: string) => Promise<{ok: boolean; error?: string}>
+	gitStash: (cwd: string) => Promise<{ok: boolean; error?: string}>
+	gitStashPop: (cwd: string) => Promise<{ok: boolean; error?: string}>
+	gitChanges: (cwd: string) => Promise<{
+		staged: Array<{path: string; status: string; kind: string}>
+		unstaged: Array<{path: string; status: string; kind: string}>
+		untracked: Array<{path: string; status: string; kind: string}>
+	}>
 	onGitChanged: (
 		cb: (msg: {tabId: string} & Record<string, unknown>) => void,
 	) => () => void
@@ -238,6 +248,12 @@ const api: TermApi = {
 		ipcRenderer.invoke('git:checkout', {cwd, branch}),
 	gitRemoteUrl: (cwd, remote) =>
 		ipcRenderer.invoke('git:remoteUrl', {cwd, remote}),
+	gitFetch: cwd => ipcRenderer.invoke('git:fetch', {cwd}),
+	gitPull: cwd => ipcRenderer.invoke('git:pull', {cwd}),
+	gitPush: cwd => ipcRenderer.invoke('git:push', {cwd}),
+	gitStash: cwd => ipcRenderer.invoke('git:stash', {cwd}),
+	gitStashPop: cwd => ipcRenderer.invoke('git:stashPop', {cwd}),
+	gitChanges: cwd => ipcRenderer.invoke('git:changes', {cwd}),
 	onGitChanged: cb => sub('git:changed', cb as never),
 	onGitChangedFor: (tabId, cb) => sub(`git:changed-${tabId}`, cb as never),
 	sysGet: () => ipcRenderer.invoke('sys:get'),

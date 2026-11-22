@@ -58,6 +58,22 @@ export interface BranchList {
 	remote: string[]
 }
 
+export type GitChangeKind = 'staged' | 'unstaged' | 'untracked'
+
+export interface GitChangeEntry {
+	path: string
+	status: string
+	kind: GitChangeKind
+}
+
+export interface GitChanges {
+	staged: GitChangeEntry[]
+	unstaged: GitChangeEntry[]
+	untracked: GitChangeEntry[]
+}
+
+export type GitActionResult = {ok: boolean; error?: string}
+
 export interface ShellProfile {
 	id: string
 	name: string
@@ -310,6 +326,12 @@ export interface TermApiShape {
 		branch: string,
 	) => Promise<{ok: boolean; error?: string; branch?: string}>
 	gitRemoteUrl: (cwd: string, remote?: string) => Promise<string | null>
+	gitFetch: (cwd: string) => Promise<GitActionResult>
+	gitPull: (cwd: string) => Promise<GitActionResult>
+	gitPush: (cwd: string) => Promise<GitActionResult>
+	gitStash: (cwd: string) => Promise<GitActionResult>
+	gitStashPop: (cwd: string) => Promise<GitActionResult>
+	gitChanges: (cwd: string) => Promise<GitChanges>
 	onGitChanged: (
 		cb: (msg: {tabId: string} & Partial<GitStatus>) => void,
 	) => () => void

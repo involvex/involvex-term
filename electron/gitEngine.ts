@@ -253,3 +253,138 @@ export async function getRemoteUrl(
 		}
 	}
 }
+
+export type GitActionResult = {ok: boolean; error?: string}
+
+function gitErr(e: unknown): string {
+	return e instanceof Error ? e.message : String(e)
+}
+
+/** Fetch from the configured upstream remote (default: origin). */
+export async function fetchRemote(cwd: string): Promise<GitActionResult> {
+	const root = resolveRepo(cwd)
+	if (!root) return {ok: false, error: 'Not a git repository'}
+	try {
+		const git = simpleGit(root)
+		await git.fetch()
+		invalidateGitCache(root)
+		return {ok: true}
+	} catch (e) {
+		return {ok: false, error: gitErr(e)}
+	}
+}
+
+/** Fast-forward-only pull of the current branch. */
+export async function pullFfOnly(cwd: string): Promise<GitActionResult> {
+	const root = resolveRepo(cwd)
+	if (!root) return {ok: false, error: 'Not a git repository'}
+	try {
+		const git = simpleGit(root)
+		await git.pull(['--ff-only'])
+		invalidateGitCache(root)
+		return {ok: true}
+	} catch (e) {
+		return {ok: false, error: gitErr(e)}
+	}
+}
+
+/** Push the current branch (never --force). */
+export async function pushCurrent(cwd: string): Promise<GitActionResult> {
+	const root = resolveRepo(cwd)
+	if (!root) return {ok: false, error: 'Not a git repository'}
+	try {
+		const git = simpleGit(root)
+		await git.push()
+		invalidateGitCache(root)
+		return {ok: true}
+	} catch (e) {
+		return {ok: false, error: gitErr(e)}
+	}
+}
+
+/** Stash tracked (+ untracked) changes. */
+export async function stashPush(cwd: string): Promise<GitActionResult> {
+	const root = resolveRepo(cwd)
+	if (!root) return {ok: false, error: 'Not a git repository'}
+	try {
+		const git = simpleGit(root)
+		await git.stash(['push', '-u', '-m', 'involvex-term'])
+		invalidateGitCache(root)
+		return {ok: true}
+	} catch (e) {
+		return {ok: false, error: gitErr(e)}
+	}
+}
+
+/** Apply and drop the most recent stash. */
+export async function stashPop(cwd: string): Promise<GitActionResult> {
+	const root = resolveRepo(cwd)
+	if (!root) return {ok: false, error: 'Not a git repository'}
+	try {
+		const git = simpleGit(root)
+		await git.stash(['pop'])
+		invalidateGitCache(root)
+		return {ok: true}
+	} catch (e) {
+		return {ok: false, error: gitErr(e)}
+	}
+}
+
+export type GitChangeKind = 'staged' | 'unstaged' | 'untracked'
+
+export interface GitChangeEntry {
+	path: string
+	/** Short status letter from name-status (A/M/D/R/…), or '?' for untracked. */
+	status: string
+	kind: GitChangeKind
+}
+
+export interface GitChanges {
+	staged: GitChangeEntry[]
+	unstaged: GitChangeEntry[]
+	untracked: GitChangeEntry[]
+}
+
+/** Parse `git diff --name-status` output. Exported for unit tests. */
+export function parseNameStatus(
+	raw: string,
+	kind: Exclude<GitChangeKind, 'untracked'>,
+): GitChangeEntry[] {
+	const out: GitChangeEntry[] = []
+	for (const line of raw.split('\n')) {
+		const trimmed = line.trimEnd()
+		if (!trimmed) continue
+		// name-status: "M\tpath" or "R100\told\tnew"
+		const parts = trimmed.split('\t')
+		const code = (parts[0] ?? '').replace(/\d+$/, '').trim() || 'M'
+		const filePath = parts.length >= 3 ? (parts[2] ?? parts[1]) : parts[1]
+		if (!filePath) continue
+		out.push({path: filePath, status: code.charAt(0) || 'M', kind})
+	}
+	return out
+}
+
+/** Read-only working-tree change list for the footer Changes view. */
+export async function listChanges(cwd: string): Promise<GitChanges> {
+	const empty: GitChanges = {staged: [], unstaged: [], untracked: []}
+	const root = resolveRepo(cwd)
+	if (!root) return empty
+	try {
+		const git = simpleGit(root)
+		const [stagedRaw, unstagedRaw, untrackedRaw] = await Promise.all([
+			git.raw(['diff', '--cached', '--name-status']).catch(() => ''),
+			git.raw(['diff', '--name-status']).catch(() => ''),
+			git.raw(['ls-files', '--others', '--exclude-standard']).catch(() => ''),
+		])
+		const staged = parseNameStatus(stagedRaw, 'staged')
+		const unstaged = parseNameStatus(unstagedRaw, 'unstaged')
+		const untracked = untrackedRaw
+			.split('\n')
+			.map(s => s.trim())
+			.filter(Boolean)
+			.map(p => ({path: p, status: '?', kind: 'untracked' as const}))
+		return {staged, unstaged, untracked}
+	} catch {
+		return empty
+	}
+}

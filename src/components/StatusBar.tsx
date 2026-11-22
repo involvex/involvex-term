@@ -14,6 +14,7 @@ import {
 	termApi,
 	type AppSettings,
 	type BranchList,
+	type GitChanges,
 	type GitStatus,
 	type OpencodeSession,
 	type OpencodeStatus,
@@ -42,6 +43,11 @@ function shortPath(p: string, max = 36): string {
 	const t = p.trim()
 	if (t.length <= max) return t
 	return `…${t.slice(-(max - 1))}`
+}
+
+/** Wall clock for menu TTL bookkeeping (kept out of render for purity lint). */
+function wallMs(): number {
+	return Date.now()
 }
 
 function FooterMenu({
@@ -116,8 +122,9 @@ export const GitWidget = memo(function GitWidget({
 	const [open, setOpen] = useState(false)
 	const [anchor, setAnchor] = useState<DOMRect | null>(null)
 	const [branches, setBranches] = useState<BranchList | null>(null)
+	const [changes, setChanges] = useState<GitChanges | null>(null)
 	const [loading, setLoading] = useState(false)
-	const [view, setView] = useState<'main' | 'branches'>('main')
+	const [view, setView] = useState<'main' | 'branches' | 'changes'>('main')
 	/** Cwd of the in-flight details fetch (dedupes menu re-opens). */
 	const detailsInFlight = useRef<string | null>(null)
 	/** Last completed details fetch per cwd — re-opens within TTL reuse it. */
@@ -160,12 +167,21 @@ export const GitWidget = memo(function GitWidget({
 		`ahead ${status.ahead} / behind ${status.behind}, stash ${status.stashCount}`,
 	].join('\n')
 
+	const refreshAfter = async (cwd: string) => {
+		const api = termApi()
+		if (!api) return
+		const next = await api.gitGetDetails(cwd)
+		onRefreshed?.(next)
+		detailsFetchedAt.current.set(cwd, wallMs())
+	}
+
 	const openMenu = () => {
 		const r = btnRef.current?.getBoundingClientRect()
 		if (!r) return
 		setAnchor(r)
 		setView('main')
 		setBranches(null)
+		setChanges(null)
 		setOpen(true)
 		// Lazy details: footer hot path carries base status only (no stash /
 		// ahead-behind spawns). Enrich on open; the footer button updates
@@ -174,14 +190,14 @@ export const GitWidget = memo(function GitWidget({
 		const cwd = status.cwd
 		if (!api || !cwd || detailsInFlight.current === cwd) return
 		const last = detailsFetchedAt.current.get(cwd) ?? 0
-		if (Date.now() - last < DETAILS_TTL_MS) return
+		if (wallMs() - last < DETAILS_TTL_MS) return
 		detailsInFlight.current = cwd
 		void api
 			.gitGetDetails(cwd)
 			.then(next => {
 				if (detailsInFlight.current !== cwd) return
 				detailsInFlight.current = null
-				detailsFetchedAt.current.set(cwd, Date.now())
+				detailsFetchedAt.current.set(cwd, wallMs())
 				onRefreshed?.(next)
 			})
 			.catch(() => {
@@ -197,6 +213,21 @@ export const GitWidget = memo(function GitWidget({
 			const list = await api.gitBranches(status.cwd)
 			setBranches(list)
 			setView('branches')
+		} catch (e) {
+			onToast?.(e instanceof Error ? e.message : String(e))
+		} finally {
+			setLoading(false)
+		}
+	}
+
+	const loadChanges = async () => {
+		const api = termApi()
+		if (!api || !status.cwd) return
+		setLoading(true)
+		try {
+			const list = await api.gitChanges(status.cwd)
+			setChanges(list)
+			setView('changes')
 		} catch (e) {
 			onToast?.(e instanceof Error ? e.message : String(e))
 		} finally {
@@ -227,8 +258,7 @@ export const GitWidget = memo(function GitWidget({
 				onToast?.(res.error || 'Checkout failed')
 				return
 			}
-			const next = await api.gitGet(status.cwd)
-			onRefreshed?.(next)
+			await refreshAfter(status.cwd)
 			onToast?.(`Checked out ${res.branch || branch}`)
 			setOpen(false)
 		} catch (e) {
@@ -236,6 +266,82 @@ export const GitWidget = memo(function GitWidget({
 		} finally {
 			setLoading(false)
 		}
+	}
+
+	const runAction = async (
+		label: string,
+		action: () => Promise<{ok: boolean; error?: string}>,
+		opts?: {confirm?: {title: string; message: string; detail?: string}},
+	) => {
+		const api = termApi()
+		if (!api || !status.cwd) return
+		if (opts?.confirm) {
+			const ok = await api.dialogConfirm({
+				title: opts.confirm.title,
+				message: opts.confirm.message,
+				detail: opts.confirm.detail,
+				buttons: [label, 'Cancel'],
+			})
+			if (!ok) return
+		}
+		setLoading(true)
+		try {
+			const res = await action()
+			if (!res.ok) {
+				onToast?.(res.error || `${label} failed`)
+				return
+			}
+			await refreshAfter(status.cwd)
+			onToast?.(label)
+			setOpen(false)
+		} catch (e) {
+			onToast?.(e instanceof Error ? e.message : String(e))
+		} finally {
+			setLoading(false)
+		}
+	}
+
+	const doFetch = () =>
+		void runAction('Fetched', () => termApi()!.gitFetch(status.cwd))
+
+	const doPull = () => {
+		const confirm =
+			status.behind > 0 && status.isDirty
+				? {
+						title: 'Pull',
+						message: 'Working tree has changes and the branch is behind.',
+						detail: 'Pull uses --ff-only and may fail if histories diverge.',
+					}
+				: undefined
+		void runAction('Pulled', () => termApi()!.gitPull(status.cwd), {confirm})
+	}
+
+	const doPush = () => {
+		const confirm =
+			status.ahead > 0
+				? {
+						title: 'Push',
+						message: `Push ${status.ahead} commit(s) on "${status.branch || 'HEAD'}"?`,
+						detail: 'Never force-pushes.',
+					}
+				: undefined
+		void runAction('Pushed', () => termApi()!.gitPush(status.cwd), {confirm})
+	}
+
+	const doStash = () =>
+		void runAction('Stashed', () => termApi()!.gitStash(status.cwd))
+
+	const doStashPop = () => {
+		const confirm = status.isDirty
+			? {
+					title: 'Stash pop',
+					message: 'Working tree has changes. Pop the latest stash anyway?',
+					detail: 'Conflicts may leave the stash entry in place.',
+				}
+			: undefined
+		void runAction('Stash popped', () => termApi()!.gitStashPop(status.cwd), {
+			confirm,
+		})
 	}
 
 	const openExplorer = () => {
@@ -270,6 +376,23 @@ export const GitWidget = memo(function GitWidget({
 		setOpen(false)
 	}
 
+	const changeRows = (section: string, entries: GitChanges['staged']) =>
+		entries.length === 0 ? null : (
+			<>
+				<div className="footer-menu-section">{section}</div>
+				{entries.map(e => (
+					<div
+						key={`${e.kind}-${e.path}`}
+						className="footer-menu-meta footer-menu-change"
+						title={e.path}
+					>
+						<span className="footer-menu-change-status">{e.status}</span>{' '}
+						{shortPath(e.path, 42)}
+					</div>
+				))}
+			</>
+		)
+
 	return (
 		<>
 			<button
@@ -295,7 +418,7 @@ export const GitWidget = memo(function GitWidget({
 				<FooterMenu
 					anchor={anchor}
 					onClose={() => setOpen(false)}
-					wide={view === 'branches'}
+					wide={view === 'branches' || view === 'changes'}
 				>
 					{view === 'main' ? (
 						<>
@@ -308,6 +431,74 @@ export const GitWidget = memo(function GitWidget({
 							>
 								Switch branch…
 							</button>
+							<button
+								type="button"
+								className="footer-menu-item"
+								role="menuitem"
+								disabled={loading || dirtyCount === 0}
+								onClick={() => void loadChanges()}
+							>
+								Changes…
+								{dirtyCount > 0 ? ` (${dirtyCount})` : ''}
+							</button>
+							<div
+								className="footer-menu-sep"
+								role="separator"
+							/>
+							<button
+								type="button"
+								className="footer-menu-item"
+								role="menuitem"
+								disabled={loading}
+								onClick={doFetch}
+							>
+								Fetch
+							</button>
+							<button
+								type="button"
+								className="footer-menu-item"
+								role="menuitem"
+								disabled={loading}
+								onClick={doPull}
+							>
+								Pull{status.behind > 0 ? ` ↓${status.behind}` : ''}
+							</button>
+							<button
+								type="button"
+								className="footer-menu-item"
+								role="menuitem"
+								disabled={loading}
+								onClick={doPush}
+							>
+								Push{status.ahead > 0 ? ` ↑${status.ahead}` : ''}
+							</button>
+							<div
+								className="footer-menu-sep"
+								role="separator"
+							/>
+							<button
+								type="button"
+								className="footer-menu-item"
+								role="menuitem"
+								disabled={loading || !status.isDirty}
+								onClick={doStash}
+							>
+								Stash
+							</button>
+							<button
+								type="button"
+								className="footer-menu-item"
+								role="menuitem"
+								disabled={loading || status.stashCount === 0}
+								onClick={doStashPop}
+							>
+								Stash pop
+								{status.stashCount > 0 ? ` (${status.stashCount})` : ''}
+							</button>
+							<div
+								className="footer-menu-sep"
+								role="separator"
+							/>
 							<button
 								type="button"
 								className="footer-menu-item"
@@ -341,7 +532,7 @@ export const GitWidget = memo(function GitWidget({
 								{shortPath(status.repoRoot)}
 							</div>
 						</>
-					) : (
+					) : view === 'branches' ? (
 						<>
 							<button
 								type="button"
@@ -382,6 +573,26 @@ export const GitWidget = memo(function GitWidget({
 									))}
 								</>
 							)}
+							{loading && <div className="footer-menu-meta">Loading…</div>}
+						</>
+					) : (
+						<>
+							<button
+								type="button"
+								className="footer-menu-item footer-menu-back"
+								onClick={() => setView('main')}
+							>
+								← Back
+							</button>
+							<div className="footer-menu-sep" />
+							{changes &&
+								changes.staged.length +
+									changes.unstaged.length +
+									changes.untracked.length ===
+									0 && <div className="footer-menu-meta">No changes</div>}
+							{changes && changeRows('Staged', changes.staged)}
+							{changes && changeRows('Unstaged', changes.unstaged)}
+							{changes && changeRows('Untracked', changes.untracked)}
 							{loading && <div className="footer-menu-meta">Loading…</div>}
 						</>
 					)}

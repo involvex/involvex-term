@@ -34,7 +34,8 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
   build also published on each release)
 - Export / import settings from Settings
 - Settings sync via private GitHub Gist (Device Code login; Push / Pull)
-- Footer Git menu (branch switch, Explorer, copy remote) + OpenCode session picker
+- Footer Git menu (branch switch, fetch / pull / push / stash, Changes list,
+  Explorer, copy remote) + OpenCode session picker
 - **Agent-aware pane labels** — tabs/panes show OpenCode session titles when a
   pane’s cwd matches a listed session (or after launch/continue); clear when
   the session ends (Settings → Agent → Pane labels)

@@ -47,9 +47,10 @@ Renderer (React, src/)              Main (electron/)
   Tray (Show/NewTab/Settings)    ←  tray.ts
 ```
 
-- CWD tracking: PowerShell `prompt` wrapper injected via `-NoExit -Command`
-  spawn args emits OSC 7 per prompt; `cwdTracker.ts` sniffs + decodes it.
-  Never `pty.write()` init code into a live shell (it echoes visibly).
+- CWD tracking: PowerShell / cmd / WSL / Linux bash+zsh hooks injected via
+  spawn args (or ZDOTDIR for zsh) emit OSC 7 / 9;9 per prompt;
+  `cwdTracker.ts` sniffs + decodes it. Never `pty.write()` init code into
+  a live shell (it echoes visibly).
 - Main process is bundled ESM: no bare `require()` — use
   `createRequire(import.meta.url)` for `node-pty` / `systeminformation`
   (kept external in `vite.config.ts`).
@@ -93,9 +94,10 @@ that is Python 3.12 when `python3-setuptools` is installed.
 
 `bun run dev` starts Vite at `http://localhost:5173/` and opens
 the Electron window. A display is required. The Linux shell profile is
-`$SHELL --login` (bash). OSC 7 cwd tracking is injected for PowerShell
-only, so the footer path and Git widget stay on the directory the pane
-was spawned in (home, unless settings set a start directory).
+`$SHELL --login` (bash/zsh). OSC 7 cwd tracking is injected for
+PowerShell, cmd, WSL, and Linux bash/zsh via spawn args / ZDOTDIR —
+never `pty.write()` into a live shell. Custom shells must emit OSC 7
+themselves for live footer Git / session cwd.
 
 ```bash
 bunx tsc --noEmit

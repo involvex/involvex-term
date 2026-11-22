@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Footer Git actions: Fetch, Pull (`--ff-only`), Push (never force), Stash,
+  Stash pop — with confirm dialogs when the tree is dirty / ahead / behind
+- Git Changes view in the footer menu (read-only staged / unstaged / untracked
+  `name-status` paths)
+- Live OSC 7 cwd for Linux bash and zsh (spawn-arg / ZDOTDIR hooks; footer Git
+  and session restore follow `cd`)
+
+### Changed
+
+- Docs: ROADMAP v0.10; suggestions backlog marks FEAT-001/010/011/012/025 shipped
+
 ## [0.9.2] - 2026-11-15
 
 ### Added
@@ -232,31 +247,6 @@
 - docs: expand v0.6.0 changelog
 
 All notable changes to this project are documented in this file.
-
-## [Unreleased]
-
-### Added
-
-- Windows Explorer “Open in involvex-term” (folders, folder backgrounds,
-  drives; per-user HKCU, no admin; NSIS setup registers it, Settings →
-  Window toggles it, `involvex-term context-menu install|uninstall|status`
-  covers portable installs; Win11 shows it under “Show more options”)
-- `involvex-term doctor [--fix] [--json] [--verbose]` — checks app install,
-  config dir, settings.json validity, shells, opencode on PATH, context-menu
-  state, GitHub reachability, and disk space; `--fix` covers safe fixes only
-- Agent-aware pane labels: tab + pane chrome show OpenCode session titles when
-  a pane matches a listed session (cwd or launch/continue binding); busy/idle
-  from recent `updated`; clears when the session leaves the list. Toggle:
-  Settings → Agent → Pane labels (`agent.showPaneLabels`, default on)
-- Optional AI-agnostic agent env hooks on PTY spawn (Settings → Agent):
-  `TERM_PROGRAM`, `INVOLVEX_TERM_*`, and `INVOLVEX_TERM_CONTEXT` JSON for
-  OpenCode / other agent CLIs — no in-app chat UI
-- Docs site: agent split screenshot + Agent integration section (OpenCode,
-  pane labels, env hooks) with links to README details
-
-### Changed
-
-- Docs / README: point visitors at GitHub Pages screenshots for agent UI
 
 ## [0.6.0] - 2026-09-28
 

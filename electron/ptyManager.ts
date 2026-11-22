@@ -153,7 +153,7 @@ export function spawnPty(
 			)
 		}
 	}
-	const {shell, args} = resolved
+	const {shell, args, env: resolvedEnv} = resolved
 	const home = resolveSpawnCwd(cwd)
 	if (!mod)
 		throw new Error(
@@ -176,7 +176,8 @@ export function spawnPty(
 			: []
 		: args
 	const useConptyDll = ensureBundledConptyDll()
-	// Profile env first, then agent hooks (`extraEnv`) so hooks win on conflict.
+	// Resolved spawn env (e.g. ZDOTDIR) then profile env, then agent hooks
+	// (`extraEnv`) so hooks win on conflict.
 	const profileEnv = profile.env ?? {}
 	const extra = opts?.extraEnv ?? {}
 	const pty = mod.spawn(finalShell, finalArgs, {
@@ -192,6 +193,7 @@ export function spawnPty(
 			...process.env,
 			TERM: 'xterm-256color',
 			COLORTERM: 'truecolor',
+			...(resolvedEnv ?? {}),
 			...profileEnv,
 			...extra,
 		} as Record<string, string>,

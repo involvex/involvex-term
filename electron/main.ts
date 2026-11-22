@@ -18,11 +18,17 @@ import {clearCwdPending, sniffCwd} from './cwdTracker.js'
 import {buildEnvHooks} from './envHooks.js'
 import {
 	checkoutBranch,
+	fetchRemote,
 	getGitDetails,
 	getGitStatus,
 	getRemoteUrl,
 	invalidateGitCache,
 	listBranches,
+	listChanges,
+	pullFfOnly,
+	pushCurrent,
+	stashPop,
+	stashPush,
 } from './gitEngine.js'
 import {buildMenu} from './hotkeys.js'
 import {getOpencodeStatus, opencodeAvailable} from './opencodeEngine.js'
@@ -568,6 +574,24 @@ function registerIpc() {
 		'git:remoteUrl',
 		async (_e, {cwd, remote}: {cwd: string; remote?: string} = {cwd: ''}) =>
 			getRemoteUrl(cwd, remote || 'origin'),
+	)
+	ipcMain.handle('git:fetch', async (_e, {cwd}: {cwd: string}) =>
+		fetchRemote(cwd),
+	)
+	ipcMain.handle('git:pull', async (_e, {cwd}: {cwd: string}) =>
+		pullFfOnly(cwd),
+	)
+	ipcMain.handle('git:push', async (_e, {cwd}: {cwd: string}) =>
+		pushCurrent(cwd),
+	)
+	ipcMain.handle('git:stash', async (_e, {cwd}: {cwd: string}) =>
+		stashPush(cwd),
+	)
+	ipcMain.handle('git:stashPop', async (_e, {cwd}: {cwd: string}) =>
+		stashPop(cwd),
+	)
+	ipcMain.handle('git:changes', async (_e, {cwd}: {cwd: string}) =>
+		listChanges(cwd),
 	)
 
 	// Live cwd per pty (tracked via OSC7) — used for session snapshots.

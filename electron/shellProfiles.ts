@@ -42,6 +42,106 @@ export const WSL_OSC9_ARGS = [
 	`eval $(echo ${Buffer.from(WSL_OSC9_SCRIPT).toString('base64')}|base64 -d);exec bash -i`,
 ]
 
+/**
+ * Linux bash: export OSC 7 PROMPT_COMMAND then exec an interactive shell.
+ * Login profile already ran under `bash --login -c`, so the exported hook
+ * survives into the interactive child (same pattern as WSL_OSC9).
+ */
+export const BASH_OSC7_SCRIPT =
+	`__it_osc7(){ printf '\\033]7;file://localhost%s\\007' "\${PWD// /%20}"; };` +
+	`PROMPT_COMMAND="__it_osc7\${PROMPT_COMMAND:+; $PROMPT_COMMAND}";` +
+	`export PROMPT_COMMAND;` +
+	`exec bash -i`
+
+/** Marker present in bash -c argv when OSC 7 injection is active. */
+export const BASH_OSC7_MARKER = 'file://localhost'
+
+/**
+ * Write a temporary ZDOTDIR that sources the user's zshrc/zprofile and adds
+ * a precmd OSC 7 hook. Spawn with env ZDOTDIR pointing here.
+ */
+export function ensureZshOsc7Zdotdir(): string {
+	const dir = path.join(os.tmpdir(), 'involvex-term-zsh-osc7')
+	fs.mkdirSync(dir, {recursive: true})
+	const userZdot = process.env['ZDOTDIR'] || os.homedir()
+	const q = (s: string) => s.replace(/'/g, `'\\''`)
+	const zprofile = `# involvex-term OSC7 — generated, safe to delete
+__it_user_zdot='${q(userZdot)}'
+if [ -f "$__it_user_zdot/.zprofile" ]; then
+  . "$__it_user_zdot/.zprofile"
+elif [ -f "$HOME/.zprofile" ]; then
+  . "$HOME/.zprofile"
+fi
+`
+	const zshrc = `# involvex-term OSC7 — generated, safe to delete
+__it_user_zdot='${q(userZdot)}'
+if [ -f "$__it_user_zdot/.zshrc" ]; then
+  . "$__it_user_zdot/.zshrc"
+elif [ -f "$HOME/.zshrc" ]; then
+  . "$HOME/.zshrc"
+fi
+__it_osc7() { print -n "\\033]7;file://localhost\${PWD// /%20}\\007"; }
+typeset -ga precmd_functions
+precmd_functions=(\${precmd_functions:#__it_osc7} __it_osc7)
+`
+	const writeIfChanged = (file: string, body: string) => {
+		try {
+			if (fs.existsSync(file) && fs.readFileSync(file, 'utf8') === body) return
+		} catch {
+			/* rewrite */
+		}
+		fs.writeFileSync(file, body, 'utf8')
+	}
+	writeIfChanged(path.join(dir, '.zprofile'), zprofile)
+	writeIfChanged(path.join(dir, '.zshrc'), zshrc)
+	return dir
+}
+
+function shellBasename(shell: string): string {
+	return path
+		.basename(shell)
+		.toLowerCase()
+		.replace(/\.(exe|cmd|bat)$/i, '')
+}
+
+function stripLoginFlags(args: string[]): string[] {
+	return args.filter(a => a !== '--login' && a !== '-l')
+}
+
+function wantsLogin(args: string[]): boolean {
+	return args.length === 0 || args.includes('--login') || args.includes('-l')
+}
+
+/** Linux bash/zsh spawn args + optional env for live OSC 7 cwd. */
+export function linuxOsc7Spawn(
+	shell: string,
+	extra: string[],
+): {args: string[]; env?: Record<string, string>} {
+	const base = shellBasename(shell)
+	const login = wantsLogin(extra)
+	const rest = stripLoginFlags(extra)
+	if (base === 'bash' || base === 'sh') {
+		const b64 = Buffer.from(BASH_OSC7_SCRIPT).toString('base64')
+		return {
+			args: [
+				...rest,
+				...(login ? ['--login'] : []),
+				'-c',
+				`eval "$(echo ${b64} | base64 -d)"`,
+			],
+		}
+	}
+	if (base === 'zsh') {
+		const zdot = ensureZshOsc7Zdotdir()
+		return {
+			args: [...rest, ...(login ? ['-l'] : []), '-i'],
+			env: {ZDOTDIR: zdot},
+		}
+	}
+	// Other shells (fish, …): keep login args; document that they must emit OSC 7.
+	return {args: extra.length ? extra : ['--login']}
+}
+
 const WIN = process.platform === 'win32'
 const SYSTEM_ROOT = process.env['SystemRoot'] ?? 'C:\\Windows'
 
@@ -129,19 +229,37 @@ export function resolveProfile(profile: ShellProfile): {
 	shell: string
 	args: string[]
 	available: boolean
+	/** Extra env for this spawn (e.g. ZDOTDIR for zsh OSC 7). */
+	env?: Record<string, string>
 } {
 	const extra = Array.isArray(profile.args) ? profile.args : []
 	if (profile.kind === 'custom') {
-		const shell = (profile.command ?? '').trim()
+		const shell =
+			(profile.command ?? '').trim() ||
+			(WIN ? findCmd() : process.env['SHELL'] || '/bin/bash')
+		if (!WIN) {
+			const osc = linuxOsc7Spawn(shell, extra)
+			return {
+				shell,
+				args: osc.args,
+				env: osc.env,
+				available: (profile.command ?? '').trim()
+					? exists((profile.command ?? '').trim())
+					: true,
+			}
+		}
 		return {
-			shell: shell || (WIN ? findCmd() : process.env['SHELL'] || '/bin/bash'),
-			args: extra.length ? extra : WIN ? [] : ['--login'],
-			available: shell ? exists(shell) : true,
+			shell,
+			args: extra,
+			available: (profile.command ?? '').trim()
+				? exists((profile.command ?? '').trim())
+				: true,
 		}
 	}
 	if (!WIN) {
 		const shell = process.env['SHELL'] || '/bin/bash'
-		return {shell, args: ['--login'], available: true}
+		const osc = linuxOsc7Spawn(shell, extra.length ? extra : ['--login'])
+		return {shell, args: osc.args, env: osc.env, available: true}
 	}
 	if (profile.kind === 'pwsh') {
 		const shell =

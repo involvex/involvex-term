@@ -69,6 +69,12 @@ Shipped in tree (see CHANGELOG 0.2.0 unreleased):
 5. ~~Win11 modern Explorer menu via IExplorerCommand + sparse MSIX (#12);
    classic HKCU remains default fallback; Authenticode signing optional~~
 
+## v0.10 — Git you can act on
+
+1. ~~Footer Git actions: fetch / pull (`--ff-only`) / push / stash / stash pop~~
+2. ~~Read-only Changes list (`name-status`) in the Git footer menu~~
+3. ~~Live OSC 7 cwd for Linux bash and zsh (footer + session honesty)~~
+
 ## Explicitly out of scope
 
 - Built-in SSH session manager (use `ssh` in the shell)
