@@ -1,23 +1,25 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Recent directories MRU from OSC 7 (new-tab ▾ menu + palette “New tab in …”)
+- App clipboard history ring (`Ctrl+Shift+V` cycles; Win+V untouched; optional
+  persist across restarts, off by default)
+- Recent commands in the palette (snippets / agent writes + OSC 633 shell
+  integration; Ctrl+R stays with the shell; Enter inserts without auto-run)
+- Import / export shell profiles independently of full settings
+
+### Changed
+
+- Docs: ROADMAP v0.10 shell memory; suggestions FEAT-006/008/015/024 shipped
+
 ## [0.9.3] - 2026-11-22
 
 ### Added
 
 - footer git actions and Linux OSC7 cwd
-
-### Changed
-
-- build(deps-dev): bump eslint-plugin-react-refresh from 0.5.7 to 0.5.8
-- build(deps-dev): bump prettier from 3.10.0 to 3.10.1
-- build(deps-dev): bump eslint from 10.14.0 to 10.15.0
-- build(deps-dev): bump electron from 45.1.0 to 45.4.1
-- build(deps): bump simple-git from 4.0.2 to 4.1.0
-
-## [Unreleased]
-
-### Added
-
 - Footer Git actions: Fetch, Pull (`--ff-only`), Push (never force), Stash,
   Stash pop — with confirm dialogs when the tree is dirty / ahead / behind
 - Git Changes view in the footer menu (read-only staged / unstaged / untracked
@@ -27,7 +29,12 @@
 
 ### Changed
 
-- Docs: ROADMAP v0.10; suggestions backlog marks FEAT-001/010/011/012/025 shipped
+- build(deps-dev): bump eslint-plugin-react-refresh from 0.5.7 to 0.5.8
+- build(deps-dev): bump prettier from 3.10.0 to 3.10.1
+- build(deps-dev): bump eslint from 10.14.0 to 10.15.0
+- build(deps-dev): bump electron from 45.1.0 to 45.4.1
+- build(deps): bump simple-git from 4.0.2 to 4.1.0
+- Docs: ROADMAP Git-actions batch; suggestions FEAT-001/010/011/012/025 shipped
 
 ## [0.9.2] - 2026-11-15
 

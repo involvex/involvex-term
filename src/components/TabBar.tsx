@@ -73,6 +73,11 @@ interface Props {
 	onSelect: (id: string) => void
 	onClose: (id: string) => void
 	onNew: (profileId?: string) => void
+	/** Recent directories for the new-tab ▾ menu. */
+	recentDirs?: string[]
+	onNewInDir?: (cwd: string) => void
+	/** Called when the profile ▾ menu opens so MRU stays fresh. */
+	onRefreshRecentDirs?: () => void
 	onRename: (id: string, title: string) => void
 	onReorder: (fromIndex: number, toIndex: number) => void
 	onMovePaneToTab: (
@@ -107,6 +112,9 @@ export default memo(function TabBar({
 	onSelect,
 	onClose,
 	onNew,
+	recentDirs = [],
+	onNewInDir,
+	onRefreshRecentDirs,
 	onRename,
 	onReorder,
 	onMovePaneToTab,
@@ -184,7 +192,11 @@ export default memo(function TabBar({
 	const openProfileMenu = () => {
 		const r = menuBtnRef.current?.getBoundingClientRect()
 		if (r) setMenuAnchor(r)
-		setMenuOpen(o => !o)
+		setMenuOpen(o => {
+			const next = !o
+			if (next) onRefreshRecentDirs?.()
+			return next
+		})
 	}
 
 	useLayoutEffect(() => {
@@ -656,6 +668,29 @@ export default memo(function TabBar({
 								{p.name}
 							</button>
 						))}
+						{recentDirs.length > 0 && onNewInDir && (
+							<>
+								<div
+									className="tab-profile-sep"
+									role="separator"
+								/>
+								<div className="tab-profile-heading">Recent folders</div>
+								{recentDirs.slice(0, 10).map(dir => (
+									<button
+										key={dir}
+										type="button"
+										className="tab-profile-item"
+										title={dir}
+										onClick={() => {
+											setMenuOpen(false)
+											onNewInDir(dir)
+										}}
+									>
+										{dir}
+									</button>
+								))}
+							</>
+						)}
 					</div>,
 					document.body,
 				)}

@@ -15,11 +15,16 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
   `Ctrl+Shift+D`
 - Split panes (binary tree, flat CSS grid) — horizontal `Shift+Alt+D`,
   vertical `Shift+Alt+V`, close `Shift+Alt+C`
-- Shell profiles: pwsh / Windows PowerShell / cmd / WSL via + ▾ or palette
+- Shell profiles: pwsh / Windows PowerShell / cmd / WSL via + ▾ or palette;
+  import / export profiles alone from Settings → Shell profiles
 - Tab rename (double-click) and drag-reorder
 - Theme presets in Settings (custom colors still work)
 - Background-pane completion toast when a hidden pane goes idle
 - Command palette (`Ctrl+Shift+P`) and find (`Ctrl+Shift+F`)
+- **Shell memory** — recent folders in the new-tab ▾ menu + palette; recent
+  commands in the palette (app-written lines + OSC 633 when the shell emits
+  them; `Ctrl+R` stays with the shell); clipboard history ring via
+  `Ctrl+Shift+V` (Win+V untouched; persist opt-in under Settings → Terminal)
 - **OpenCode** button / `Ctrl+Shift+O` — launches
   [OpenCode](https://opencode.ai) in the focused pane; click the footer
   `OC` widget to continue the matched session (`opencode -s <id>`)

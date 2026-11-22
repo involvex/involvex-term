@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'bun:test'
-import {sniffCwd} from '../../electron/cwdTracker.ts'
+import {decodeOsc633Command, sniffCwd} from '../../electron/cwdTracker.ts'
 
 describe('CWD Tracker OSC7 sniffing', () => {
 	it('extracts and strips OSC7 escape sequence', () => {
@@ -62,5 +62,31 @@ describe('CWD Tracker OSC7 sniffing', () => {
 			},
 		)
 		expect(capturedCwd.endsWith('new')).toBe(true)
+	})
+
+	it('decodes OSC 633 E escaped command lines', () => {
+		expect(decodeOsc633Command('git\\x20status;nonce')).toBe('git status')
+		expect(decodeOsc633Command('echo\\x20a\\x3bb')).toBe('echo a;b')
+	})
+
+	it('reports OSC 633 E commands and strips all 633 sequences', () => {
+		const cmds: string[] = []
+		let cwd = ''
+		const out = sniffCwd(
+			'tab-633',
+			'pre\x1b]633;E;bun\\x20test\x07\x1b]633;P;Cwd=/tmp/proj\x07mid\x1b]633;D;0\x07post',
+			{
+				onCwd: (_id, c) => {
+					cwd = c
+				},
+				onCommand: (_id, c) => {
+					cmds.push(c)
+				},
+			},
+		)
+		expect(cmds).toEqual(['bun test'])
+		expect(cwd.replace(/\\/g, '/').endsWith('tmp/proj')).toBe(true)
+		expect(out).toBe('premidpost')
+		expect(out).not.toContain('\x1b]633')
 	})
 })

@@ -155,6 +155,8 @@ export interface AppSettings {
 		/** Use @xterm/addon-webgl when available (smoother floods; GPU). */
 		webgl: boolean
 		cursorStyle: CursorStyle
+		/** Persist clipboard history ring across restarts (off by default). */
+		clipboardPersist: boolean
 		snippets: CommandSnippet[]
 		quickCommands: QuickCommand[]
 	}
@@ -351,6 +353,16 @@ export interface TermApiShape {
 	clipboardWrite: (text: string) => Promise<void>
 	clipboardRead: () => Promise<string>
 	clipboardHasImage: () => Promise<boolean>
+	/** Machine-local recent directories (existing paths only). */
+	memoryRecentDirs: () => Promise<string[]>
+	/** App-written + OSC 633 command lines, newest first. */
+	memoryRecentCommands: () => Promise<string[]>
+	/** Record a command the app wrote into a pane (snippets / agent). */
+	memoryRecordCommand: (command: string) => Promise<void>
+	memoryClipboardList: () => Promise<string[]>
+	memoryClipboardPush: (text: string) => Promise<void>
+	/** Next older clip for Ctrl+Shift+V cycling; null if empty. */
+	memoryClipboardCycle: () => Promise<string | null>
 	settingsGet: () => Promise<SettingsLoadResult>
 	settingsSet: (next: AppSettings) => Promise<SettingsSaveResult>
 	onSettingsChanged: (cb: (s: AppSettings) => void) => () => void
@@ -405,6 +417,18 @@ export interface TermApiShape {
 		 */
 		rejected?: string[]
 		/** Total rejected paths, which may exceed `rejected.length`. */
+		rejectedTotal?: number
+		error?: string
+	}>
+	settingsExportProfiles: () => Promise<{
+		ok: boolean
+		path?: string
+		error?: string
+	}>
+	settingsImportProfiles: () => Promise<{
+		ok: boolean
+		settings?: AppSettings
+		rejected?: string[]
 		rejectedTotal?: number
 		error?: string
 	}>

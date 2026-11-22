@@ -83,6 +83,7 @@ const PortableSchema = z.object({
 		scrollbar: z.boolean(),
 		webgl: z.boolean().optional(),
 		cursorStyle: z.enum(['block', 'underline', 'bar']).optional(),
+		clipboardPersist: z.boolean().optional(),
 		snippets: z.array(PortableSnippetSchema),
 		quickCommands: z.array(PortableQuickCommandSchema),
 	}),
@@ -348,6 +349,7 @@ export function extractPortable(
 			scrollbar: settings.terminal.scrollbar,
 			webgl: settings.terminal.webgl,
 			cursorStyle: settings.terminal.cursorStyle,
+			clipboardPersist: settings.terminal.clipboardPersist,
 			snippets: settings.terminal.snippets,
 			quickCommands: settings.terminal.quickCommands,
 		},
@@ -405,6 +407,10 @@ export function mergePortable(
 			webgl: portable.terminal.webgl ?? local.terminal.webgl ?? false,
 			cursorStyle:
 				portable.terminal.cursorStyle ?? local.terminal.cursorStyle ?? 'block',
+			clipboardPersist:
+				portable.terminal.clipboardPersist ??
+				local.terminal.clipboardPersist ??
+				false,
 			snippets: portable.terminal.snippets,
 			quickCommands: portable.terminal.quickCommands,
 		},

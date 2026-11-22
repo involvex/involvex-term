@@ -245,20 +245,8 @@ export default function TerminalView({
 		}
 		registerSearch(paneId, search)
 		const marks = createMarkController(term)
-		registerTermActions(paneId, {
-			clearBuffer: () => {
-				term.clear()
-				term.focus()
-			},
-			exportBuffer: () => serializeTerminalBuffer(term),
-			addMark: () => marks.addMark(),
-			jumpPrevMark: () => marks.jumpPrev(),
-			jumpNextMark: () => marks.jumpNext(),
-		})
-		term.open(el)
-		termRef.current = term
-		fitRef.current = fit
-
+		/** Bytes written by the last history cycle (for replace-on-repress). */
+		let historyPasteLen = 0
 		const copySelection = (): boolean => {
 			const sel = term.getSelection()
 			if (!sel) return false
@@ -271,6 +259,7 @@ export default function TerminalView({
 		// Single choke point for every paste gesture (see claimPaste).
 		const pasteClipboard = (): void => {
 			if (!claimPaste(paneId)) return
+			historyPasteLen = 0
 			term.focus()
 			if (api) {
 				void api
@@ -318,9 +307,39 @@ export default function TerminalView({
 					.catch(() => undefined)
 			}
 		}
+		/** Ctrl+Shift+V — walk the app clipboard ring (Win+V stays with the OS). */
+		const pasteHistory = (): void => {
+			if (!api?.memoryClipboardCycle) return
+			// No claimPaste gate: each press should advance the ring.
+			term.focus()
+			void api
+				.memoryClipboardCycle()
+				.then(text => {
+					if (!text) return
+					const erase = historyPasteLen > 0 ? '\b'.repeat(historyPasteLen) : ''
+					api.ptyWrite(paneId, erase + text)
+					historyPasteLen = text.length
+				})
+				.catch(() => undefined)
+		}
+		registerTermActions(paneId, {
+			clearBuffer: () => {
+				term.clear()
+				term.focus()
+			},
+			exportBuffer: () => serializeTerminalBuffer(term),
+			addMark: () => marks.addMark(),
+			jumpPrevMark: () => marks.jumpPrev(),
+			jumpNextMark: () => marks.jumpNext(),
+			pasteHistory,
+		})
+		term.open(el)
+		termRef.current = term
+		fitRef.current = fit
 
 		// Windows-Terminal style: Ctrl+C copies ONLY when text is selected
 		// (otherwise ^C still interrupts the shell), Ctrl+V pastes.
+		// Ctrl+Shift+V cycles the app clipboard ring (not Win+V).
 		// NOTE: returning false alone does NOT stop Chromium's native paste
 		// into xterm's hidden textarea (which xterm then forwards via onData).
 		// preventDefault + stopPropagation are required so ONLY the manual
@@ -338,7 +357,7 @@ export default function TerminalView({
 			if (ev.ctrlKey && ev.shiftKey && key === 'v') {
 				ev.preventDefault()
 				ev.stopPropagation()
-				pasteClipboard()
+				pasteHistory()
 				return false
 			}
 			if (modKey && !ev.altKey && key === 'c') {

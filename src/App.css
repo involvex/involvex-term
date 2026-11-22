@@ -294,6 +294,27 @@ select,
 	color: var(--accent);
 }
 
+.tab-profile-sep {
+	height: 1px;
+	margin: 4px 6px;
+	background: var(--border-default);
+}
+
+.tab-profile-heading {
+	padding: 4px 10px 2px;
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--text-muted, #888);
+}
+
+.tab-profile-menu .tab-profile-item {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 320px;
+}
+
 .tab-rename {
 	width: 100px;
 	max-width: 140px;
