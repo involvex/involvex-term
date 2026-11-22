@@ -69,6 +69,12 @@ export interface TermApi {
 	clipboardWrite: (text: string) => Promise<void>
 	clipboardRead: () => Promise<string>
 	clipboardHasImage: () => Promise<boolean>
+	memoryRecentDirs: () => Promise<string[]>
+	memoryRecentCommands: () => Promise<string[]>
+	memoryRecordCommand: (command: string) => Promise<void>
+	memoryClipboardList: () => Promise<string[]>
+	memoryClipboardPush: (text: string) => Promise<void>
+	memoryClipboardCycle: () => Promise<string | null>
 	settingsGet: () => Promise<{
 		settings: unknown
 		rejected: string[]
@@ -155,6 +161,18 @@ export interface TermApi {
 		ok: boolean
 		settings?: unknown
 		rejected?: string[]
+		error?: string
+	}>
+	settingsExportProfiles: () => Promise<{
+		ok: boolean
+		path?: string
+		error?: string
+	}>
+	settingsImportProfiles: () => Promise<{
+		ok: boolean
+		settings?: unknown
+		rejected?: string[]
+		rejectedTotal?: number
 		error?: string
 	}>
 	syncStatus: () => Promise<{
@@ -267,6 +285,14 @@ const api: TermApi = {
 	clipboardWrite: text => ipcRenderer.invoke('clipboard:write', {text}),
 	clipboardRead: () => ipcRenderer.invoke('clipboard:read'),
 	clipboardHasImage: () => ipcRenderer.invoke('clipboard:has-image'),
+	memoryRecentDirs: () => ipcRenderer.invoke('memory:recentDirs'),
+	memoryRecentCommands: () => ipcRenderer.invoke('memory:recentCommands'),
+	memoryRecordCommand: command =>
+		ipcRenderer.invoke('memory:recordCommand', {command}),
+	memoryClipboardList: () => ipcRenderer.invoke('memory:clipboardList'),
+	memoryClipboardPush: text =>
+		ipcRenderer.invoke('memory:clipboardPush', {text}),
+	memoryClipboardCycle: () => ipcRenderer.invoke('memory:clipboardCycle'),
 	settingsGet: () => ipcRenderer.invoke('settings:get'),
 	settingsSet: next => ipcRenderer.invoke('settings:set', next),
 	onSettingsChanged: cb => sub('settings:changed', cb as never),
@@ -292,6 +318,8 @@ const api: TermApi = {
 	contextMenu: action => ipcRenderer.invoke('shell:contextMenu', {action}),
 	settingsExport: () => ipcRenderer.invoke('settings:export'),
 	settingsImport: () => ipcRenderer.invoke('settings:import'),
+	settingsExportProfiles: () => ipcRenderer.invoke('settings:exportProfiles'),
+	settingsImportProfiles: () => ipcRenderer.invoke('settings:importProfiles'),
 	syncStatus: () => ipcRenderer.invoke('sync:status'),
 	syncValidate: () => ipcRenderer.invoke('sync:validate'),
 	syncSetClientId: clientId => ipcRenderer.invoke('sync:setClientId', clientId),

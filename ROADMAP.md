@@ -69,11 +69,18 @@ Shipped in tree (see CHANGELOG 0.2.0 unreleased):
 5. ~~Win11 modern Explorer menu via IExplorerCommand + sparse MSIX (#12);
    classic HKCU remains default fallback; Authenticode signing optional~~
 
-## v0.10 — Git you can act on
+## Git you can act on (shipped in v0.9.3)
 
 1. ~~Footer Git actions: fetch / pull (`--ff-only`) / push / stash / stash pop~~
 2. ~~Read-only Changes list (`name-status`) in the Git footer menu~~
 3. ~~Live OSC 7 cwd for Linux bash and zsh (footer + session honesty)~~
+
+## v0.10 — Shell memory
+
+1. Recent directories MRU (OSC 7) in new-tab ▾ menu + palette
+2. App clipboard history ring (`Ctrl+Shift+V`; Win+V untouched; persist opt-in)
+3. Recent commands in palette (app-written + OSC 633; Ctrl+R stays with the shell)
+4. Import / export shell profiles independently of full settings
 
 ## Explicitly out of scope
 

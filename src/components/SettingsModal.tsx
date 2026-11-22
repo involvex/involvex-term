@@ -66,6 +66,7 @@ const HOTKEY_ACTIONS: Array<{id: string; label: string}> = [
 	{id: 'zoom-out', label: 'Zoom out'},
 	{id: 'zoom-reset', label: 'Zoom reset'},
 	{id: 'clear-buffer', label: 'Clear buffer'},
+	{id: 'paste-history', label: 'Paste from clipboard history'},
 	{id: 'mark-prompt', label: 'Mark prompt'},
 	{id: 'prev-mark', label: 'Previous mark'},
 	{id: 'next-mark', label: 'Next mark'},
@@ -1198,6 +1199,26 @@ export default function SettingsModal({
 										Background pane completion toast
 									</label>
 									<label>
+										<input
+											type="checkbox"
+											checked={settings.terminal.clipboardPersist === true}
+											onChange={e =>
+												set({
+													terminal: {
+														...settings.terminal,
+														clipboardPersist: e.target.checked,
+													},
+												})
+											}
+										/>{' '}
+										Remember clipboard history across restarts
+									</label>
+									<p className="footer-dim">
+										Ctrl+Shift+V cycles clips this app copied or pasted (Win+V
+										stays with Windows). Persist is off by default — history can
+										hold secrets.
+									</p>
+									<label>
 										Scrollback lines{' '}
 										<input
 											type="number"
@@ -1279,6 +1300,52 @@ export default function SettingsModal({
 										<code>KEY=value</code> (one per line); they apply before
 										agent env hooks.
 									</p>
+									<div className="settings-btn-row">
+										<button
+											type="button"
+											className="settings-btn"
+											onClick={() => {
+												void termApi()
+													?.settingsExportProfiles()
+													.then(r => {
+														if (!r.ok)
+															onToast?.(r.error || 'Export failed', 4000)
+														else if (r.path)
+															onToast?.(`Exported profiles to ${r.path}`)
+													})
+											}}
+										>
+											Export profiles…
+										</button>
+										<button
+											type="button"
+											className="settings-btn"
+											onClick={() => {
+												void termApi()
+													?.settingsImportProfiles()
+													.then(r => {
+														if (!r.ok) {
+															onToast?.(r.error || 'Import failed', 4000)
+															return
+														}
+														if (r.settings) onChange(r.settings)
+														const stripped = (r.rejected ?? []).filter(p =>
+															p.includes('.command'),
+														)
+														if (stripped.length) {
+															onToast?.(
+																`Imported profiles; stripped ${stripped.length} command path(s) for safety`,
+																6000,
+															)
+														} else {
+															onToast?.('Imported profiles')
+														}
+													})
+											}}
+										>
+											Import profiles…
+										</button>
+									</div>
 									{settings.terminal.profiles.map((prof, idx) => (
 										<div
 											key={prof.id}

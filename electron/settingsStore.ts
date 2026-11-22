@@ -85,6 +85,7 @@ const HotkeysSchema = z.record(z.string(), z.string()).default({
 	'mark-prompt': 'Ctrl+Shift+M',
 	'prev-mark': 'Ctrl+Shift+Up',
 	'next-mark': 'Ctrl+Shift+Down',
+	'paste-history': 'Ctrl+Shift+V',
 	'check-updates': 'Ctrl+Shift+U',
 	'toggle-app': 'Ctrl+`',
 })
@@ -166,6 +167,11 @@ const TerminalSchema = z.object({
 	snippets: z.array(SnippetSchema).default(defaultSnippets()),
 	/** Compact buttons on the tab bar (left of agent). */
 	quickCommands: z.array(QuickCommandSchema).default([]),
+	/**
+	 * Persist the app clipboard history ring to shell-memory.json.
+	 * Off by default — clips can contain secrets.
+	 */
+	clipboardPersist: z.boolean().default(false),
 })
 
 const AgentToolSchema = z.object({
@@ -685,6 +691,42 @@ export function parseImportedSettings(raw: unknown): AppSettings {
 	for (const p of stripProfileCommands(settings)) rejected.add(p)
 	warnRejected('import', rejected)
 	return settings
+}
+
+/**
+ * Merge an imported profiles-only file into existing settings.
+ * Same command-strip trust rule as full settings import.
+ */
+export function mergeImportedProfiles(
+	current: AppSettings,
+	raw: unknown,
+): {settings: AppSettings; rejected: string[]} {
+	const rejected: string[] = []
+	const root =
+		raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null
+	const list = Array.isArray(root?.profiles)
+		? root.profiles
+		: Array.isArray(
+					(root?.terminal as {profiles?: unknown} | undefined)?.profiles,
+			  )
+			? (root!.terminal as {profiles: unknown[]}).profiles
+			: null
+	if (!list) {
+		rejected.push('profiles')
+		return {settings: current, rejected}
+	}
+	const draft = {
+		...current,
+		terminal: {
+			...current.terminal,
+			profiles: list as AppSettings['terminal']['profiles'],
+		},
+	}
+	const {settings, rejected: parseRejected} = parseSettingsLenient(draft)
+	for (const p of parseRejected) rejected.push(p)
+	for (const p of stripProfileCommands(settings)) rejected.push(p)
+	warnRejected('import', new Set(rejected))
+	return {settings, rejected}
 }
 
 function isValidSessionTab(t: unknown): t is {title: unknown; root: unknown} {

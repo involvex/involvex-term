@@ -2,11 +2,12 @@
 import {setCwd} from './ptyManager.js'
 
 // OSC 7: ESC ] 7 ; file://hostname/path ST  (ST = BEL \x07 or ESC \)
-// OSC 633: VS Code style fallback.
+// OSC 633: VS Code style — P;Cwd=… for cwd, E;command for executed line.
 // OSC 9;9: Windows Terminal / ConEmu "current directory" (plain path,
 // optionally quoted) — what WT-style pwsh `prompt` functions emit.
 const OSC7_RE = /\x1b\]7;file:\/\/[^/]*(\/[^\x07\x1b]*)(?:\x07|\x1b\\)/g
-const OSC633_RE = /\x1b\]633;P;Cwd=([^\x07\x1b]*)(?:\x07|\x1b\\)/g
+const OSC633_CWD_RE = /\x1b\]633;P;Cwd=([^\x07\x1b]*)(?:\x07|\x1b\\)/g
+const OSC633_CMD_RE = /\x1b\]633;E(?:;([^\x07\x1b]*))?(?:\x07|\x1b\\)/g
 const OSC9_9_RE = /\x1b\]9;9;([^\x07\x1b]*)(?:\x07|\x1b\\)/g
 
 function normalizeWinPath(s: string): string {
@@ -32,7 +33,37 @@ function decodeOsc9Path(p: string): string {
 	return normalizeWinPath(p.trim().replace(/^"(.*)"$/, '$1'))
 }
 
-const OSC_STARTS = ['7;file://', '633;P;Cwd=', '9;9;']
+/**
+ * VS Code shell-integration escapes `;` and other specials as `\xHH`.
+ * The optional nonce after the command is a second `;`-separated field;
+ * because `;` inside the command is escaped, a literal `;` always splits.
+ */
+export function decodeOsc633Command(raw: string | undefined): string {
+	if (!raw) return ''
+	const cmdPart = raw.split(';')[0] ?? ''
+	return cmdPart
+		.replace(/\\x([0-9a-fA-F]{2})/g, (_, h: string) =>
+			String.fromCharCode(Number.parseInt(h, 16)),
+		)
+		.replace(/\\\\/g, '\\')
+		.trim()
+}
+
+export interface CwdSniffHooks {
+	onCwd?: (tabId: string, cwd: string) => void
+	onCommand?: (tabId: string, command: string) => void
+}
+
+function normalizeHooks(
+	onChangeOrHooks?: ((tabId: string, cwd: string) => void) | CwdSniffHooks,
+): CwdSniffHooks {
+	if (!onChangeOrHooks) return {}
+	if (typeof onChangeOrHooks === 'function') return {onCwd: onChangeOrHooks}
+	return onChangeOrHooks
+}
+
+// Prefer a broad `633;` prefix so incomplete E/C/D/P sequences reassemble.
+const OSC_STARTS = ['7;file://', '633;', '9;9;']
 const MAX_PENDING = 4096
 const pending = new Map<string, string>()
 
@@ -57,7 +88,7 @@ function incompleteTailStart(data: string): number {
 export function sniffCwd(
 	tabId: string,
 	data: string,
-	onChange?: (tabId: string, cwd: string) => void,
+	onChangeOrHooks?: ((tabId: string, cwd: string) => void) | CwdSniffHooks,
 ): string {
 	// Fast path: bulk output (cat/build logs) never contains ESC ].
 	// Skip pending bookkeeping + regex work entirely in that case.
@@ -70,14 +101,14 @@ export function sniffCwd(
 	return sniffComplete(
 		tabId,
 		cut >= 0 ? combined.slice(0, cut) : combined,
-		onChange,
+		normalizeHooks(onChangeOrHooks),
 	)
 }
 
 function sniffComplete(
 	tabId: string,
 	data: string,
-	onChange?: (tabId: string, cwd: string) => void,
+	hooks: CwdSniffHooks,
 ): string {
 	// Fast path (belt & braces — sniffCwd already checked): no OSC
 	// introducer means no cwd and nothing to strip.
@@ -86,7 +117,7 @@ function sniffComplete(
 	let at = -1
 	const patterns: Array<[RegExp, (raw: string) => string]> = [
 		[OSC7_RE, decodeOscPath],
-		[OSC633_RE, decodeOscPath],
+		[OSC633_CWD_RE, decodeOscPath],
 		[OSC9_9_RE, decodeOsc9Path],
 	]
 	for (const [re, decode] of patterns) {
@@ -102,11 +133,22 @@ function sniffComplete(
 	}
 	if (cwd) {
 		setCwd(tabId, cwd)
-		onChange?.(tabId, cwd)
+		hooks.onCwd?.(tabId, cwd)
 	}
-	// Strip OSC sequences so xterm doesn't render garbage
+
+	if (hooks.onCommand) {
+		OSC633_CMD_RE.lastIndex = 0
+		let m: RegExpExecArray | null
+		while ((m = OSC633_CMD_RE.exec(data)) !== null) {
+			const cmd = decodeOsc633Command(m[1])
+			if (cmd) hooks.onCommand(tabId, cmd)
+		}
+	}
+
+	// Strip OSC sequences so xterm doesn't render garbage. All 633;* forms
+	// (cwd, command, prompt marks) are shell-integration noise.
 	return data
 		.replace(/\x1b\]7;file:\/\/[^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
-		.replace(/\x1b\]633;P;Cwd=[^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+		.replace(/\x1b\]633;[^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
 		.replace(/\x1b\]9;9;[^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
 }

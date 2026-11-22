@@ -69,6 +69,7 @@ import {
 	currentFileRejectedReport,
 	loadSession,
 	loadSettings,
+	mergeImportedProfiles,
 	parseImportedSettings,
 	rejectedSettingsReport,
 	saveSession,
@@ -88,6 +89,18 @@ import {
 	unlinkSync,
 	validateSyncToken,
 } from './settingsSync.js'
+import {
+	cycleClipboard,
+	listClipboardRing,
+	listRecentCommands,
+	listRecentDirs,
+	loadShellMemory,
+	recordClipboard,
+	recordRecentCommand,
+	recordRecentDir,
+	resetClipboardCycle,
+	setClipboardPersist,
+} from './shellMemory.js'
 import {getSysStats} from './sysEngine.js'
 import {destroyTray, setupTray} from './tray.js'
 import {
@@ -183,6 +196,8 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 
 let win: BrowserWindow | null = null
 let settings = loadSettings()
+loadShellMemory()
+setClipboardPersist(settings.terminal.clipboardPersist === true)
 let sysTimer: NodeJS.Timeout | null = null
 /** One chokidar watcher per repo root, shared by every pane inside it. */
 const gitWatchers = new Map<string, {watcher: FSWatcher; panes: Set<string>}>()
@@ -410,6 +425,7 @@ function stopSysLoop() {
 
 /** Re-apply menus/tray/quake/sys after settings change (import, sync pull, …). */
 async function applyLoadedSettings(): Promise<void> {
+	setClipboardPersist(settings.terminal.clipboardPersist === true)
 	if (!win || win.isDestroyed()) return
 	applyWindowMaterial(win, settings)
 	safeSend(win, 'settings:changed', settings)
@@ -481,14 +497,20 @@ function registerIpc() {
 					extraEnv,
 				})
 				entry.pty.onData((data: string) => {
-					// sniffCwd's onChange fires per chunk that carried a prompt OSC
+					// sniffCwd's onCwd fires per chunk that carried a prompt OSC
 					// (7/633/9;9) — the renderer's completion signal. Same-cwd
 					// re-prompts fire too, which is exactly what we want.
 					let sawPrompt = false
-					const cleaned = sniffCwd(id, data, (tabId, newCwd) => {
-						sawPrompt = true
-						setCwd(tabId, newCwd)
-						scheduleGitRefresh(tabId, newCwd)
+					const cleaned = sniffCwd(id, data, {
+						onCwd: (tabId, newCwd) => {
+							sawPrompt = true
+							setCwd(tabId, newCwd)
+							scheduleGitRefresh(tabId, newCwd)
+							recordRecentDir(newCwd)
+						},
+						onCommand: (_tabId, command) => {
+							recordRecentCommand(command)
+						},
 					})
 					// Prompt chunks flush immediately so the renderer sees output
 					// before pty:prompt; everything else joins the next turn.
@@ -799,6 +821,62 @@ function registerIpc() {
 		}
 	})
 
+	ipcMain.handle('settings:exportProfiles', async () => {
+		if (!win || win.isDestroyed()) return {ok: false, error: 'no window'}
+		const {canceled, filePath} = await dialog.showSaveDialog(win, {
+			title: 'Export shell profiles',
+			defaultPath: 'involvex-term-profiles.json',
+			filters: [{name: 'JSON', extensions: ['json']}],
+		})
+		if (canceled || !filePath) return {ok: false, error: 'canceled'}
+		try {
+			const payload = {
+				version: 1,
+				profiles: settings.terminal.profiles,
+			}
+			fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8')
+			return {ok: true, path: filePath}
+		} catch (e) {
+			return {ok: false, error: e instanceof Error ? e.message : String(e)}
+		}
+	})
+
+	ipcMain.handle('settings:importProfiles', async () => {
+		if (!win || win.isDestroyed()) return {ok: false, error: 'no window'}
+		const {canceled, filePaths} = await dialog.showOpenDialog(win, {
+			title: 'Import shell profiles',
+			filters: [{name: 'JSON', extensions: ['json']}],
+			properties: ['openFile'],
+		})
+		if (canceled || !filePaths[0]) return {ok: false, error: 'canceled'}
+		try {
+			const raw = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'))
+			const {settings: merged, rejected} = mergeImportedProfiles(settings, raw)
+			settings = saveSettings(merged)
+			bumpLocalUpdatedAt()
+			await applyLoadedSettings()
+			return {
+				ok: true,
+				settings,
+				rejected,
+				rejectedTotal: rejected.length,
+			}
+		} catch (e) {
+			return {ok: false, error: e instanceof Error ? e.message : String(e)}
+		}
+	})
+
+	ipcMain.handle('memory:recentDirs', () => listRecentDirs())
+	ipcMain.handle('memory:recentCommands', () => listRecentCommands())
+	ipcMain.handle('memory:recordCommand', (_e, {command}: {command: string}) => {
+		if (typeof command === 'string') recordRecentCommand(command)
+	})
+	ipcMain.handle('memory:clipboardList', () => listClipboardRing())
+	ipcMain.handle('memory:clipboardPush', (_e, {text}: {text: string}) => {
+		if (typeof text === 'string') recordClipboard(text)
+	})
+	ipcMain.handle('memory:clipboardCycle', () => cycleClipboard())
+
 	ipcMain.handle('sync:status', () => getSyncStatus())
 	ipcMain.handle('sync:validate', () => validateSyncToken())
 	ipcMain.handle('sync:setClientId', (_e, clientId: string) =>
@@ -847,9 +925,18 @@ function registerIpc() {
 	ipcMain.handle('update:status', () => getUpdateStatus())
 
 	ipcMain.handle('clipboard:write', (_e, {text}: {text: string}) => {
-		clipboard.writeText(text ?? '')
+		const t = text ?? ''
+		clipboard.writeText(t)
+		if (t.trim()) recordClipboard(t)
 	})
-	ipcMain.handle('clipboard:read', () => clipboard.readText())
+	ipcMain.handle('clipboard:read', async () => {
+		const t = await Promise.resolve(clipboard.readText())
+		if (t?.trim()) {
+			recordClipboard(t)
+			resetClipboardCycle()
+		}
+		return t
+	})
 	// Image paste probe: foreground TUIs with native image paste (e.g.
 	// opencode) read the clipboard themselves when they see the Ctrl+V
 	// keypress — the emulator only needs to forward it, so this reports

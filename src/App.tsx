@@ -128,6 +128,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 		'mark-prompt': 'Ctrl+Shift+M',
 		'prev-mark': 'Ctrl+Shift+Up',
 		'next-mark': 'Ctrl+Shift+Down',
+		'paste-history': 'Ctrl+Shift+V',
 		'check-updates': 'Ctrl+Shift+U',
 		'toggle-app': 'Ctrl+`',
 	},
@@ -146,6 +147,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 		scrollbar: true,
 		webgl: false,
 		cursorStyle: 'block',
+		clipboardPersist: false,
 		snippets: [
 			{
 				id: 'git-status',
@@ -231,6 +233,10 @@ export default function App() {
 	const [sys, setSys] = useState<SysStats | null>(null)
 	/** Branches loaded while the palette is open (for checkout commands). */
 	const [paletteBranches, setPaletteBranches] = useState<string[]>([])
+	/** Machine-local shell memory (dirs / commands / clipboard ring). */
+	const [recentDirs, setRecentDirs] = useState<string[]>([])
+	const [recentCommands, setRecentCommands] = useState<string[]>([])
+	const [clipboardClips, setClipboardClips] = useState<string[]>([])
 	const [cwd, setCwd] = useState('')
 	const [searchOpen, setSearchOpen] = useState(false)
 	const [paletteOpen, setPaletteOpen] = useState(false)
@@ -458,6 +464,7 @@ export default function App() {
 		const tab = tabsRef.current.find(t => t.id === activeRef.current)
 		const paneId = tab?.activePaneId
 		if (!paneId) return
+		void api.memoryRecordCommand?.(cmd)
 		api.ptyWrite(paneId, '\x03')
 		setTimeout(() => api.ptyWrite(paneId, `${cmd}\r`), 50)
 		return paneId
@@ -521,7 +528,28 @@ export default function App() {
 		const tab = tabsRef.current.find(t => t.id === activeRef.current)
 		const paneId = tab?.activePaneId
 		if (!paneId) return
+		void api.memoryRecordCommand?.(command)
 		api.ptyWrite(paneId, sendEnter ? `${command}\r` : command)
+	}, [])
+
+	const writeRecentCommand = useCallback((command: string) => {
+		const api = termApi()
+		if (!api) return
+		const tab = tabsRef.current.find(t => t.id === activeRef.current)
+		const paneId = tab?.activePaneId
+		if (!paneId) return
+		// Write without Enter so the user can edit before running.
+		api.ptyWrite(paneId, command)
+	}, [])
+
+	const pasteClipboardClip = useCallback((text: string) => {
+		const api = termApi()
+		if (!api) return
+		const tab = tabsRef.current.find(t => t.id === activeRef.current)
+		const paneId = tab?.activePaneId
+		if (!paneId) return
+		void api.memoryClipboardPush?.(text)
+		api.ptyWrite(paneId, text)
 	}, [])
 
 	const checkoutBranch = useCallback(
@@ -803,6 +831,30 @@ export default function App() {
 			cancelled = true
 		}
 	}, [paletteOpen, git?.cwd, git?.repoRoot, cwd])
+
+	// Refresh shell-memory rows when the palette opens (async IPC → setState
+	// in the continuation, same pattern as paletteBranches).
+	useEffect(() => {
+		if (!paletteOpen) return
+		const api = termApi()
+		if (!api?.memoryRecentDirs) return
+		let cancelled = false
+		void Promise.all([
+			api.memoryRecentDirs(),
+			api.memoryRecentCommands(),
+			api.memoryClipboardList(),
+		])
+			.then(([dirs, cmds, clips]) => {
+				if (cancelled) return
+				setRecentDirs(dirs)
+				setRecentCommands(cmds)
+				setClipboardClips(clips)
+			})
+			.catch(() => undefined)
+		return () => {
+			cancelled = true
+		}
+	}, [paletteOpen])
 
 	const closeTab = useCallback(async (id: string) => {
 		const tab = tabsRef.current.find(t => t.id === id)
@@ -1376,6 +1428,9 @@ export default function App() {
 			} else if (hit('clear-buffer', 'Ctrl+Shift+K')) {
 				e.preventDefault()
 				activePaneActions()?.clearBuffer()
+			} else if (hit('paste-history', 'Ctrl+Shift+V')) {
+				e.preventDefault()
+				activePaneActions()?.pasteHistory()
 			} else if (hit('mark-prompt', 'Ctrl+Shift+M')) {
 				e.preventDefault()
 				activePaneActions()?.addMark()
@@ -1648,6 +1703,37 @@ export default function App() {
 				hint: p.id === settings.terminal.defaultProfileId ? 'default' : p.kind,
 				run: () => addTab(undefined, p.id),
 			})),
+			...recentDirs.slice(0, 12).map((dir, i) => ({
+				id: `cmd:recent-dir-${i}-${dir}`,
+				title: `New tab in ${dir}`,
+				hint: 'recent',
+				run: () => addTab(dir),
+			})),
+			...recentCommands.slice(0, 16).map((cmd, i) => ({
+				id: `cmd:recent-cmd-${i}-${cmd.slice(0, 40)}`,
+				title: `Recent: ${cmd.length > 64 ? `${cmd.slice(0, 63)}…` : cmd}`,
+				hint: 'no Enter',
+				run: () => writeRecentCommand(cmd),
+			})),
+			...clipboardClips.slice(0, 12).map((clip, i) => {
+				const oneLine = clip.replace(/\s+/g, ' ').trim()
+				const label =
+					oneLine.length > 48
+						? `${oneLine.slice(0, 47)}…`
+						: oneLine || '(empty)'
+				return {
+					id: `cmd:clip-${i}-${oneLine.slice(0, 24)}`,
+					title: `Clipboard: ${label}`,
+					hint: 'history',
+					run: () => pasteClipboardClip(clip),
+				}
+			}),
+			{
+				id: 'cmd:paste-history',
+				title: 'Paste from clipboard history',
+				hint: settings.hotkeys['paste-history'] || 'Ctrl+Shift+V',
+				run: () => activePaneActions()?.pasteHistory(),
+			},
 			{
 				id: 'cmd:toggle-git',
 				title: settings.footer.showGit ? 'Hide Git status' : 'Show Git status',
@@ -1718,6 +1804,11 @@ export default function App() {
 			checkoutBranch,
 			git?.branch,
 			saveSettings,
+			recentDirs,
+			recentCommands,
+			clipboardClips,
+			writeRecentCommand,
+			pasteClipboardClip,
 		],
 	)
 
@@ -1747,6 +1838,15 @@ export default function App() {
 		(profileId?: string) => addTab(undefined, profileId),
 		[addTab],
 	)
+	const handleNewTabInDir = useCallback((dir: string) => addTab(dir), [addTab])
+	const handleRefreshRecentDirs = useCallback(() => {
+		const api = termApi()
+		if (!api?.memoryRecentDirs) return
+		void api
+			.memoryRecentDirs()
+			.then(dirs => setRecentDirs(dirs))
+			.catch(() => undefined)
+	}, [])
 	const handleDuplicateTabId = useCallback(
 		(id: string) => void duplicateTab(id),
 		[duplicateTab],
@@ -1820,6 +1920,9 @@ export default function App() {
 						onSelect={selectTab}
 						onClose={handleCloseTabId}
 						onNew={handleNewTab}
+						recentDirs={recentDirs}
+						onNewInDir={handleNewTabInDir}
+						onRefreshRecentDirs={handleRefreshRecentDirs}
 						onRename={renameTab}
 						onReorder={reorderTabs}
 						onMovePaneToTab={movePaneToTab}

@@ -320,3 +320,29 @@ describe('parseImportedSettings: profile commands are not imported', () => {
 		expect(store.rejectedSettingsPaths('import')).toEqual([])
 	})
 })
+
+describe('mergeImportedProfiles', () => {
+	it('replaces profiles and strips foreign commands', async () => {
+		const store = await storeWithScratchHome()
+		const current = store.defaultSettings()
+		const {settings, rejected} = store.mergeImportedProfiles(current, {
+			version: 1,
+			profiles: [
+				{
+					id: 'payload',
+					name: 'Evil',
+					kind: 'custom',
+					command: 'C:\\evil.exe',
+					args: ['--silent'],
+				},
+				{id: 'cmd', name: 'Command Prompt', kind: 'cmd'},
+			],
+		})
+		expect(settings.terminal.profiles.some(p => p.id === 'payload')).toBe(true)
+		const evil = settings.terminal.profiles.find(p => p.id === 'payload')
+		expect(evil?.command).toBeUndefined()
+		expect(rejected.some(p => p.includes('.command'))).toBe(true)
+		// Unrelated settings stay put.
+		expect(settings.theme.bg).toBe(current.theme.bg)
+	})
+})

@@ -7,6 +7,8 @@ export interface TermActions {
 	addMark: () => void
 	jumpPrevMark: () => void
 	jumpNextMark: () => void
+	/** Paste the next older entry from the app clipboard ring. */
+	pasteHistory: () => void
 }
 
 const registry = new Map<string, TermActions>()

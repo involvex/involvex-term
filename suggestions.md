@@ -1,37 +1,38 @@
 # Involvex-Term Feature Suggestions
 
-Living backlog (refreshed for **v0.9.x**). Struck items shipped; keep IDs stable.
+Living backlog (refreshed for **v0.10**). Struck items shipped; keep IDs stable.
 
 ## Shipped (do not re-open)
 
 | ID       | Notes                                                         |
 | -------- | ------------------------------------------------------------- |
-| FEAT-001 | Footer Git fetch / pull / push / stash / stash pop (v0.10)    |
+| FEAT-001 | Footer Git fetch / pull / push / stash / stash pop (v0.9.3)   |
 | FEAT-002 | Multi-pane search within a tab                                |
 | FEAT-003 | Cross-tab pane drag-and-drop                                  |
 | FEAT-004 | Lazy pane hydration (xterm/ConPTY on first focus)             |
+| FEAT-006 | Import/export profiles independently of full settings (v0.10) |
+| FEAT-008 | Recent commands in palette (OSC 633 + app-written; no Ctrl+R) |
 | FEAT-009 | Per-profile environment variables (Settings → Shell profiles) |
-| FEAT-010 | Read-only Changes list in Git footer (name-status; v0.10)     |
+| FEAT-010 | Read-only Changes list in Git footer (name-status; v0.9.3)    |
 | FEAT-011 | Git watcher refresh debounce (250ms in main)                  |
 | FEAT-012 | Pane split ratios persisted in session restore                |
 | FEAT-014 | Cursor style (block / underline / bar) in Terminal settings   |
+| FEAT-015 | Clipboard history ring (Ctrl+Shift+V; persist opt-in; v0.10)  |
+| FEAT-024 | Recent directories in new-tab menu + palette (v0.10)          |
 | FEAT-025 | Sys stats loop skips when footer sys hidden / window hidden   |
 
 ## High Priority
 
-| ID       | Category      | Description                                                          | Impact | Effort |
-| -------- | ------------- | -------------------------------------------------------------------- | ------ | ------ |
-| FEAT-005 | Security      | Warn before running plugins from untrusted sources (signature check) | Medium | Low    |
-| FEAT-006 | Configuration | Import/export profiles independently of full settings                | Medium | Low    |
+| ID       | Category | Description                                                          | Impact | Effort |
+| -------- | -------- | -------------------------------------------------------------------- | ------ | ------ |
+| FEAT-005 | Security | Warn before running plugins from untrusted sources (signature check) | Medium | Low    |
 
 ## Medium Priority
 
-| ID       | Category      | Description                                                      | Impact | Effort |
-| -------- | ------------- | ---------------------------------------------------------------- | ------ | ------ |
-| FEAT-007 | Accessibility | Text-to-speech readout for background pane completion            | Medium | Low    |
-| FEAT-008 | Productivity  | Command history search (Ctrl+R reverse-i-search style)           | Medium | Medium |
-| FEAT-013 | Security      | sandbox plugin filesystem access (restrict to plugin dir only)   | Medium | Medium |
-| FEAT-015 | Productivity  | Clipboard history ring (Ctrl+Shift+V cycle through recent clips) | Medium | Medium |
+| ID       | Category      | Description                                                    | Impact | Effort |
+| -------- | ------------- | -------------------------------------------------------------- | ------ | ------ |
+| FEAT-007 | Accessibility | Text-to-speech readout for background pane completion          | Medium | Low    |
+| FEAT-013 | Security      | sandbox plugin filesystem access (restrict to plugin dir only) | Medium | Medium |
 
 ## Low Priority
 
@@ -45,12 +46,11 @@ Living backlog (refreshed for **v0.9.x**). Struck items shipped; keep IDs stable
 | FEAT-021 | Accessibility | High-contrast theme preset                                     | Low    | Low    |
 | FEAT-022 | Configuration | Per-project auto-start profiles (auto-switch shell per repo)   | Low    | Medium |
 | FEAT-023 | Security      | Plugin sandboxing via Node.js vm module                        | Low    | High   |
-| FEAT-024 | Productivity  | Quick access to recently used directories in new-tab menu      | Low    | Low    |
 
 ## Follow-ups from v0.9.2 / v0.10
 
 - Authenticode-sign the sparse Explorer MSIX so Win11 top-level menu works without Developer Mode
-- Full inline diff viewer (FEAT-010 was reduced to a name-status list in v0.10)
+- Full inline diff viewer (FEAT-010 was reduced to a name-status list in v0.9.3)
 - Commit UI stays out of scope (use the shell)
 
 ---
@@ -69,5 +69,4 @@ Living backlog (refreshed for **v0.9.x**). Struck items shipped; keep IDs stable
 ### Remaining gaps
 
 - Plugin security is trust-based; no signature/sandboxing (electron/pluginManager.ts)
-- No clipboard history or shell-side command history UI
 - No in-app git commit UI (intentional — use the shell)
