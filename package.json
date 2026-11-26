@@ -32,6 +32,7 @@
 		"build:explorer-command": "bun scripts/build-explorer-command.mjs",
 		"build:release": "tsc && vite build && bun scripts/rebuild-pty.mjs && bun scripts/build-explorer-command.mjs && electron-builder --publish never",
 		"build:store": "bun scripts/build-store.mjs",
+		"commit:store": "bun scripts/commit-store-submission.mjs",
 		"dev": "vite",
 		"format": "prettier . --write",
 		"format:check": "prettier . --check",

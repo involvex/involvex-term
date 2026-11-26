@@ -1,8 +1,9 @@
 /**
  * Publish a built Store .msix as a Partner Center draft (--noCommit).
- * First-ever submission must still be completed in Partner Center UI.
+ * First-ever submission often still needs Partner Center for age ratings /
+ * listing; this uploads the package into a draft when the API allows.
  *
- * Usage: bun scripts/publish-store.mjs [path-to.msix]
+ * Usage: bun scripts/publish-store.mjs [path-to.msix-or-dir]
  */
 import {spawnSync} from 'node:child_process'
 import fs from 'node:fs'
@@ -39,34 +40,64 @@ const version = pkg.version
 const outDir = path.join(ROOT, 'release', version)
 
 let input = process.argv[2]
-if (!input) {
-	const candidates = fs.existsSync(outDir)
-		? fs
-				.readdirSync(outDir)
-				.filter(n => n.toLowerCase().endsWith('.msix'))
-				.map(n => path.join(outDir, n))
-		: []
-	if (candidates.length === 0) {
-		console.error(
-			'[publish-store] No .msix found. Run `bun run build:store` first, or pass a path.',
-		)
-		process.exit(1)
+let inputDir = outDir
+if (input) {
+	const st = fs.statSync(input)
+	if (st.isDirectory()) inputDir = input
+	else inputDir = path.dirname(input)
+} else {
+	const preferred = path.join(outDir, `involvex-term-${version}.msix`)
+	if (!fs.existsSync(preferred)) {
+		const candidates = fs.existsSync(outDir)
+			? fs
+					.readdirSync(outDir)
+					.filter(n => n.toLowerCase().endsWith('.msix'))
+					.map(n => path.join(outDir, n))
+			: []
+		if (candidates.length === 0) {
+			console.error(
+				'[publish-store] No .msix found. Run `bun run build:store` first, or pass a path.',
+			)
+			process.exit(1)
+		}
 	}
-	input = candidates.sort().at(-1)
 }
 
-const args = ['publish', input, '--noCommit']
 const appId = process.env.STORE_PRODUCT_ID
-if (appId) {
-	args.push('--appId', appId)
+if (!appId) {
+	console.error(
+		'[publish-store] STORE_PRODUCT_ID unset — set it in store-identity.env',
+	)
+	process.exit(1)
 }
 
-console.log('[publish-store]', 'msstore', args.join(' '))
+// Pass the package directory as pathOrUrl so the Electron configurator does
+// not run `npm install` in the repo root. Prefer a space-free .msix name.
+const args = [
+	'publish',
+	inputDir,
+	'--inputDirectory',
+	inputDir,
+	'--appId',
+	appId,
+	'--noCommit',
+	'--priceId',
+	'Free',
+	'--uploadTimeout',
+	'600',
+]
+
+console.log(
+	'[publish-store]',
+	'msstore',
+	args.map(a => (/\s/.test(a) ? `"${a}"` : a)).join(' '),
+)
 const r = spawnSync('msstore', args, {
 	cwd: ROOT,
 	stdio: 'inherit',
-	shell: true,
+	shell: false,
 	env: process.env,
+	windowsVerbatimArguments: false,
 })
 if (r.error?.code === 'ENOENT') {
 	console.error(
