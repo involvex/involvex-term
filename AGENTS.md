@@ -11,6 +11,8 @@ bun run dev                # dev (vite + Electron)
 bun run rebuild           # FORCE full node-pty rebuild (slow, rarely needed)
 bun run build             # tsc + vite + node-pty rebuild + electron-builder + link-latest
 bun run build:store       # Store APPX/MSIX (docs/STORE.md; needs store-identity.env)
+bun run publish:store     # upload .msix draft (--noCommit); first IARC must be Partner Center
+bun run commit:store      # msstore submission publish after age ratings exist
 bun run link:latest       # release/latest → current win-unpacked (junction)
 bun run link:desktop      # Desktop Involvex-Term.lnk → release/latest/involvex-term.exe
 bunx tsc --noEmit         # ground truth for types (opencode LSP reports false electron errors)
@@ -105,3 +107,23 @@ bunx tsc --noEmit
 bun run lint
 bun run format:check
 ```
+
+## Current work
+
+Microsoft Store **Involvex Term** (`9NBNBH9CJ507`) Submission 1 is **In
+certification** (pre-processing passed). Dual-channel NSIS + Store APPX is
+live in-repo; later updates via `bun run build:store` / `publish:store`.
+See `docs/STORE.md` and `docs/store/submission-notes.md`.
+
+## Learned preferences
+
+- Dual-channel: keep GitHub NSIS + Store APPX; do not run `msstore init` (Bun).
+
+## Learned workspace facts
+
+- Store identity: `Einzelunternehmen.InvolvexTerm` /
+  `CN=50777D18-6AA9-43B0-9CE5-BB776BC9514F` / PublisherDisplayName `involvex`
+- Store ID `9NBNBH9CJ507` · PFN `Einzelunternehmen.InvolvexTerm_nk2dxr82q950t`
+- Protocol: `ms-windows-store://pdp/?productid=9NBNBH9CJ507`
+- Local identity file: `store-identity.env` (gitignored); template
+  `store-identity.example.env`

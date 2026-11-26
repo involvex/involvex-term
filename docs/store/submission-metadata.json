@@ -1,0 +1,56 @@
+{
+	"applicationCategory": "DeveloperTools",
+	"hardwarePreferences": [],
+	"notesForCertification": "runFullTrust is required: Involvex Term is a terminal emulator that must spawn user shells via ConPTY, access the real filesystem, and run developer CLIs. Closing the window quits by default on Store builds. Third-party plugins are off by default and unsandboxed if enabled.",
+	"meetAccessibilityGuidelines": false,
+	"canInstallOnRemovableMedia": true,
+	"automaticBackupEnabled": false,
+	"isGameDvrEnabled": false,
+	"hasExternalInAppProducts": false,
+	"allowMicrosoftDecideAppAvailabilityToFutureDeviceFamilies": true,
+	"allowTargetFutureDeviceFamilies": {
+		"Desktop": true,
+		"Mobile": false,
+		"Xbox": false,
+		"Holographic": false
+	},
+	"pricing": {
+		"priceId": "Free",
+		"trialPeriod": "NoFreeTrial",
+		"marketSpecificPricings": {}
+	},
+	"visibility": "Public",
+	"targetPublishMode": "Immediate",
+	"listings": {
+		"en-us": {
+			"baseListing": {
+				"copyrightAndTrademarkInfo": "",
+				"keywords": [
+					"terminal",
+					"powershell",
+					"git",
+					"developer",
+					"console",
+					"cmd",
+					"wsl"
+				],
+				"licenseTerms": "",
+				"privacyPolicy": "https://involvex.github.io/involvex-term/privacy.html",
+				"supportContact": "https://github.com/involvex/involvex-term/issues",
+				"websiteUrl": "https://involvex.github.io/involvex-term/",
+				"description": "Involvex Term is a Git-aware desktop terminal built with Electron, xterm.js, and ConPTY (node-pty).\n\nHighlights\n- Dark theme tuned for long coding sessions\n- Tabs and split panes (horizontal / vertical)\n- Live Git status in the footer (branch, dirty counts, fetch/pull/push/stash)\n- Shell profiles: PowerShell 7, Windows PowerShell, cmd, WSL\n- OpenCode launch and session continue from the UI\n- Session restore, system tray, optional quake dropdown\n- Command palette, find-in-buffer, snippets\n- Optional settings sync via private GitHub Gist (Device Code login)\n\nUpdates\nStore installs update through the Microsoft Store. GitHub Releases auto-update applies only to the separate NSIS installer from GitHub.\n\nPrivacy\nhttps://involvex.github.io/involvex-term/privacy.html",
+				"features": [
+					"Tabs and split panes with live Git footer",
+					"PowerShell, cmd, and WSL shell profiles",
+					"Windows Terminal-style copy/paste",
+					"OpenCode hooks and command palette",
+					"Optional private Gist settings sync"
+				],
+				"releaseNotes": "Initial Microsoft Store release of Involvex Term 0.10.0. Store builds update through the Microsoft Store only.",
+				"shortDescription": "Minimalist dark Git-aware terminal for Windows: tabs, split panes, live Git footer, and Windows Terminal-style copy/paste.",
+				"title": "Involvex Term",
+				"images": []
+			}
+		}
+	}
+}
