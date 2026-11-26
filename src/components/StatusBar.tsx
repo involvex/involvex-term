@@ -155,8 +155,11 @@ export const GitWidget = memo(function GitWidget({
 	}
 
 	const dirtyCount = status.staged + status.unstaged + status.untracked
-	const sync =
-		status.ahead > 0 || status.behind > 0
+	// Fast-path status zeros ahead/behind — do not show a false ✓ until
+	// getGitDetails has run (footer menu open).
+	const sync = !status.syncKnown
+		? ''
+		: status.ahead > 0 || status.behind > 0
 			? ` ↑${status.ahead} ↓${status.behind}`
 			: ' ✓'
 	const tip = [

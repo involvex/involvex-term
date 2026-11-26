@@ -6,6 +6,7 @@ import {
 	type PaletteCommand,
 } from '../commands'
 import {focusTerm} from '../lib/focusTerm'
+import {trapFocus} from '../lib/focusTrap'
 
 interface Props {
 	tabId: string
@@ -25,8 +26,13 @@ export default function CommandPalette({tabId, commands, onClose}: Props) {
 		[commands, filter, mru],
 	)
 
+	const dialogRef = useRef<HTMLDivElement>(null)
+	const activeId = visible[index]?.id
+
 	useEffect(() => {
-		inputRef.current?.focus()
+		const el = dialogRef.current
+		if (!el) return
+		return trapFocus(el)
 	}, [])
 
 	useEffect(() => {
@@ -54,14 +60,22 @@ export default function CommandPalette({tabId, commands, onClose}: Props) {
 			onClick={close}
 		>
 			<div
+				ref={dialogRef}
 				className="modal palette"
 				onClick={e => e.stopPropagation()}
 				role="dialog"
+				aria-modal="true"
 				aria-label="Command palette"
 			>
 				<input
 					ref={inputRef}
 					type="text"
+					role="combobox"
+					aria-expanded="true"
+					aria-controls="palette-listbox"
+					aria-activedescendant={
+						activeId ? `palette-opt-${activeId}` : undefined
+					}
 					value={filter}
 					placeholder="Type a command, branch, session, or tab…"
 					aria-label="Command palette"
@@ -86,6 +100,7 @@ export default function CommandPalette({tabId, commands, onClose}: Props) {
 					}}
 				/>
 				<div
+					id="palette-listbox"
 					className="palette-list"
 					ref={listRef}
 					role="listbox"
@@ -93,6 +108,7 @@ export default function CommandPalette({tabId, commands, onClose}: Props) {
 					{visible.map((c, i) => (
 						<div
 							key={c.id}
+							id={`palette-opt-${c.id}`}
 							role="option"
 							aria-selected={i === index}
 							data-selected={i === index}

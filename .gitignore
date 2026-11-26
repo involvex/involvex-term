@@ -13,9 +13,13 @@ dist-electron
 dist-ssr
 release
 build
+# Store APPX logos (electron-builder buildResources); keep under resources/
+# so they are not wiped by the `build` ignore above.
 coverage
 *.tsbuildinfo
 *.local
+store-identity.env
+!store-identity.example.env
 
 # Native Explorer-command build outputs (keep out/.gitkeep)
 native/explorer-command/out/**

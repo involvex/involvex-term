@@ -9,6 +9,8 @@ export interface GitStatus {
 	ahead: number
 	behind: number
 	stashCount: number
+	/** True after stash + ahead/behind enrichment (footer menu / getDetails). */
+	syncKnown?: boolean
 }
 
 export interface SysStats {
@@ -119,6 +121,7 @@ export interface UpdateStatus {
 		| 'downloading'
 		| 'downloaded'
 		| 'error'
+		| 'store'
 	version?: string
 	currentVersion: string
 	message?: string
@@ -186,7 +189,13 @@ export interface AppSettings {
 		acrylic: boolean
 		checkUpdatesOnStartup: boolean
 	}
-	tray: {enabled: boolean; minimizeToTray: boolean; closeToTray: boolean}
+	tray: {
+		enabled: boolean
+		minimizeToTray: boolean
+		closeToTray: boolean
+		/** Internal: Store channel already applied safer close default. */
+		storeDefaultsApplied?: boolean
+	}
 	quake: {
 		enabled: boolean
 		hotkey: string
@@ -272,6 +281,8 @@ export interface AppInfo {
 	chrome: string
 	node: string
 	platform: string
+	/** True when running from a Microsoft Store / APPX package. */
+	storeChannel?: boolean
 }
 
 /**

@@ -130,6 +130,36 @@
 	}
 }
 
+/* Windows High Contrast / forced-colors: keep chrome readable. */
+@media (forced-colors: active) {
+	:root {
+		--theme-bg: Canvas;
+		--theme-fg: CanvasText;
+		--surface-app: Canvas;
+		--surface-panel: Canvas;
+		--surface-strip: Canvas;
+		--surface-tabbar: Canvas;
+		--surface-statusbar: Canvas;
+		--surface-hover: Highlight;
+		--text-default: CanvasText;
+		--text-dim: GrayText;
+		--text-muted: GrayText;
+		--border-default: CanvasText;
+		--accent: Highlight;
+		--status-error: Mark;
+		--status-ok: Highlight;
+		--focus-ring-width: 3px;
+	}
+}
+
+@media (prefers-contrast: more) {
+	:root {
+		--text-dim: color-mix(in srgb, var(--theme-fg), var(--theme-bg) 18%);
+		--text-muted: color-mix(in srgb, var(--theme-fg), var(--theme-bg) 22%);
+		--border-default: color-mix(in srgb, var(--theme-bg), var(--theme-fg) 40%);
+	}
+}
+
 html,
 body,
 #root {

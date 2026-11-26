@@ -79,7 +79,11 @@ function ensureBundledConptyDll(): boolean {
 		const releaseDir = path.join(ptyRoot, 'build', 'Release')
 		const destDir = path.join(releaseDir, 'conpty')
 		const destDll = path.join(destDir, 'conpty.dll')
+		// Prefer a DLL already staged by rebuild-pty.mjs. WindowsApps (Store)
+		// packages are read-only — never attempt a runtime copy there.
 		if (fs.existsSync(destDll)) return true
+		if ((process as NodeJS.Process & {windowsStore?: boolean}).windowsStore)
+			return false
 
 		const arch = process.arch === 'arm64' ? 'win32-arm64' : 'win32-x64'
 		const srcDir = path.join(ptyRoot, 'prebuilds', arch, 'conpty')
@@ -155,10 +159,16 @@ export function spawnPty(
 	}
 	const {shell, args, env: resolvedEnv} = resolved
 	const home = resolveSpawnCwd(cwd)
-	if (!mod)
-		throw new Error(
-			'node-pty native module unavailable. Run: bun run rebuild (requires Python 3.11 + VS Build Tools).',
+	if (!mod) {
+		const store = Boolean(
+			(process as NodeJS.Process & {windowsStore?: boolean}).windowsStore,
 		)
+		throw new Error(
+			store
+				? 'Could not start a shell (native terminal module missing). Try reinstalling Involvex Term from the Microsoft Store.'
+				: 'node-pty native module unavailable. Run: bun run rebuild (requires Python 3.11 + VS Build Tools).',
+		)
+	}
 	// Re-spawns reuse their pane id (killed below), so only brand-new ids
 	// count against the budget.
 	if (!entries.has(id) && entries.size >= MAX_LIVE_PTYS)

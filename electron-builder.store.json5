@@ -1,0 +1,45 @@
+// Microsoft Store APPX channel. Identity is injected by scripts/build-store.mjs
+// from store-identity.env / env vars (see docs/STORE.md). Do not put real
+// Partner Center publisher CN values in this template — the build script
+// writes a resolved config under release/.
+//
+// Explorer sparse MSIX is intentionally omitted from Store packages.
+{
+	$schema: 'https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json',
+	appId: 'dev.involvex.term',
+	asar: true,
+	npmRebuild: false,
+	productName: 'involvex-term',
+	executableName: 'involvex-term',
+	directories: {
+		output: 'release/${version}',
+		buildResources: 'resources',
+	},
+	files: ['dist', 'dist-electron'],
+	mac: {
+		target: [],
+	},
+	linux: {
+		target: [],
+	},
+	win: {
+		icon: 'public/icon.ico',
+		signAndEditExecutable: false,
+		target: [
+			{
+				target: 'appx',
+				arch: ['x64'],
+			},
+		],
+	},
+	appx: {
+		identityName: '__STORE_IDENTITY_NAME__',
+		publisher: '__STORE_PUBLISHER__',
+		publisherDisplayName: '__STORE_PUBLISHER_DISPLAY_NAME__',
+		applicationId: 'InvolvexTerm',
+		displayName: 'Involvex Term',
+		setBuildNumber: false,
+		minVersion: '10.0.17763.0',
+	},
+	publish: null,
+}

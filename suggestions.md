@@ -20,6 +20,7 @@ Living backlog (refreshed for **v0.10**). Struck items shipped; keep IDs stable.
 | FEAT-015 | Clipboard history ring (Ctrl+Shift+V; persist opt-in; v0.10)  |
 | FEAT-024 | Recent directories in new-tab menu + palette (v0.10)          |
 | FEAT-025 | Sys stats loop skips when footer sys hidden / window hidden   |
+| FEAT-021 | High-contrast theme preset + forced-colors chrome             |
 
 ## High Priority
 
@@ -43,7 +44,6 @@ Living backlog (refreshed for **v0.10**). Struck items shipped; keep IDs stable.
 | FEAT-018 | Productivity  | Template snippets for common workflows (new project, PR, etc.) | Low    | Low    |
 | FEAT-019 | Performance   | Cache git remote URLs to avoid repeated API calls              | Low    | Low    |
 | FEAT-020 | UX            | Animated window open/close for quake dropdown                  | Low    | Medium |
-| FEAT-021 | Accessibility | High-contrast theme preset                                     | Low    | Low    |
 | FEAT-022 | Configuration | Per-project auto-start profiles (auto-switch shell per repo)   | Low    | Medium |
 | FEAT-023 | Security      | Plugin sandboxing via Node.js vm module                        | Low    | High   |
 

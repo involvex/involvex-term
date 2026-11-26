@@ -123,8 +123,11 @@ const IS_WINDOWS =
  * Stagger concurrent pty spawns. With lazy hydration most restores only
  * spawn the focused pane of the active tab; the slot still spaces out a
  * burst when the user flips tabs or focuses several panes quickly.
+ * Cap the slot so long sessions don't wait multi-seconds for a new pane.
  */
 let globalSpawnSlot = 0
+const SPAWN_STAGGER_CAP = 5
+const SPAWN_STAGGER_MS = 200
 
 export default function TerminalView({
 	paneId,
@@ -163,6 +166,8 @@ export default function TerminalView({
 	const [ctxMenu, setCtxMenu] = useState<TermContextMenuState | null>(null)
 	const paneMenuRef = useRef(paneMenu)
 	const [menuTabActive, setMenuTabActive] = useState(tabActive)
+	const [spawnError, setSpawnError] = useState<string | null>(null)
+	const [spawnAttempt, setSpawnAttempt] = useState(0)
 	if (menuTabActive !== tabActive) {
 		setMenuTabActive(tabActive)
 		if (!tabActive && ctxMenu) setCtxMenu(null)
@@ -762,22 +767,23 @@ export default function TerminalView({
 		const spawn = async (cols: number, rows: number) => {
 			if (spawned) return
 			spawned = true
+			setSpawnError(null)
 			// Stagger concurrent spawns: 5 tabs × 3 panes = 15 pwsh7
 			// profiles + ConPTYs at once freezes the UI and OOMs the app.
-			// Uncapped linear backoff spreads a full session restore over
-			// seconds instead of firing every pane in the same 600ms window.
+			// Cap the slot so a long session does not wait multi-seconds.
 			try {
-				const slot = globalSpawnSlot++
-				if (slot > 0) await new Promise(r => setTimeout(r, slot * 200))
+				const slot = Math.min(globalSpawnSlot++, SPAWN_STAGGER_CAP)
+				if (slot > 0)
+					await new Promise(r => setTimeout(r, slot * SPAWN_STAGGER_MS))
 				if (disposed) return
 			} catch {
 				/* noop */
 			}
 			if (!api) {
-				term.writeln(
-					'\x1b[33mNot running in Electron — PTY unavailable.\x1b[0m',
-				)
-				term.writeln('Run with: bun run dev (vite + Electron).')
+				spawned = false
+				const msg = 'Not running in Electron — shell unavailable.'
+				setSpawnError(msg)
+				term.writeln(`\x1b[33m${msg}\x1b[0m`)
 				return
 			}
 			try {
@@ -821,8 +827,12 @@ export default function TerminalView({
 					/* fonts API unavailable */
 				}
 			} catch (err) {
-				term.writeln(`\x1b[31mPTY spawn failed: ${String(err)}\x1b[0m`)
-				term.writeln('If node-pty is missing, run: bun run rebuild')
+				spawned = false
+				const raw = err instanceof Error ? err.message : String(err)
+				const storeish = /microsoft store|reinstall/i.test(raw)
+				const msg = storeish ? raw : `Couldn't start a shell: ${raw}`
+				setSpawnError(msg)
+				term.writeln(`\x1b[31m${msg}\x1b[0m`)
 				return
 			}
 			offData = api.onPtyData(paneId, data => {
@@ -981,6 +991,7 @@ export default function TerminalView({
 			offPrompt?.()
 			unregisterSearch(paneId)
 			unregisterTermActions(paneId)
+			lastPasteByPane.delete(paneId)
 			marks.dispose()
 			try {
 				webglAddon?.dispose()
@@ -994,8 +1005,9 @@ export default function TerminalView({
 		}
 		// webgl is sampled at hydrate time — toggling it applies to new panes
 		// without killing a live shell mid-session.
+		// spawnAttempt remounts after a failed spawn Retry.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [paneId, hydrated])
+	}, [paneId, hydrated, spawnAttempt])
 
 	// Focus requests from overlays (search bar, palette) closing.
 	useEffect(() => {
@@ -1115,18 +1127,59 @@ export default function TerminalView({
 	}
 
 	return (
-		<>
+		<div
+			className="term-host"
+			style={{
+				display: tabActive ? 'block' : 'none',
+				width: '100%',
+				height: '100%',
+				position: 'relative',
+				background: bg,
+			}}
+		>
 			<div
 				ref={containerRef}
 				className={scrollbar ? undefined : 'term-no-scrollbar'}
 				style={{
-					display: tabActive ? 'block' : 'none',
 					width: '100%',
 					height: '100%',
 					background: bg,
 				}}
 			/>
-			{ctxMenu && tabActive ? (
+			{spawnError ? (
+				<div
+					className="term-spawn-error"
+					role="alert"
+				>
+					<p>{spawnError}</p>
+					<div className="settings-btn-row">
+						<button
+							type="button"
+							className="settings-btn"
+							onClick={() => {
+								setSpawnError(null)
+								setSpawnAttempt(n => n + 1)
+							}}
+						>
+							Retry
+						</button>
+						<button
+							type="button"
+							className="settings-btn"
+							onClick={() => {
+								window.dispatchEvent(
+									new CustomEvent('involvex:tab-action', {
+										detail: 'open-settings',
+									}),
+								)
+							}}
+						>
+							Open settings
+						</button>
+					</div>
+				</div>
+			) : null}
+			{ctxMenu ? (
 				<TermContextMenu
 					menu={ctxMenu}
 					onClose={() => {
@@ -1135,6 +1188,6 @@ export default function TerminalView({
 					}}
 				/>
 			) : null}
-		</>
+		</div>
 	)
 }

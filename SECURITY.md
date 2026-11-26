@@ -1,5 +1,12 @@
 # Security policy
 
+## Distribution channels
+
+- **GitHub Releases (NSIS / portable / AppImage)** may use `electron-updater`
+  against GitHub Releases.
+- **Microsoft Store (APPX/MSIX)** never checks GitHub for updates — the Store
+  owns update delivery. See `docs/STORE.md`.
+
 ## Threat model
 
 involvex-term is a local desktop terminal. Its main-process attack surface is:

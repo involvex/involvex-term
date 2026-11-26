@@ -8,6 +8,17 @@ const cache = new Map<string, {at: number; status: GitStatus}>()
 const repoRootCache = new Map<string, {at: number; root: string | null}>()
 const REPO_ROOT_TTL_MS = 5000
 const STATUS_TTL_MS = 1500
+const CACHE_MAX = 200
+
+function pruneMap<V>(map: Map<string, V>, max: number): void {
+	if (map.size <= max) return
+	const excess = map.size - max
+	let i = 0
+	for (const key of map.keys()) {
+		map.delete(key)
+		if (++i >= excess) break
+	}
+}
 
 function cachedRepoRoot(dir: string): string | null | undefined {
 	const hit = repoRootCache.get(dir)
@@ -51,6 +62,7 @@ export async function getGitStatus(
 		ahead: 0,
 		behind: 0,
 		stashCount: 0,
+		syncKnown: false,
 	}
 	let dir = cwd
 	try {
@@ -64,6 +76,7 @@ export async function getGitStatus(
 	if (root === undefined) {
 		root = findRepoRoot(dir)
 		repoRootCache.set(dir, {at: Date.now(), root})
+		pruneMap(repoRootCache, CACHE_MAX)
 	}
 	if (!root) return {...empty, cwd: dir}
 
@@ -118,10 +131,12 @@ export async function getGitStatus(
 			ahead,
 			behind,
 			stashCount,
+			syncKnown: wantDetails,
 		}
 		// Cache both fast and detailed results (TTL is 1.5s; ahead/behind
 		// staleness is bounded by it either way).
 		cache.set(root, {at: Date.now(), status: {...result}})
+		pruneMap(cache, CACHE_MAX)
 		return result
 	} catch {
 		return {...empty, cwd: dir, repoRoot: root}

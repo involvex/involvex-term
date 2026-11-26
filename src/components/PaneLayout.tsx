@@ -196,6 +196,7 @@ export default memo(function PaneLayout({
 							<div
 								className="pane-drag-handle"
 								title="Drag to move this pane to another tab"
+								aria-label="Move pane to another tab"
 								draggable
 								onDragStart={e => {
 									e.stopPropagation()

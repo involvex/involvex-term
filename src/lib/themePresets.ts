@@ -44,4 +44,11 @@ export const THEME_PRESETS: ThemePreset[] = [
 		fg: '#839496',
 		fontFamily: "'Cascadia Code', Consolas, monospace",
 	},
+	{
+		id: 'high-contrast',
+		name: 'High Contrast',
+		bg: '#000000',
+		fg: '#ffffff',
+		fontFamily: "'Cascadia Code', Consolas, monospace",
+	},
 ]

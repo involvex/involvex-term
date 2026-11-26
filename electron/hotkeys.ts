@@ -1,6 +1,7 @@
 import type {BrowserWindow, Input} from 'electron'
 import {safeSend} from './safeSend.js'
 import type {AppSettings} from './settingsStore.js'
+import {isStoreChannel} from './storeChannel.js'
 
 function accelFromSetting(
 	hotkey: string | undefined,
@@ -136,8 +137,9 @@ export async function buildMenu(
 	win: BrowserWindow,
 	settings: AppSettings,
 ): Promise<void> {
-	const {Menu} = await import('electron')
+	const {Menu, app, shell} = await import('electron')
 	const hk = settings.hotkeys as Record<string, string>
+	const packaged = app.isPackaged
 	const template: Electron.MenuItemConstructorOptions[] = [
 		{
 			label: 'Terminal',
@@ -265,6 +267,10 @@ export async function buildMenu(
 			],
 		},
 		{
+			label: 'Edit',
+			submenu: [{role: 'copy'}, {role: 'paste'}, {role: 'selectAll'}],
+		},
+		{
 			label: 'View',
 			submenu: [
 				{
@@ -303,14 +309,47 @@ export async function buildMenu(
 					accelerator: accelFromSetting(hk['zoom-reset'], 'CommandOrControl+0'),
 				},
 				{type: 'separator'},
-				{role: 'toggleDevTools'},
+				// Retail / Store builds must not expose DevTools (WACK).
+				...(!packaged || process.env.INVOLVEX_ALLOW_DEVTOOLS === '1'
+					? ([
+							{role: 'toggleDevTools'},
+						] as Electron.MenuItemConstructorOptions[])
+					: []),
 				{role: 'togglefullscreen'},
 			],
 		},
 		{
-			id: 'app:about',
-			label: 'About',
-			click: () => safeSend(win, 'tab:action', 'open-about'),
+			label: 'Help',
+			submenu: [
+				{
+					label: 'Documentation',
+					click: () => {
+						void shell.openExternal('https://involvex.github.io/involvex-term/')
+					},
+				},
+				{
+					label: 'Privacy Policy',
+					click: () => {
+						void shell.openExternal(
+							'https://involvex.github.io/involvex-term/privacy.html',
+						)
+					},
+				},
+				{
+					label: 'License (MIT)',
+					click: () => {
+						void shell.openExternal(
+							'https://github.com/involvex/involvex-term/blob/main/LICENSE',
+						)
+					},
+				},
+				{type: 'separator'},
+				{
+					id: 'app:about',
+					label: isStoreChannel() ? 'About Involvex Term' : 'About',
+					click: () => safeSend(win, 'tab:action', 'open-about'),
+				},
+			],
 		},
 	]
 	const menu = Menu.buildFromTemplate(template)

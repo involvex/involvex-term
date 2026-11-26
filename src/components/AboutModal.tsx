@@ -1,4 +1,5 @@
-import {useEffect, useState} from 'react'
+import {useEffect, useRef, useState} from 'react'
+import {trapFocus} from '../lib/focusTrap'
 import {termApi, type AppInfo, type UpdateStatus} from '../types'
 
 const LINKS: Array<{label: string; text: string; url: string}> = [
@@ -11,6 +12,16 @@ const LINKS: Array<{label: string; text: string; url: string}> = [
 		label: 'Docs',
 		text: 'involvex.github.io/involvex-term',
 		url: 'https://involvex.github.io/involvex-term/',
+	},
+	{
+		label: 'Privacy',
+		text: 'Privacy policy',
+		url: 'https://involvex.github.io/involvex-term/privacy.html',
+	},
+	{
+		label: 'License',
+		text: 'MIT License',
+		url: 'https://github.com/involvex/involvex-term/blob/main/LICENSE',
 	},
 	{
 		label: 'Funding',
@@ -39,6 +50,7 @@ export default function AboutModal({onClose, onCheckUpdates, onToast}: Props) {
 	const [info, setInfo] = useState<AppInfo | null>(null)
 	const [update, setUpdate] = useState<UpdateStatus | null>(null)
 	const [busy, setBusy] = useState(false)
+	const dialogRef = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
 		termApi()
@@ -62,6 +74,12 @@ export default function AboutModal({onClose, onCheckUpdates, onToast}: Props) {
 		return () => window.removeEventListener('keydown', onKey)
 	}, [onClose])
 
+	useEffect(() => {
+		const el = dialogRef.current
+		if (!el) return
+		return trapFocus(el)
+	}, [])
+
 	const open = (url: string) => {
 		const api = termApi()
 		if (api) void api.openExternal(url)
@@ -75,6 +93,8 @@ export default function AboutModal({onClose, onCheckUpdates, onToast}: Props) {
 	const updateLabel = (() => {
 		if (!update) return 'Checking updates…'
 		switch (update.state) {
+			case 'store':
+				return update.message || 'Updates are delivered by the Microsoft Store.'
 			case 'idle':
 				return `Current: ${update.currentVersion}`
 			case 'checking':
@@ -143,16 +163,21 @@ export default function AboutModal({onClose, onCheckUpdates, onToast}: Props) {
 		}
 	}
 
+	const storeChannel = Boolean(info?.storeChannel)
+	const checkLabel = storeChannel ? 'Open Microsoft Store' : 'Check for updates'
+
 	return (
 		<div
 			className="modal-backdrop"
 			onClick={onClose}
 		>
 			<div
+				ref={dialogRef}
 				className="modal about-modal"
 				onClick={e => e.stopPropagation()}
 				role="dialog"
-				aria-label="About Involvex-Term"
+				aria-modal="true"
+				aria-labelledby="about-title"
 			>
 				<div className="modal-header">
 					<img
@@ -163,9 +188,10 @@ export default function AboutModal({onClose, onCheckUpdates, onToast}: Props) {
 						height={40}
 					/>
 					<div className="about-title">
-						<h2>Involvex-Term</h2>
+						<h2 id="about-title">Involvex Term</h2>
 						<span className="footer-dim">
 							Version {info?.version ?? '…'} · MIT License
+							{storeChannel ? ' · Microsoft Store' : ''}
 						</span>
 					</div>
 					<button
@@ -205,9 +231,9 @@ export default function AboutModal({onClose, onCheckUpdates, onToast}: Props) {
 							disabled={busy || update?.state === 'downloading'}
 							onClick={() => void runCheck()}
 						>
-							Check for updates
+							{checkLabel}
 						</button>
-						{update?.state === 'available' && (
+						{!storeChannel && update?.state === 'available' && (
 							<button
 								type="button"
 								className="settings-btn"
@@ -217,7 +243,7 @@ export default function AboutModal({onClose, onCheckUpdates, onToast}: Props) {
 								Download {update.version}
 							</button>
 						)}
-						{update?.state === 'downloaded' && (
+						{!storeChannel && update?.state === 'downloaded' && (
 							<button
 								type="button"
 								className="settings-btn"

@@ -101,6 +101,7 @@ import {
 	resetClipboardCycle,
 	setClipboardPersist,
 } from './shellMemory.js'
+import {isStoreChannel} from './storeChannel.js'
 import {getSysStats} from './sysEngine.js'
 import {destroyTray, setupTray} from './tray.js'
 import {
@@ -740,10 +741,17 @@ function registerIpc() {
 		chrome: process.versions.chrome,
 		node: process.versions.node,
 		platform: `${process.platform} ${process.arch}`,
+		storeChannel: isStoreChannel(),
 	}))
 	ipcMain.handle('shell:openExternal', async (_e, {url}: {url: string}) => {
 		const u = String(url ?? '').trim()
-		if (!/^https?:\/\//i.test(u) && !/^mailto:/i.test(u)) return
+		// http(s)/mailto for docs; ms-windows-store for Store-channel update links.
+		if (
+			!/^https?:\/\//i.test(u) &&
+			!/^mailto:/i.test(u) &&
+			!/^ms-windows-store:/i.test(u)
+		)
+			return
 		await shell.openExternal(u)
 	})
 	ipcMain.handle('shell:openPath', async (_e, {path: p}: {path: string}) => {
@@ -1067,7 +1075,25 @@ function watchSettingsFile() {
 	}
 }
 
+function applyStoreChannelDefaults(): void {
+	if (!isStoreChannel()) return
+	if (settings.tray.storeDefaultsApplied) return
+	settings = saveSettings({
+		...settings,
+		tray: {
+			...settings.tray,
+			closeToTray: false,
+			storeDefaultsApplied: true,
+		},
+		window: {
+			...settings.window,
+			checkUpdatesOnStartup: false,
+		},
+	})
+}
+
 function createWindow() {
+	applyStoreChannelDefaults()
 	const w = settings.window
 	const bounds: BrowserWindowConstructorOptions = {
 		width: w.width,
@@ -1080,13 +1106,19 @@ function createWindow() {
 	}
 	win = new BrowserWindow({
 		...bounds,
-		title: 'involvex-term',
+		title: 'Involvex Term',
 		icon: iconPath(),
 		backgroundColor: settings.theme.bg || '#1e1e1e',
 		...(process.platform === 'win32' && w.acrylic
 			? {backgroundMaterial: 'mica' as const}
 			: {}),
-		webPreferences: {preload: path.join(__dirname, 'preload.mjs')},
+		webPreferences: {
+			preload: path.join(__dirname, 'preload.mjs'),
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: true,
+			webSecurity: true,
+		},
 	})
 	applyWindowMaterial(win, settings)
 
@@ -1126,11 +1158,21 @@ function createWindow() {
 	win.webContents.on('did-finish-load', () => {
 		safeSend(win, 'main-process-message', new Date().toLocaleString())
 	})
+	// Deny in-window navigation / popups — links go through shell:openExternal.
+	win.webContents.on('will-navigate', (e, url) => {
+		e.preventDefault()
+		void url
+	})
+	win.webContents.setWindowOpenHandler(() => ({action: 'deny'}))
 	// A dead renderer never runs its effect cleanups, so no ptyKill is issued
 	// and every pane's pty would survive with nothing left able to reach it.
-	// Tear them all down; a reload re-spawns from the session snapshot.
-	win.webContents.on('render-process-gone', () => {
+	// Tear them all down; reload so the user gets a recoverable window.
+	win.webContents.on('render-process-gone', (_e, details) => {
 		killAllPtys()
+		if (details.reason === 'clean-exit') return
+		if (!win || win.isDestroyed()) return
+		if (VITE_DEV_SERVER_URL) void win.loadURL(VITE_DEV_SERVER_URL)
+		else void win.loadFile(path.join(RENDERER_DIST, 'index.html'))
 	})
 	if (VITE_DEV_SERVER_URL) win.loadURL(VITE_DEV_SERVER_URL)
 	else win.loadFile(path.join(RENDERER_DIST, 'index.html'))
@@ -1140,7 +1182,8 @@ function createWindow() {
 	registerToggleApp(win, () => settings)
 	bindUpdaterWindow(win)
 	startSysLoop()
-	if (settings.window.checkUpdatesOnStartup) scheduleStartupUpdateCheck()
+	if (settings.window.checkUpdatesOnStartup && !isStoreChannel())
+		scheduleStartupUpdateCheck()
 	void pullOnStartup(settings).then(async merged => {
 		if (!merged) return
 		settings = saveSettings(merged)

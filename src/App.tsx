@@ -186,7 +186,12 @@ const DEFAULT_SETTINGS: AppSettings = {
 		acrylic: false,
 		checkUpdatesOnStartup: true,
 	},
-	tray: {enabled: true, minimizeToTray: true, closeToTray: true},
+	tray: {
+		enabled: true,
+		minimizeToTray: true,
+		closeToTray: true,
+		storeDefaultsApplied: false,
+	},
 	plugins: {enabled: false},
 	quake: {
 		enabled: false,
@@ -332,11 +337,13 @@ export default function App() {
 	// Interval-only: this must NOT re-fire on tabs/cwd changes, or every
 	// prompt's git refresh cascades into an immediate `opencode session list`
 	// CLI spawn. Overlapping ticks are skipped (the CLI takes seconds).
+	// When the binary is missing, back off to avoid a child-process storm.
 	useEffect(() => {
 		const api = termApi()
 		if (!api || !pollOpencode) return
 		let cancelled = false
 		let inFlight = false
+		let missStreak = 0
 		const tick = async () => {
 			if (inFlight) return
 			if (typeof document !== 'undefined' && document.hidden) return
@@ -383,6 +390,7 @@ export default function App() {
 					if (cancelled) return
 					setOpencode(s)
 					setAgentAvailable(s.available)
+					missStreak = s.available ? 0 : missStreak + 1
 
 					const paneIds = new Set(ids)
 					const pruned = pruneAgentBindings(
@@ -426,6 +434,7 @@ export default function App() {
 					}
 				} catch {
 					if (cancelled) return
+					missStreak += 1
 					setOpencode({
 						available: false,
 						sessionCount: 0,
@@ -441,10 +450,17 @@ export default function App() {
 			}
 		}
 		void tick()
-		const ms = Math.max(5000, settings.footer.refreshMs || 1500)
+		const baseMs = Math.max(5000, settings.footer.refreshMs || 1500)
+		let skipTicks = 0
 		const timer = setInterval(() => {
+			// After repeated misses (CLI not on PATH), poll ~every 30s.
+			if (missStreak >= 2) {
+				skipTicks += 1
+				if (skipTicks < Math.max(1, Math.ceil(30000 / baseMs))) return
+				skipTicks = 0
+			}
 			void tick()
-		}, ms)
+		}, baseMs)
 		return () => {
 			cancelled = true
 			clearInterval(timer)
@@ -730,39 +746,23 @@ export default function App() {
 		return off
 	}, [])
 
-	// Process list cache: refreshed in the background (paused while the
-	// manager is open — it runs its own faster poll then) so reopening
-	// the panel shows rows instantly instead of a fresh load.
-	const showProcessesRef = useRef(showProcesses)
+	// Process list: only poll while Process Manager is open (WMI is heavy).
+	// Opening the panel triggers an immediate refresh there.
 	useEffect(() => {
-		showProcessesRef.current = showProcesses
-	}, [showProcesses])
-	useEffect(() => {
+		if (!showProcesses) return
 		const api = termApi()
 		if (!api || typeof api.procList !== 'function') return
 		let cancelled = false
-		let busy = false
-		const tick = async () => {
-			if (busy || showProcessesRef.current) return
-			if (typeof document !== 'undefined' && document.hidden) return
-			busy = true
-			try {
-				const list = await api.procList()
-				if (!cancelled && Array.isArray(list) && list.length > 0) setProcs(list)
-			} catch {
-				/* keep stale cache */
-			} finally {
-				busy = false
-			}
-		}
-		const warmup = setTimeout(() => void tick(), 3000)
-		const timer = setInterval(() => void tick(), 5000)
+		void api
+			.procList()
+			.then(list => {
+				if (!cancelled && Array.isArray(list)) setProcs(list)
+			})
+			.catch(() => undefined)
 		return () => {
 			cancelled = true
-			clearTimeout(warmup)
-			clearInterval(timer)
 		}
-	}, [])
+	}, [showProcesses])
 
 	// Git status for the active pane: subscribe per-pane + global events.
 	// Main tracks cwd per pty (= pane) id; the owning tab gets the title.
@@ -1357,7 +1357,16 @@ export default function App() {
 			else if (action === 'next-mark') activePaneActions()?.jumpNextMark()
 			else if (action === 'check-updates') void checkUpdates()
 		})
-		return off
+		const onRendererAction = (e: Event) => {
+			const action = (e as CustomEvent<string>).detail
+			if (action === 'open-settings') setShowSettings(true)
+			else if (action === 'open-about') setShowAbout(true)
+		}
+		window.addEventListener('involvex:tab-action', onRendererAction)
+		return () => {
+			off()
+			window.removeEventListener('involvex:tab-action', onRendererAction)
+		}
 	}, [
 		addTab,
 		closeTab,
