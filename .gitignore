@@ -19,6 +19,7 @@ coverage
 *.tsbuildinfo
 *.local
 store-identity.env
+# Keep the example tracked despite the `*.env` rule above.
 !store-identity.example.env
 
 # Native Explorer-command build outputs (keep out/.gitkeep)
