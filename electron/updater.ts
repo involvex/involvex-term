@@ -1,12 +1,13 @@
 /**
  * GitHub Releases auto-update via electron-updater.
- * Only meaningful for packaged installs (NSIS / AppImage); portable
- * release/latest junctions get a Releases-page fallback.
+ * Only meaningful for packaged NSIS / AppImage installs.
+ * Microsoft Store builds must never sideload updates — the Store owns them.
  */
 import type {BrowserWindow} from 'electron'
 import {app, dialog, shell} from 'electron'
 import {autoUpdater} from 'electron-updater'
 import {safeSend} from './safeSend.js'
+import {isStoreChannel, storeProductPageUrl} from './storeChannel.js'
 
 export type UpdateState =
 	| 'idle'
@@ -16,6 +17,7 @@ export type UpdateState =
 	| 'downloading'
 	| 'downloaded'
 	| 'error'
+	| 'store'
 
 export interface UpdateStatus {
 	state: UpdateState
@@ -97,7 +99,17 @@ export function getUpdateStatus(): UpdateStatus {
 
 const RELEASES_URL = 'https://github.com/involvex/involvex-term/releases'
 
+async function openStoreUpdates(): Promise<UpdateStatus> {
+	emit({
+		state: 'store',
+		message: 'Updates are delivered by the Microsoft Store.',
+	})
+	await shell.openExternal(storeProductPageUrl())
+	return getUpdateStatus()
+}
+
 export async function checkForUpdates(): Promise<UpdateStatus> {
+	if (isStoreChannel()) return openStoreUpdates()
 	wireUpdater()
 	if (!app.isPackaged) {
 		emit({
@@ -120,6 +132,13 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
 }
 
 export async function downloadUpdate(): Promise<UpdateStatus> {
+	if (isStoreChannel()) {
+		emit({
+			state: 'store',
+			message: 'Install updates from the Microsoft Store.',
+		})
+		return getUpdateStatus()
+	}
 	wireUpdater()
 	if (!app.isPackaged) {
 		emit({state: 'error', message: 'Not a packaged install'})
@@ -137,6 +156,7 @@ export async function downloadUpdate(): Promise<UpdateStatus> {
 }
 
 export async function installUpdate(): Promise<void> {
+	if (isStoreChannel()) return
 	wireUpdater()
 	if (status.state !== 'downloaded') return
 	const {response} = await dialog.showMessageBox({
@@ -152,9 +172,9 @@ export async function installUpdate(): Promise<void> {
 	}
 }
 
-/** Quiet check a few seconds after launch (packaged only). */
+/** Quiet check a few seconds after launch (packaged NSIS/AppImage only). */
 export function scheduleStartupUpdateCheck(): void {
-	if (!app.isPackaged) return
+	if (!app.isPackaged || isStoreChannel()) return
 	setTimeout(() => {
 		wireUpdater()
 		void autoUpdater.checkForUpdates().catch(() => undefined)

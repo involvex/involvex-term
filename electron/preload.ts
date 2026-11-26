@@ -338,18 +338,4 @@ const api: TermApi = {
 }
 
 contextBridge.exposeInMainWorld('termApi', api)
-
-// Keep legacy channel used by template
-contextBridge.exposeInMainWorld('ipcRenderer', {
-	on: (channel: string, listener: (...a: unknown[]) => void) => {
-		const fn = (_e: unknown, ...args: unknown[]) => listener(...args)
-		ipcRenderer.on(channel, fn as never)
-		return () => ipcRenderer.off(channel, fn as never)
-	},
-	off: (channel: string, listener: (...a: never[]) => void) =>
-		ipcRenderer.off(channel, listener as never),
-	send: (channel: string, ...args: unknown[]) =>
-		ipcRenderer.send(channel, ...args),
-	invoke: (channel: string, ...args: unknown[]) =>
-		ipcRenderer.invoke(channel, ...args),
-})
+// Do not expose raw ipcRenderer — XSS could invoke pty:write / proc:kill.

@@ -10,6 +10,7 @@ bun install               # postinstall only applies the node-pty Spectre patch
 bun run dev                # dev (vite + Electron)
 bun run rebuild           # FORCE full node-pty rebuild (slow, rarely needed)
 bun run build             # tsc + vite + node-pty rebuild + electron-builder + link-latest
+bun run build:store       # Store APPX/MSIX (docs/STORE.md; needs store-identity.env)
 bun run link:latest       # release/latest → current win-unpacked (junction)
 bun run link:desktop      # Desktop Involvex-Term.lnk → release/latest/involvex-term.exe
 bunx tsc --noEmit         # ground truth for types (opencode LSP reports false electron errors)

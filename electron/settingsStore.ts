@@ -238,6 +238,11 @@ const TraySchema = z.object({
 	enabled: z.boolean().default(true),
 	minimizeToTray: z.boolean().default(true),
 	closeToTray: z.boolean().default(true),
+	/**
+	 * Set once when the Microsoft Store package applies safer tray defaults
+	 * (closeToTray false). NSIS installs leave this untouched.
+	 */
+	storeDefaultsApplied: z.boolean().default(false),
 })
 
 const QuakeSchema = z.object({

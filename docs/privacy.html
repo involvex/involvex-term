@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1"
+		/>
+		<title>Privacy Policy — Involvex Term</title>
+		<meta
+			name="description"
+			content="Privacy policy for Involvex Term, the Git-aware desktop terminal."
+		/>
+		<link
+			rel="icon"
+			href="https://raw.githubusercontent.com/involvex/involvex-term/main/public/icon.png"
+		/>
+		<link
+			rel="stylesheet"
+			href="styles.css"
+		/>
+	</head>
+	<body>
+		<main>
+			<header class="hero">
+				<img
+					class="logo"
+					src="https://raw.githubusercontent.com/involvex/involvex-term/main/public/icon.png"
+					alt=""
+					width="72"
+					height="72"
+				/>
+				<h1>Privacy Policy</h1>
+				<p class="tagline">Involvex Term — last updated 26 November 2026</p>
+				<p class="cta">
+					<a
+						class="btn"
+						href="index.html"
+						>← Back to docs</a
+					>
+				</p>
+			</header>
+
+			<section>
+				<h2>Summary</h2>
+				<p>
+					Involvex Term is a local desktop terminal. It does
+					<strong>not</strong> include advertising SDKs, crash analytics, or
+					telemetry that phones home by default. Data stays on your machine
+					unless you opt into optional features that use the network.
+				</p>
+			</section>
+
+			<section>
+				<h2>Data stored on your device</h2>
+				<ul>
+					<li>
+						<strong>Settings and session</strong> —
+						<code>~/.involvex-term/settings.json</code> and
+						<code>session.json</code> (window size, themes, tabs, shell
+						profiles, hotkeys).
+					</li>
+					<li>
+						<strong>Shell memory</strong> — recent directories (from OSC 7) and
+						recent commands the app wrote into a pane. Optional clipboard
+						history persist (<code>clipboardPersist</code>, off by default)
+						stores clip text in <code>shell-memory.json</code>.
+					</li>
+					<li>
+						<strong>Chromium profile</strong> —
+						<code>~/.involvex-term/electron</code> (Electron userData).
+					</li>
+					<li>
+						<strong>Optional plugins</strong> — if you enable plugins, files
+						under <code>~/.involvex-term/plugins</code> run with full local
+						privileges (see Security policy).
+					</li>
+				</ul>
+			</section>
+
+			<section>
+				<h2>Optional network features</h2>
+				<ul>
+					<li>
+						<strong>Settings sync (opt-in)</strong> — Device Code login with
+						GitHub stores an OAuth token and gist id in
+						<code>~/.involvex-term/sync.json</code> so you can push/pull a
+						private settings gist.
+					</li>
+					<li>
+						<strong>GitHub Releases auto-update</strong> — only for NSIS /
+						AppImage installs from GitHub. Microsoft Store builds update
+						exclusively through the Store and never check GitHub for updates.
+					</li>
+					<li>
+						<strong>Links you open</strong> — Ctrl+click / context menu opens
+						URLs in your default browser.
+					</li>
+					<li>
+						<strong>OpenCode / agent CLIs</strong> — if installed, the app may
+						invoke them locally; their own privacy policies apply to any cloud
+						agent traffic they initiate.
+					</li>
+				</ul>
+			</section>
+
+			<section>
+				<h2>Process list</h2>
+				<p>
+					The optional Process Manager can list running processes (name, CPU,
+					memory, path) using OS APIs so you can inspect or end a process. That
+					data is not uploaded.
+				</p>
+			</section>
+
+			<section>
+				<h2>Children</h2>
+				<p>
+					Involvex Term is a developer tool and is not directed at children
+					under 13.
+				</p>
+			</section>
+
+			<section>
+				<h2>Contact</h2>
+				<p>
+					Questions:
+					<a href="https://github.com/involvex/involvex-term/issues"
+						>GitHub Issues</a
+					>
+					or security reports via
+					<a
+						href="https://github.com/involvex/involvex-term/security/advisories"
+						>GitHub Security Advisories</a
+					>.
+				</p>
+			</section>
+		</main>
+	</body>
+</html>

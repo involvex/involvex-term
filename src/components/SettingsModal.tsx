@@ -1,5 +1,6 @@
-import {useEffect, useMemo, useState, type DragEvent} from 'react'
+import {useEffect, useMemo, useRef, useState, type DragEvent} from 'react'
 import {defaultAgentTools} from '../lib/agents'
+import {trapFocus} from '../lib/focusTrap'
 import {envToText, textToEnv} from '../lib/profileEnv'
 import {
 	REJECTED_PATH_PREVIEW,
@@ -553,7 +554,14 @@ export default function SettingsModal({
 	onToast,
 }: Props) {
 	const [tab, setTab] = useState<SettingsTabId>('appearance')
+	const dialogRef = useRef<HTMLDivElement>(null)
 	const set = (patch: Partial<AppSettings>) => onChange({...settings, ...patch})
+
+	useEffect(() => {
+		const el = dialogRef.current
+		if (!el) return
+		return trapFocus(el)
+	}, [])
 
 	/** Replace profiles and retarget default/startup ids when a row is removed. */
 	const setProfiles = (profiles: ShellProfile[]) => {
@@ -671,13 +679,15 @@ export default function SettingsModal({
 			onClick={onClose}
 		>
 			<div
+				ref={dialogRef}
 				className="modal settings-modal"
 				onClick={e => e.stopPropagation()}
 				role="dialog"
-				aria-label="Settings"
+				aria-modal="true"
+				aria-labelledby="settings-title"
 			>
 				<div className="modal-header">
-					<h2>Settings</h2>
+					<h2 id="settings-title">Settings</h2>
 					<span className="footer-dim modal-path">
 						~/.involvex-term/settings.json
 					</span>

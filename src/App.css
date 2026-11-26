@@ -387,6 +387,28 @@ select,
 	letter-spacing: 0.02em;
 }
 
+.term-spawn-error {
+	position: absolute;
+	inset: 0;
+	z-index: 5;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	padding: 24px;
+	background: color-mix(in srgb, var(--theme-bg) 88%, transparent);
+	color: var(--status-error);
+	text-align: center;
+	pointer-events: auto;
+}
+
+.term-spawn-error p {
+	margin: 0;
+	max-width: 36rem;
+	color: var(--text-default);
+}
+
 .footer-git-pending {
 	letter-spacing: 0.04em;
 }

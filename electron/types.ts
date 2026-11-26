@@ -9,6 +9,8 @@ export interface GitStatus {
 	ahead: number
 	behind: number
 	stashCount: number
+	/** True after stash + ahead/behind enrichment (footer menu / getDetails). */
+	syncKnown?: boolean
 }
 
 export interface SysStats {
