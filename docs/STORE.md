@@ -13,22 +13,34 @@ https://apps.microsoft.com/store/detail/9NBNBH9CJ507?cid=DevShareMCLPCS
 GitHub Pages (`docs/index.html`) uses the official web component:
 
 ```html
-<script type="module" src="https://get.microsoft.com/badge/ms-store-badge.bundled.js"></script>
+<script
+	type="module"
+	src="https://get.microsoft.com/badge/ms-store-badge.bundled.js"
+></script>
 <ms-store-badge
 	productid="9NBNBH9CJ507"
 	window-mode="full"
 	theme="auto"
 	size="large"
 	language="en-us"
-	animation="on">
+	animation="on"
+>
 </ms-store-badge>
 ```
 
 Markdown / README (no custom elements) use the static badge image:
 
 ```html
-<a href="https://apps.microsoft.com/detail/9NBNBH9CJ507?referrer=appbadge&mode=full" target="_blank" rel="noopener noreferrer">
-	<img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200" alt="Get it from Microsoft Store" />
+<a
+	href="https://apps.microsoft.com/detail/9NBNBH9CJ507?referrer=appbadge&mode=full"
+	target="_blank"
+	rel="noopener noreferrer"
+>
+	<img
+		src="https://get.microsoft.com/images/en-us%20dark.svg"
+		width="200"
+		alt="Get it from Microsoft Store"
+	/>
 </a>
 ```
 
