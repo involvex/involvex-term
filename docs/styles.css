@@ -101,6 +101,23 @@ section p {
 	margin: 0;
 }
 
+.cta.store-badge {
+	margin-bottom: 0.85rem;
+	align-items: center;
+}
+
+.cta.store-badge ms-store-badge,
+.cta.store-badge a {
+	display: inline-flex;
+	line-height: 0;
+}
+
+.cta.store-badge img {
+	display: block;
+	height: auto;
+	max-width: 100%;
+}
+
 .btn {
 	display: inline-block;
 	padding: 0.55rem 1.1rem;

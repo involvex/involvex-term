@@ -19,6 +19,10 @@
 			rel="stylesheet"
 			href="styles.css"
 		/>
+		<script
+			type="module"
+			src="https://get.microsoft.com/badge/ms-store-badge.bundled.js"
+		></script>
 	</head>
 	<body>
 		<main>
@@ -35,12 +39,31 @@
 					Minimalist dark Git-aware terminal: Electron + TypeScript + Bun +
 					xterm.js + node-pty — with OpenCode and agent CLI hooks in the pane.
 				</p>
-				<p class="cta">
-					<a
-						class="btn primary"
-						href="https://apps.microsoft.com/detail/9NBNBH9CJ507"
-						>Microsoft Store</a
+				<p class="cta store-badge">
+					<ms-store-badge
+						productid="9NBNBH9CJ507"
+						window-mode="full"
+						theme="auto"
+						size="large"
+						language="en-us"
+						animation="on"
 					>
+					</ms-store-badge>
+					<noscript>
+						<a
+							href="https://apps.microsoft.com/detail/9NBNBH9CJ507?referrer=appbadge&amp;mode=full"
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							<img
+								src="https://get.microsoft.com/images/en-us%20dark.svg"
+								width="200"
+								alt="Get it from Microsoft Store"
+							/>
+						</a>
+					</noscript>
+				</p>
+				<p class="cta">
 					<a
 						class="btn"
 						href="https://github.com/involvex/involvex-term/releases/latest"

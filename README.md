@@ -2,8 +2,9 @@
 
 [![CI](https://github.com/involvex/involvex-term/actions/workflows/ci.yml/badge.svg)](https://github.com/involvex/involvex-term/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-4ec9b0)](https://involvex.github.io/involvex-term/)
-[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-9NBNBH9CJ507-0078d4)](https://apps.microsoft.com/detail/9NBNBH9CJ507)
 [![npm CLI](https://img.shields.io/npm/v/%40involvex%2Fterm?label=%40involvex%2Fterm)](https://www.npmjs.com/package/@involvex/term)
+
+<a href="https://apps.microsoft.com/detail/9NBNBH9CJ507?referrer=appbadge&mode=full" target="_blank" rel="noopener noreferrer"><img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200" alt="Get it from Microsoft Store" /></a>
 
 Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.js + node-pty.
 

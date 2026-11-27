@@ -7,6 +7,8 @@
 - Docs: Microsoft Store listing is live
   (https://apps.microsoft.com/detail/9NBNBH9CJ507); dual-channel install CTAs
   on README / docs site; ROADMAP v0.11 marked shipped
+- Docs / GitHub Pages: official Microsoft Store badge
+  (`ms-store-badge` on Pages; static `get.microsoft.com` image on README)
 
 ## [0.10.0] - 2026-11-22
 

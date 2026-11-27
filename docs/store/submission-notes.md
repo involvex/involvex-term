@@ -8,7 +8,8 @@ PFN: `Einzelunternehmen.InvolvexTerm_nk2dxr82q950t`
 
 **Live listing:** https://apps.microsoft.com/detail/9NBNBH9CJ507  
 Share link: https://apps.microsoft.com/store/detail/9NBNBH9CJ507?cid=DevShareMCLPCS  
-Protocol: `ms-windows-store://pdp/?productid=9NBNBH9CJ507`
+Protocol: `ms-windows-store://pdp/?productid=9NBNBH9CJ507`  
+Badge: `ms-store-badge` productid `9NBNBH9CJ507` (see `docs/STORE.md` / Pages)
 
 Dashboard: https://partner.microsoft.com/dashboard/products/9NBNBH9CJ507/submissions
 
