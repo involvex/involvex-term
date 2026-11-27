@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Docs: Microsoft Store listing is live
+  (https://apps.microsoft.com/detail/9NBNBH9CJ507); dual-channel install CTAs
+  on README / docs site; ROADMAP v0.11 marked shipped
+
 ## [0.10.0] - 2026-11-22
 
 ### Added

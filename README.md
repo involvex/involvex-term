@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/involvex/involvex-term/actions/workflows/ci.yml/badge.svg)](https://github.com/involvex/involvex-term/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-4ec9b0)](https://involvex.github.io/involvex-term/)
+[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-9NBNBH9CJ507-0078d4)](https://apps.microsoft.com/detail/9NBNBH9CJ507)
 [![npm CLI](https://img.shields.io/npm/v/%40involvex%2Fterm?label=%40involvex%2Fterm)](https://www.npmjs.com/package/@involvex/term)
 
 Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.js + node-pty.
@@ -35,8 +36,10 @@ Minimalist dark-themed Git-aware terminal: Electron + TypeScript + Bun + xterm.j
 - Ctrl+click URLs and local paths; scrollback / scrollbar / font fallback
 - Optional Windows 11 mica title-bar backdrop
 - Command snippets in the palette; clear buffer / prompt marks
-- In-app update check (packaged NSIS/AppImage via GitHub Releases; portable
-  build also published on each release)
+- In-app update check (Store builds update via Microsoft Store; NSIS/AppImage
+  via GitHub Releases; portable also published on each release)
+- Also on the [Microsoft Store](https://apps.microsoft.com/detail/9NBNBH9CJ507)
+  (`9NBNBH9CJ507`)
 - Export / import settings from Settings
 - Settings sync via private GitHub Gist (Device Code login; Push / Pull)
 - Footer Git menu (branch switch, fetch / pull / push / stash, Changes list,

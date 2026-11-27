@@ -84,10 +84,12 @@ Shipped in tree (see CHANGELOG 0.2.0 unreleased):
 
 ## v0.11 — Microsoft Store
 
-1. Dual-channel Windows: GitHub NSIS + Store APPX/MSIX (`bun run build:store`)
-2. Store runtime: no GitHub auto-update, safer close-to-tray default, privacy page
-3. WACK hardening: remove raw `ipcRenderer` bridge, CSP, navigation deny, DevTools gated
-4. See `docs/STORE.md` for Partner Center reservation + `msstore publish`
+Shipped — live at https://apps.microsoft.com/detail/9NBNBH9CJ507
+
+1. ~~Dual-channel Windows: GitHub NSIS + Store APPX/MSIX (`bun run build:store`)~~
+2. ~~Store runtime: no GitHub auto-update, safer close-to-tray default, privacy page~~
+3. ~~WACK hardening: remove raw `ipcRenderer` bridge, CSP, navigation deny, DevTools gated~~
+4. ~~Partner Center first publish + updates via `msstore` (`docs/STORE.md`)~~
 
 ## Explicitly out of scope
 

@@ -4,6 +4,10 @@ Dual-channel Windows distribution: **GitHub NSIS/portable** (GitHub auto-update)
 and **Store APPX/MSIX** (Store updates only). Do **not** run `msstore init` on
 this Bun repo (it assumes npm/yarn).
 
+**Live:** [Involvex Term on Microsoft Store](https://apps.microsoft.com/detail/9NBNBH9CJ507)
+(`9NBNBH9CJ507`). Share:
+https://apps.microsoft.com/store/detail/9NBNBH9CJ507?cid=DevShareMCLPCS
+
 ## 1. Reserve the product (human)
 
 1. Open [Partner Center](https://partner.microsoft.com/dashboard) → **New product**.
@@ -54,26 +58,11 @@ bun run build:store
 Produces `release/<version>/involvex-term-*.appx` and a sibling `.msix` copy
 (unsigned — the Store signs it). Explorer sparse MSIX is **not** included.
 
-## 3. First submission (Partner Center)
+## 3. First submission (done)
 
-Draft for Store ID `9NBNBH9CJ507` already has category, Free pricing, en-US
-listing, screenshots, and the unsigned MSIX attached via API. Commit failed
-once with `InvalidMicrosoftAgeRating` — **IARC must be completed in Partner
-Center UI** (the Store submission API cannot set age ratings on the first
-submission).
-
-1. Open https://partner.microsoft.com/dashboard/products/9NBNBH9CJ507/submissions
-2. Open the draft → **Age ratings** → complete the IARC questionnaire
-   (category: productivity / developer tool; answer honestly — no gambling,
-   no gratuitous violence, etc.). Save and generate.
-3. Confirm Privacy policy URL:
-   `https://involvex.github.io/involvex-term/privacy.html`
-4. Confirm `runFullTrust` notes (already in Notes for certification).
-5. **Submit for certification**, or after IARC:
-   `msstore submission publish 9NBNBH9CJ507`
-
-`runFullTrust` shows a PackageValidationWarning until Microsoft approves the
-capability for this product (expected for terminals).
+Submission 1 is **published**. First-time Partner Center work (IARC age
+ratings, `runFullTrust` justification, listing, screenshots) is complete —
+see [`store/submission-notes.md`](store/submission-notes.md).
 
 Optional local check (admin): Windows App Certification Kit
 
@@ -81,9 +70,7 @@ Optional local check (admin): Windows App Certification Kit
 bun scripts/run-wack.mjs
 ```
 
-## 4. Later updates (`msstore` CLI)
-
-After the app is live:
+## 4. Updates (`msstore` CLI)
 
 ```powershell
 bun run build:store
@@ -91,4 +78,4 @@ bun run publish:store
 ```
 
 `publish:store` runs `msstore publish` with `--noCommit` by default so you can
-review the draft in Partner Center before committing.
+review the draft in Partner Center before committing (`bun run commit:store`).

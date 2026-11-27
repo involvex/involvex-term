@@ -110,10 +110,10 @@ bun run format:check
 
 ## Current work
 
-Microsoft Store **Involvex Term** (`9NBNBH9CJ507`) Submission 1 is **In
-certification** (pre-processing passed). Dual-channel NSIS + Store APPX is
-live in-repo; later updates via `bun run build:store` / `publish:store`.
-See `docs/STORE.md` and `docs/store/submission-notes.md`.
+Microsoft Store **Involvex Term** is **live**:
+https://apps.microsoft.com/detail/9NBNBH9CJ507
+(`9NBNBH9CJ507`). Dual-channel NSIS + Store APPX; later Store updates via
+`bun run build:store` / `publish:store`. See `docs/STORE.md`.
 
 ## Learned preferences
 
@@ -124,6 +124,7 @@ See `docs/STORE.md` and `docs/store/submission-notes.md`.
 - Store identity: `Einzelunternehmen.InvolvexTerm` /
   `CN=50777D18-6AA9-43B0-9CE5-BB776BC9514F` / PublisherDisplayName `involvex`
 - Store ID `9NBNBH9CJ507` · PFN `Einzelunternehmen.InvolvexTerm_nk2dxr82q950t`
+- Live: https://apps.microsoft.com/detail/9NBNBH9CJ507
 - Protocol: `ms-windows-store://pdp/?productid=9NBNBH9CJ507`
 - Local identity file: `store-identity.env` (gitignored); template
   `store-identity.example.env`
