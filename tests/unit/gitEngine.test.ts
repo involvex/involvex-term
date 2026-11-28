@@ -1,5 +1,13 @@
-import {describe, expect, it} from 'bun:test'
-import {parseNameStatus} from '../../electron/gitEngine.ts'
+import {afterEach, describe, expect, it} from 'bun:test'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import {
+	getRemoteUrl,
+	invalidateGitCache,
+	parseNameStatus,
+	REMOTE_URL_TTL_MS,
+} from '../../electron/gitEngine.ts'
 
 describe('parseNameStatus', () => {
 	it('parses modified and added paths', () => {
@@ -21,5 +29,89 @@ describe('parseNameStatus', () => {
 
 	it('skips blank lines', () => {
 		expect(parseNameStatus('\n\n', 'staged')).toEqual([])
+	})
+})
+
+describe('getRemoteUrl cache (FEAT-019)', () => {
+	const roots: string[] = []
+
+	function fakeRepo(): string {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ivx-term-git-'))
+		fs.mkdirSync(path.join(root, '.git'))
+		roots.push(root)
+		return root
+	}
+
+	afterEach(() => {
+		invalidateGitCache()
+		for (const root of roots.splice(0)) {
+			fs.rmSync(root, {recursive: true, force: true})
+		}
+	})
+
+	it('avoids a second lookup within the TTL', async () => {
+		const root = fakeRepo()
+		let calls = 0
+		const lookup = async () => {
+			calls += 1
+			return 'https://example.com/repo.git'
+		}
+		const t0 = 1_000_000
+		const a = await getRemoteUrl(root, 'origin', {
+			lookup,
+			now: () => t0,
+		})
+		const b = await getRemoteUrl(root, 'origin', {
+			lookup,
+			now: () => t0 + REMOTE_URL_TTL_MS - 1,
+		})
+		expect(a).toBe('https://example.com/repo.git')
+		expect(b).toBe(a)
+		expect(calls).toBe(1)
+	})
+
+	it('re-fetches after the TTL expires', async () => {
+		const root = fakeRepo()
+		let calls = 0
+		const lookup = async () => {
+			calls += 1
+			return `https://example.com/r${calls}.git`
+		}
+		const t0 = 2_000_000
+		await getRemoteUrl(root, 'origin', {lookup, now: () => t0})
+		const next = await getRemoteUrl(root, 'origin', {
+			lookup,
+			now: () => t0 + REMOTE_URL_TTL_MS + 1,
+		})
+		expect(calls).toBe(2)
+		expect(next).toBe('https://example.com/r2.git')
+	})
+
+	it('invalidates on git action cache clear', async () => {
+		const root = fakeRepo()
+		let calls = 0
+		const lookup = async () => {
+			calls += 1
+			return 'https://example.com/repo.git'
+		}
+		const t0 = 3_000_000
+		await getRemoteUrl(root, 'origin', {lookup, now: () => t0})
+		invalidateGitCache(root)
+		await getRemoteUrl(root, 'origin', {lookup, now: () => t0})
+		expect(calls).toBe(2)
+	})
+
+	it('caches per remote name independently', async () => {
+		const root = fakeRepo()
+		const seen: string[] = []
+		const lookup = async (_root: string, remote: string) => {
+			seen.push(remote)
+			return `https://example.com/${remote}.git`
+		}
+		const t0 = 4_000_000
+		await getRemoteUrl(root, 'origin', {lookup, now: () => t0})
+		await getRemoteUrl(root, 'upstream', {lookup, now: () => t0})
+		await getRemoteUrl(root, 'origin', {lookup, now: () => t0})
+		expect(seen).toEqual(['origin', 'upstream'])
 	})
 })
