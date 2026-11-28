@@ -2,13 +2,14 @@
 
 ## Audience
 
-Authors of local Involvex Term plugins (and anyone extending the terminal).
+Accessibility-minded terminal users and anyone opening Settings / palette /
+Process Manager often.
 
 ## Announcement
 
-Plugin API update: plugins can read a slim git snapshot via `api.git.get(cwd)`
-and listen for prompt OSC events with `api.pty.onPrompt`. Types are in
-`@involvex/term-sdk` 0.1.1. See PLUGINS.md and `examples/plugins/hello-plugin`.
+Involvex Term’s dialog focus trap now has unit coverage (Tab / Shift+Tab cycle
+and focus restore on close). Process Manager also traps focus and sets
+`aria-modal`, matching Settings, About, and the command palette.
 https://github.com/involvex/involvex-term
 
 ## Free channels (pick one)

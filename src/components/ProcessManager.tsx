@@ -1,4 +1,5 @@
 import {useEffect, useMemo, useRef, useState} from 'react'
+import {trapFocus} from '../lib/focusTrap'
 import {
 	ariaSortFor,
 	filterProcs,
@@ -102,6 +103,7 @@ export default function ProcessManager({
 	const [selectedPid, setSelectedPid] = useState<number | null>(null)
 	const [killing, setKilling] = useState<number | null>(null)
 	const [ctx, setCtx] = useState<TermContextMenuState | null>(null)
+	const dialogRef = useRef<HTMLDivElement>(null)
 	const inFlight = useRef(false)
 	const procsRef = useRef<ProcInfo[]>([])
 	useEffect(() => {
@@ -111,6 +113,12 @@ export default function ProcessManager({
 	useEffect(() => {
 		onProcsRef.current = onProcs
 	}, [onProcs])
+
+	useEffect(() => {
+		const el = dialogRef.current
+		if (!el) return
+		return trapFocus(el)
+	}, [])
 
 	const changeInterval = (v: number) => {
 		setIntervalMs(v)
@@ -289,8 +297,10 @@ export default function ProcessManager({
 			}}
 		>
 			<div
+				ref={dialogRef}
 				className="modal proc-modal"
 				role="dialog"
+				aria-modal="true"
 				aria-label="Process manager"
 				style={{background: bg, color: fg}}
 			>

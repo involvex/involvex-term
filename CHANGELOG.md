@@ -4,6 +4,8 @@
 
 ### Added
 
+- Focus-trap unit tests (Tab / Shift+Tab cycle, restore on close); Process
+  Manager dialog uses `trapFocus` + `aria-modal` (FEAT-027)
 - Plugin API: read-only `api.git.get(cwd)` snapshot and `api.pty.onPrompt`;
   mirrored in `@involvex/term-sdk` 0.1.1; hello-plugin smoke (FEAT-026)
 - Cache git remote URLs per repo root + remote name with TTL; cleared by

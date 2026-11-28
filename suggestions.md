@@ -29,7 +29,7 @@ keep IDs stable. Grouped release view lives in [`ROADMAP.md`](ROADMAP.md).
 | -------- | ------------- | ----------------------------------------------------------------------- | ------ | ------ | ------------------------------------------------ |
 | FEAT-005 | Security      | ~~Plugin trust gate~~ (shipped)                                         | Medium | Low    | Allowlist + Settings confirm/status              |
 | FEAT-026 | Plugins       | ~~Complete plugin API: git snapshot + prompt hook; sync SDK~~ (shipped) | Medium | Low    | `api.git.get` + `api.pty.onPrompt`; SDK 0.1.1    |
-| FEAT-027 | Accessibility | Focus-trap tests + modal audit (Tab/Shift+Tab cycle, restore focus)     | Medium | Low    | `src/lib/focusTrap.ts` exists, 0% coverage today |
+| FEAT-027 | Accessibility | ~~Focus-trap tests + modal audit~~ (shipped)                            | Medium | Low    | Unit coverage + ProcessManager trap/`aria-modal` |
 
 ## Medium Priority (v0.12–v0.13)
 
@@ -92,7 +92,7 @@ keep IDs stable. Grouped release view lives in [`ROADMAP.md`](ROADMAP.md).
 
 - Plugin security is trust-based allowlist (FEAT-005 shipped); no signature/sandbox yet (FEAT-013/023)
 - ~~`PluginGitSnapshot` not on plugin API~~ (FEAT-026 shipped)
-- `focusTrap.ts` has no unit tests (FEAT-027)
+- ~~`focusTrap.ts` has no unit tests~~ (FEAT-027 shipped); FEAT-032 still covers panes
 - ~~`getRemoteUrl()` uncached~~ (FEAT-019 shipped)
 - FEAT-016 full graph is high effort; scoped recent-commits list is the realistic slice
 - Win11 modern Explorer menu still needs Authenticode for zero-friction install (FOLLOW-1, cert-blocked)
