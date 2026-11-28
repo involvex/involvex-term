@@ -33,15 +33,15 @@ keep IDs stable. Grouped release view lives in [`ROADMAP.md`](ROADMAP.md).
 
 ## Medium Priority (v0.12–v0.13)
 
-| ID       | Category      | Description                                                                        | Impact | Effort | Why now / seam                                    |
-| -------- | ------------- | ---------------------------------------------------------------------------------- | ------ | ------ | ------------------------------------------------- |
-| FEAT-007 | Accessibility | ~~Opt-in spoken readout for background-pane completion~~ (shipped)                 | Medium | Low    | `terminal.completionSpeech` + Web Speech API      |
-| FEAT-017 | Configuration | ~~Custom notification sound file for background-pane completion~~ (shipped)        | Low    | Low    | `terminal.completionSound` + HTMLAudioElement     |
-| FEAT-019 | Performance   | ~~Cache git remote URLs per repo root with TTL/invalidation~~ (shipped)            | Low    | Low    | `remoteUrlCache` in `gitEngine.ts`                |
-| FEAT-022 | Configuration | Per-project auto-start profile (repo root/cwd mapping → profile)                   | Medium | Medium | `ptySpawn` takes profileId; OSC7 cwd tracked      |
-| FEAT-028 | Git workflow  | Read-only inline diff preview modal from Changes row (`git diff -- <path>`)        | Medium | Medium | `listChanges()` + modal/IPC patterns exist        |
-| FEAT-029 | Git workflow  | Changes row actions: Reveal in Explorer, Copy relative path                        | Low    | Low    | `shell:showItemInFolder` + clipboard IPC exist    |
-| FEAT-016 | Git workflow  | Recent commits list in Git footer (last 5, read-only; scoped down from full graph) | Low    | Medium | `getGitDetails`/menu pattern; full graph deferred |
+| ID       | Category      | Description                                                                 | Impact | Effort | Why now / seam                                       |
+| -------- | ------------- | --------------------------------------------------------------------------- | ------ | ------ | ---------------------------------------------------- |
+| FEAT-007 | Accessibility | ~~Opt-in spoken readout for background-pane completion~~ (shipped)          | Medium | Low    | `terminal.completionSpeech` + Web Speech API         |
+| FEAT-017 | Configuration | ~~Custom notification sound file for background-pane completion~~ (shipped) | Low    | Low    | `terminal.completionSound` + HTMLAudioElement        |
+| FEAT-019 | Performance   | ~~Cache git remote URLs per repo root with TTL/invalidation~~ (shipped)     | Low    | Low    | `remoteUrlCache` in `gitEngine.ts`                   |
+| FEAT-022 | Configuration | Per-project auto-start profile (repo root/cwd mapping → profile)            | Medium | Medium | `ptySpawn` takes profileId; OSC7 cwd tracked         |
+| FEAT-028 | Git workflow  | Read-only inline diff preview modal from Changes row (`git diff -- <path>`) | Medium | Medium | `listChanges()` + modal/IPC patterns exist           |
+| FEAT-029 | Git workflow  | Changes row actions: Reveal in Explorer, Copy relative path                 | Low    | Low    | `shell:showItemInFolder` + clipboard IPC exist       |
+| FEAT-016 | Git workflow  | ~~Recent commits list in Git footer (last 5, read-only)~~ **shipped**       | Low    | Medium | Footer menu + `git:commits` IPC; full graph deferred |
 
 ## Low Priority (v0.14 / later)
 

@@ -110,9 +110,9 @@ bun run format:check
 
 ## Current work
 
-Microsoft Store **Involvex Term** is **live**:
-https://apps.microsoft.com/detail/9NBNBH9CJ507
-(`9NBNBH9CJ507`). Dual-channel NSIS + Store APPX; later Store updates via
+See `ROADMAP.md` (**Now**: FEAT-028 inline diff preview). Microsoft Store
+listing live: https://apps.microsoft.com/detail/9NBNBH9CJ507
+(`9NBNBH9CJ507`). Dual-channel NSIS + Store APPX; Store updates via
 `bun run build:store` / `publish:store`. See `docs/STORE.md`.
 
 ## Learned preferences

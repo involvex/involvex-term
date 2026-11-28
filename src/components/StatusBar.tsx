@@ -15,6 +15,7 @@ import {
 	type AppSettings,
 	type BranchList,
 	type GitChanges,
+	type GitCommitEntry,
 	type GitStatus,
 	type OpencodeSession,
 	type OpencodeStatus,
@@ -123,8 +124,11 @@ export const GitWidget = memo(function GitWidget({
 	const [anchor, setAnchor] = useState<DOMRect | null>(null)
 	const [branches, setBranches] = useState<BranchList | null>(null)
 	const [changes, setChanges] = useState<GitChanges | null>(null)
+	const [commits, setCommits] = useState<GitCommitEntry[] | null>(null)
 	const [loading, setLoading] = useState(false)
-	const [view, setView] = useState<'main' | 'branches' | 'changes'>('main')
+	const [view, setView] = useState<'main' | 'branches' | 'changes' | 'commits'>(
+		'main',
+	)
 	/** Cwd of the in-flight details fetch (dedupes menu re-opens). */
 	const detailsInFlight = useRef<string | null>(null)
 	/** Last completed details fetch per cwd — re-opens within TTL reuse it. */
@@ -185,6 +189,7 @@ export const GitWidget = memo(function GitWidget({
 		setView('main')
 		setBranches(null)
 		setChanges(null)
+		setCommits(null)
 		setOpen(true)
 		// Lazy details: footer hot path carries base status only (no stash /
 		// ahead-behind spawns). Enrich on open; the footer button updates
@@ -236,6 +241,30 @@ export const GitWidget = memo(function GitWidget({
 		} finally {
 			setLoading(false)
 		}
+	}
+
+	const loadCommits = async () => {
+		const api = termApi()
+		if (!api || !status.cwd) return
+		setLoading(true)
+		try {
+			const list = await api.gitCommits(status.cwd)
+			setCommits(list)
+			setView('commits')
+		} catch (e) {
+			onToast?.(e instanceof Error ? e.message : String(e))
+		} finally {
+			setLoading(false)
+		}
+	}
+
+	const copyCommit = async (entry: GitCommitEntry) => {
+		const api = termApi()
+		if (!api) return
+		const text = `${entry.hash} ${entry.subject}`.trim()
+		await api.clipboardWrite(text)
+		onToast?.('Copied commit')
+		setOpen(false)
 	}
 
 	const doCheckout = async (branch: string) => {
@@ -421,7 +450,7 @@ export const GitWidget = memo(function GitWidget({
 				<FooterMenu
 					anchor={anchor}
 					onClose={() => setOpen(false)}
-					wide={view === 'branches' || view === 'changes'}
+					wide={view === 'branches' || view === 'changes' || view === 'commits'}
 				>
 					{view === 'main' ? (
 						<>
@@ -443,6 +472,15 @@ export const GitWidget = memo(function GitWidget({
 							>
 								Changes…
 								{dirtyCount > 0 ? ` (${dirtyCount})` : ''}
+							</button>
+							<button
+								type="button"
+								className="footer-menu-item"
+								role="menuitem"
+								disabled={loading}
+								onClick={() => void loadCommits()}
+							>
+								Recent commits…
 							</button>
 							<div
 								className="footer-menu-sep"
@@ -578,7 +616,7 @@ export const GitWidget = memo(function GitWidget({
 							)}
 							{loading && <div className="footer-menu-meta">Loading…</div>}
 						</>
-					) : (
+					) : view === 'changes' ? (
 						<>
 							<button
 								type="button"
@@ -596,6 +634,37 @@ export const GitWidget = memo(function GitWidget({
 							{changes && changeRows('Staged', changes.staged)}
 							{changes && changeRows('Unstaged', changes.unstaged)}
 							{changes && changeRows('Untracked', changes.untracked)}
+							{loading && <div className="footer-menu-meta">Loading…</div>}
+						</>
+					) : (
+						<>
+							<button
+								type="button"
+								className="footer-menu-item footer-menu-back"
+								onClick={() => setView('main')}
+							>
+								← Back
+							</button>
+							<div className="footer-menu-sep" />
+							<div className="footer-menu-section">Recent</div>
+							{commits && commits.length === 0 && (
+								<div className="footer-menu-meta">No commits</div>
+							)}
+							{(commits ?? []).map(c => (
+								<button
+									key={c.hash}
+									type="button"
+									className="footer-menu-item footer-menu-commit"
+									title={`${c.hash} ${c.subject}`}
+									disabled={loading}
+									onClick={() => void copyCommit(c)}
+								>
+									<span className="footer-menu-commit-hash">{c.hash}</span>
+									<span className="footer-menu-commit-subject">
+										{shortPath(c.subject, 42)}
+									</span>
+								</button>
+							))}
 							{loading && <div className="footer-menu-meta">Loading…</div>}
 						</>
 					)}

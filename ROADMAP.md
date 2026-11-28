@@ -14,11 +14,10 @@ added.
 
 ## Now
 
-- [ ] FEAT-016 (scoped): Recent commits list in Git footer menu
+- [ ] FEAT-028: Read-only inline diff preview from Changes row
 
 ## Later
 
-- [ ] FEAT-028: Read-only inline diff preview from Changes row
 - [ ] FEAT-029: Changes row actions (Reveal / Copy path)
 - [ ] FEAT-022: Per-project auto-start profile
 - [ ] FEAT-018: Built-in snippet templates
@@ -33,9 +32,12 @@ added.
 - [ ] Share remote URL cache: free announcement draft in SHARE.md
 - [ ] Share plugin API git/prompt: free announcement draft in SHARE.md
 - [ ] Share focus-trap tests: free announcement draft in SHARE.md
+- [ ] Share recent commits menu: free announcement draft in SHARE.md
 
 ## Done
 
+- [x] FEAT-016 (scoped): Recent commits list in Git footer menu (last 5
+      `--oneline`, click copies hash/subject)
 - [x] FEAT-027: Focus-trap unit tests + ProcessManager modal audit
 - [x] FEAT-026: Plugin API — `api.git.get` + `api.pty.onPrompt`; SDK 0.1.1
 - [x] FEAT-019: Cache git remote URL per repo root (TTL + invalidate on action)
@@ -50,7 +52,8 @@ added.
 - Tabs, split panes (horizontal + vertical), find, command palette, session
   restore, tray, quake dropdown
 - Git footer: branch/dirty/ahead/behind/stash, fetch/pull/push/stash actions,
-  read-only Changes list, live OSC 7 cwd (PowerShell/cmd/WSL/Linux bash+zsh)
+  read-only Changes + Recent commits lists, live OSC 7 cwd
+  (PowerShell/cmd/WSL/Linux bash+zsh)
 - OpenCode: launch/continue, PATH detect, footer status, session picker,
   agent-aware pane/tab labels (busy/idle cue)
 - Shell memory: recent dirs MRU, clipboard history ring (`Ctrl+Shift+V`),

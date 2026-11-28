@@ -442,3 +442,41 @@ export async function listChanges(cwd: string): Promise<GitChanges> {
 		return empty
 	}
 }
+
+export interface GitCommitEntry {
+	hash: string
+	subject: string
+}
+
+/** Parse `git log --oneline` output. Exported for unit tests. */
+export function parseOnelineLog(raw: string): GitCommitEntry[] {
+	const out: GitCommitEntry[] = []
+	for (const line of raw.split('\n')) {
+		const trimmed = line.trimEnd()
+		if (!trimmed) continue
+		const m = /^([0-9a-f]+)\s+(.*)$/i.exec(trimmed)
+		if (!m) continue
+		out.push({hash: m[1]!, subject: m[2] ?? ''})
+	}
+	return out
+}
+
+/**
+ * Last N commits for the footer Recent commits view (read-only).
+ * Spawn only when the menu subview opens — not on the status hot path.
+ */
+export async function listRecentCommits(
+	cwd: string,
+	limit = 5,
+): Promise<GitCommitEntry[]> {
+	const root = resolveRepo(cwd)
+	if (!root) return []
+	const n = Math.max(1, Math.min(50, Math.floor(limit) || 5))
+	try {
+		const git = simpleGit(root)
+		const raw = await git.raw(['log', `-n`, String(n), '--oneline'])
+		return parseOnelineLog(typeof raw === 'string' ? raw : '').slice(0, n)
+	} catch {
+		return []
+	}
+}
