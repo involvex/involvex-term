@@ -62,7 +62,8 @@ class FakeEl {
 		return this.children.some(c => c.contains(node))
 	}
 
-	querySelectorAll(_sel: string): FakeEl[] {
+	querySelectorAll(sel: string): FakeEl[] {
+		void sel
 		const out: FakeEl[] = []
 		const walk = (el: FakeEl) => {
 			for (const child of el.children) {
