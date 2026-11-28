@@ -4,6 +4,8 @@
 
 ### Added
 
+- Cache git remote URLs per repo root + remote name with TTL; cleared by
+  `invalidateGitCache` on fetch/pull/push/checkout (FEAT-019)
 - Custom background-pane completion sound (FEAT-017): optional
   `terminal.completionSound` path; HTMLAudioElement via local data URL;
   invalid/missing files ignored; not Gist-synced

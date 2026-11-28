@@ -6,7 +6,11 @@ import type {GitStatus} from './types.js'
 const cache = new Map<string, {at: number; status: GitStatus}>()
 /** Cache repo-root lookups: findRepoRoot does sync fs walks on every call. */
 const repoRootCache = new Map<string, {at: number; root: string | null}>()
+/** Cache remote URLs per repo root + remote name (FEAT-019). */
+const remoteUrlCache = new Map<string, {at: number; url: string | null}>()
 const REPO_ROOT_TTL_MS = 5000
+/** Same window as repo-root cache — remote URLs change rarely. */
+export const REMOTE_URL_TTL_MS = 5000
 const STATUS_TTL_MS = 1500
 const CACHE_MAX = 200
 
@@ -159,8 +163,50 @@ export async function getGitDetails(cwd: string): Promise<GitStatus> {
 }
 
 export function invalidateGitCache(repoRoot?: string): void {
-	if (repoRoot) cache.delete(repoRoot)
-	else cache.clear()
+	if (repoRoot) {
+		cache.delete(repoRoot)
+		const prefix = `${repoRoot}\0`
+		for (const key of [...remoteUrlCache.keys()]) {
+			if (key.startsWith(prefix)) remoteUrlCache.delete(key)
+		}
+	} else {
+		cache.clear()
+		remoteUrlCache.clear()
+	}
+}
+
+function remoteUrlCacheKey(repoRoot: string, remote: string): string {
+	return `${repoRoot}\0${remote}`
+}
+
+/** Actual git spawn(s) for a remote URL. Separated so tests can stub it. */
+export async function lookupRemoteUrl(
+	root: string,
+	remote: string,
+): Promise<string | null> {
+	try {
+		const git = simpleGit(root)
+		const raw = await git.remote(['get-url', remote])
+		const url = typeof raw === 'string' ? raw.trim() : ''
+		return url || null
+	} catch {
+		try {
+			const git = simpleGit(root)
+			const remotes = await git.getRemotes(true)
+			const hit =
+				remotes.find(r => r.name === remote) ??
+				remotes.find(r => r.name === 'origin') ??
+				remotes[0]
+			return hit?.refs?.fetch || hit?.refs?.push || null
+		} catch {
+			return null
+		}
+	}
+}
+
+export type GetRemoteUrlDeps = {
+	lookup?: (root: string, remote: string) => Promise<string | null>
+	now?: () => number
 }
 
 export interface BranchList {
@@ -246,27 +292,20 @@ export async function checkoutBranch(
 export async function getRemoteUrl(
 	cwd: string,
 	remote = 'origin',
+	deps: GetRemoteUrlDeps = {},
 ): Promise<string | null> {
 	const root = resolveRepo(cwd)
 	if (!root) return null
-	try {
-		const git = simpleGit(root)
-		const raw = await git.remote(['get-url', remote])
-		const url = typeof raw === 'string' ? raw.trim() : ''
-		return url || null
-	} catch {
-		try {
-			const git = simpleGit(root)
-			const remotes = await git.getRemotes(true)
-			const hit =
-				remotes.find(r => r.name === remote) ??
-				remotes.find(r => r.name === 'origin') ??
-				remotes[0]
-			return hit?.refs?.fetch || hit?.refs?.push || null
-		} catch {
-			return null
-		}
-	}
+	const key = remoteUrlCacheKey(root, remote)
+	const now = deps.now?.() ?? Date.now()
+	const hit = remoteUrlCache.get(key)
+	if (hit && now - hit.at < REMOTE_URL_TTL_MS) return hit.url
+
+	const lookup = deps.lookup ?? lookupRemoteUrl
+	const url = await lookup(root, remote)
+	remoteUrlCache.set(key, {at: now, url})
+	pruneMap(remoteUrlCache, CACHE_MAX)
+	return url
 }
 
 export type GitActionResult = {ok: boolean; error?: string}

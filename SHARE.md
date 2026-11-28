@@ -2,15 +2,13 @@
 
 ## Audience
 
-Windows terminal users who want an audible cue when a background pane finishes.
+Developers watching the git footer / remote link in Involvex Term.
 
 ## Announcement
 
-Involvex Term can play a custom sound when a background pane completes —
-Settings → Terminal → Custom completion sound (`terminal.completionSound`).
-Pick a local `.wav` / `.mp3` / … file; invalid or missing paths are ignored.
-Toast and spoken readout stay independent. Paths stay on this machine (not
-Gist-synced).
+Involvex Term now caches each repo’s remote URL (per root + remote name) for a
+few seconds and clears it on fetch/pull/push/checkout — fewer git spawns when
+the footer refreshes, same correctness. Part of the ongoing git polish track.
 https://github.com/involvex/involvex-term
 
 ## Free channels (pick one)

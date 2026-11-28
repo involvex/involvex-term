@@ -37,7 +37,7 @@ keep IDs stable. Grouped release view lives in [`ROADMAP.md`](ROADMAP.md).
 | -------- | ------------- | ---------------------------------------------------------------------------------- | ------ | ------ | ------------------------------------------------- |
 | FEAT-007 | Accessibility | ~~Opt-in spoken readout for background-pane completion~~ (shipped)                 | Medium | Low    | `terminal.completionSpeech` + Web Speech API      |
 | FEAT-017 | Configuration | ~~Custom notification sound file for background-pane completion~~ (shipped)        | Low    | Low    | `terminal.completionSound` + HTMLAudioElement     |
-| FEAT-019 | Performance   | Cache git remote URLs per repo root with TTL/invalidation                          | Low    | Low    | Mirror `repoRootCache` in `gitEngine.ts`          |
+| FEAT-019 | Performance   | ~~Cache git remote URLs per repo root with TTL/invalidation~~ (shipped)            | Low    | Low    | `remoteUrlCache` in `gitEngine.ts`                |
 | FEAT-022 | Configuration | Per-project auto-start profile (repo root/cwd mapping → profile)                   | Medium | Medium | `ptySpawn` takes profileId; OSC7 cwd tracked      |
 | FEAT-028 | Git workflow  | Read-only inline diff preview modal from Changes row (`git diff -- <path>`)        | Medium | Medium | `listChanges()` + modal/IPC patterns exist        |
 | FEAT-029 | Git workflow  | Changes row actions: Reveal in Explorer, Copy relative path                        | Low    | Low    | `shell:showItemInFolder` + clipboard IPC exist    |
@@ -93,6 +93,6 @@ keep IDs stable. Grouped release view lives in [`ROADMAP.md`](ROADMAP.md).
 - Plugin security is trust-based allowlist (FEAT-005 shipped); no signature/sandbox yet (FEAT-013/023)
 - `PluginGitSnapshot` type exists but is not exposed through the plugin API (FEAT-026)
 - `focusTrap.ts` has no unit tests (FEAT-027)
-- `getRemoteUrl()` is uncached; cheap win (FEAT-019)
+- ~~`getRemoteUrl()` uncached~~ (FEAT-019 shipped)
 - FEAT-016 full graph is high effort; scoped recent-commits list is the realistic slice
 - Win11 modern Explorer menu still needs Authenticode for zero-friction install (FOLLOW-1, cert-blocked)
