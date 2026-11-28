@@ -124,10 +124,24 @@ export interface TermApi {
 		status: {
 			dir: string
 			enabled: boolean
-			loaded: Array<{name: string; commands: string[]}>
-			errors: Array<{name: string; error: string}>
+			loaded: Array<{
+				name: string
+				commands: string[]
+				dir: string
+				entry: string
+			}>
+			untrusted: Array<{name: string; dir: string; entry: string}>
+			errors: Array<{
+				name: string
+				error: string
+				dir?: string
+				entry?: string
+			}>
 		}
 	}>
+	pluginDiscover: () => Promise<
+		Array<{name: string; dir: string; entry: string}>
+	>
 	onPluginChanged: (
 		cb: (msg: {
 			commands: Array<{id: string; title: string; hint?: string}>
@@ -304,6 +318,7 @@ const api: TermApi = {
 	dialogSaveText: opts => ipcRenderer.invoke('dialog:saveText', opts),
 	dialogConfirm: opts => ipcRenderer.invoke('dialog:confirm', opts),
 	pluginList: () => ipcRenderer.invoke('plugin:list'),
+	pluginDiscover: () => ipcRenderer.invoke('plugin:discover'),
 	onPluginChanged: cb => sub('plugin:changed', cb as never),
 	runPluginCommand: id => ipcRenderer.invoke('plugin:runCommand', {id}),
 	pluginOpenDir: () => ipcRenderer.invoke('plugin:openDir'),

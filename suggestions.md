@@ -25,11 +25,11 @@ keep IDs stable. Grouped release view lives in [`ROADMAP.md`](ROADMAP.md).
 
 ## High Priority (v0.12 candidates)
 
-| ID       | Category      | Description                                                                                       | Impact | Effort | Why now / seam                                           |
-| -------- | ------------- | ------------------------------------------------------------------------------------------------- | ------ | ------ | -------------------------------------------------------- |
-| FEAT-005 | Security      | Plugin trust gate: confirm before first load of untrusted plugin; persist allowlist; clear status | Medium | Low    | `electron/pluginManager.ts` already isolates load/errors |
-| FEAT-026 | Plugins       | Complete plugin API: expose read-only git snapshot (`PluginGitSnapshot`) + prompt hook; sync SDK  | Medium | Low    | Type declared in `pluginTypes.ts`; prompt events exist   |
-| FEAT-027 | Accessibility | Focus-trap tests + modal audit (Tab/Shift+Tab cycle, restore focus)                               | Medium | Low    | `src/lib/focusTrap.ts` exists, 0% coverage today         |
+| ID       | Category      | Description                                                                                      | Impact | Effort | Why now / seam                                         |
+| -------- | ------------- | ------------------------------------------------------------------------------------------------ | ------ | ------ | ------------------------------------------------------ |
+| FEAT-005 | Security      | ~~Plugin trust gate~~ (shipped)                                                                  | Medium | Low    | Allowlist + Settings confirm/status                    |
+| FEAT-026 | Plugins       | Complete plugin API: expose read-only git snapshot (`PluginGitSnapshot`) + prompt hook; sync SDK | Medium | Low    | Type declared in `pluginTypes.ts`; prompt events exist |
+| FEAT-027 | Accessibility | Focus-trap tests + modal audit (Tab/Shift+Tab cycle, restore focus)                              | Medium | Low    | `src/lib/focusTrap.ts` exists, 0% coverage today       |
 
 ## Medium Priority (v0.12–v0.13)
 
@@ -90,7 +90,7 @@ keep IDs stable. Grouped release view lives in [`ROADMAP.md`](ROADMAP.md).
 
 ### Remaining gaps / risks
 
-- Plugin security is trust-based; no signature/sandbox (FEAT-005 first, then FEAT-013/023)
+- Plugin security is trust-based allowlist (FEAT-005 shipped); no signature/sandbox yet (FEAT-013/023)
 - `PluginGitSnapshot` type exists but is not exposed through the plugin API (FEAT-026)
 - `focusTrap.ts` has no unit tests (FEAT-027)
 - `getRemoteUrl()` is uncached; cheap win (FEAT-019)

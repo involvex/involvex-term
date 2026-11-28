@@ -210,6 +210,11 @@ const AgentSchema = z.object({
 const PluginsSchema = z.object({
 	/** Load local plugins from ~/.involvex-term/plugins (opt-in, off by default). */
 	enabled: z.boolean().default(false),
+	/**
+	 * Folder names under ~/.involvex-term/plugins that the user has confirmed.
+	 * Unlisted plugins are discovered but never imported until trusted.
+	 */
+	trusted: z.array(z.string()).default([]),
 })
 
 const StartupSchema = z.object({

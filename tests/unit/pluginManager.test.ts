@@ -14,6 +14,7 @@ const settingsStore = await import('../../electron/settingsStore.ts')
 settingsStore.setSettingsHome(scratchHome)
 
 const {
+	discoverPlugins,
 	initPluginHost,
 	loadPlugins,
 	pluginCommandList,
@@ -72,13 +73,21 @@ describe('pluginManager', () => {
 				},
 			}`,
 		)
-		await loadPlugins('1.0.0')
+		await loadPlugins('1.0.0', ['good'])
 
 		expect(pluginCommandList()).toEqual([{id: 'good.hi', title: 'Say hi'}])
 		expect(pluginStatusBarList()).toEqual([{id: 'good.seg', text: 'hello'}])
 		const status = pluginStatus(true)
 		expect(status.enabled).toBe(true)
-		expect(status.loaded).toEqual([{name: 'good', commands: ['good.hi']}])
+		expect(status.loaded).toEqual([
+			{
+				name: 'good',
+				commands: ['good.hi'],
+				dir: path.join(pluginsDir(), 'good'),
+				entry: path.join(pluginsDir(), 'good', 'index.mjs'),
+			},
+		])
+		expect(status.untrusted).toEqual([])
 		expect(status.errors).toEqual([])
 	})
 
@@ -93,7 +102,7 @@ describe('pluginManager', () => {
 				},
 			}`,
 		)
-		await loadPlugins('1.0.0')
+		await loadPlugins('1.0.0', ['runner'])
 		const ok = await runPluginCommand('r.run')
 		expect(ok).toBe(true)
 		const ran = (globalThis as unknown as {__ran?: boolean}).__ran === true
@@ -110,11 +119,69 @@ describe('pluginManager', () => {
 				},
 			}`,
 		)
-		await loadPlugins('1.0.0')
+		await loadPlugins('1.0.0', ['broken', 'fine'])
 
 		const status = pluginStatus(true)
-		expect(status.errors).toEqual([{name: 'broken', error: 'boom'}])
-		expect(status.loaded).toEqual([{name: 'fine', commands: ['fine.cmd']}])
+		expect(status.errors).toEqual([
+			{
+				name: 'broken',
+				error: 'boom',
+				dir: path.join(pluginsDir(), 'broken'),
+				entry: path.join(pluginsDir(), 'broken', 'index.mjs'),
+			},
+		])
+		expect(status.loaded).toEqual([
+			{
+				name: 'fine',
+				commands: ['fine.cmd'],
+				dir: path.join(pluginsDir(), 'fine'),
+				entry: path.join(pluginsDir(), 'fine', 'index.mjs'),
+			},
+		])
+	})
+
+	it('blocks untrusted plugins until they are on the allowlist', async () => {
+		writePlugin(
+			'hello',
+			`export default {
+				activate(api) {
+					api.commands.register({id: 'hello.hi', title: 'Hi'}, () => {})
+				},
+			}`,
+		)
+		await loadPlugins('1.0.0', [])
+		const blocked = pluginStatus(true)
+		expect(blocked.loaded).toEqual([])
+		expect(blocked.untrusted).toEqual([
+			{
+				name: 'hello',
+				dir: path.join(pluginsDir(), 'hello'),
+				entry: path.join(pluginsDir(), 'hello', 'index.mjs'),
+			},
+		])
+		expect(pluginCommandList()).toEqual([])
+
+		await loadPlugins('1.0.0', ['hello'])
+		const allowed = pluginStatus(true)
+		expect(allowed.untrusted).toEqual([])
+		expect(allowed.loaded.map(p => p.name)).toEqual(['hello'])
+		expect(pluginCommandList()).toEqual([{id: 'hello.hi', title: 'Hi'}])
+	})
+
+	it('discoverPlugins lists entry paths without importing', () => {
+		writePlugin(
+			'scan-me',
+			`export default { activate() { throw new Error('should not run') } }`,
+		)
+		const found = discoverPlugins()
+		expect(found).toEqual([
+			{
+				name: 'scan-me',
+				dir: path.join(pluginsDir(), 'scan-me'),
+				entry: path.join(pluginsDir(), 'scan-me', 'index.mjs'),
+			},
+		])
+		expect(pluginCommandList()).toEqual([])
 	})
 
 	it('persists per-plugin storage across reloads', async () => {
@@ -129,9 +196,9 @@ describe('pluginManager', () => {
 				},
 			}`,
 		)
-		await loadPlugins('1.0.0')
+		await loadPlugins('1.0.0', ['stateful'])
 		expect(pluginCommandList()[0]?.title).toBe('1')
-		await loadPlugins('1.0.0')
+		await loadPlugins('1.0.0', ['stateful'])
 		expect(pluginCommandList()[0]?.title).toBe('2')
 	})
 
@@ -144,7 +211,7 @@ describe('pluginManager', () => {
 				},
 			}`,
 		)
-		await loadPlugins('1.0.0')
+		await loadPlugins('1.0.0', ['temp'])
 		expect(pluginCommandList().length).toBe(1)
 		await unloadPlugins()
 		expect(pluginCommandList().length).toBe(0)

@@ -175,7 +175,7 @@ export interface AppSettings {
 		showPaneLabels: boolean
 	}
 	/** Local plugins loaded from ~/.involvex-term/plugins (opt-in). */
-	plugins: {enabled: boolean}
+	plugins: {enabled: boolean; trusted: string[]}
 	startup: {
 		mode: 'session' | 'new'
 		profileId: string
@@ -258,11 +258,18 @@ export interface PluginStatusBarSegment {
 	text: string
 	title?: string
 }
+export interface PluginCandidate {
+	name: string
+	dir: string
+	entry: string
+}
 export interface PluginStatus {
 	dir: string
 	enabled: boolean
-	loaded: Array<{name: string; commands: string[]}>
-	errors: Array<{name: string; error: string}>
+	loaded: Array<{name: string; commands: string[]; dir: string; entry: string}>
+	/** Discovered plugins not yet on the trusted allowlist (not imported). */
+	untrusted: PluginCandidate[]
+	errors: Array<{name: string; error: string; dir?: string; entry?: string}>
 }
 export interface PluginListResult {
 	commands: PluginCommand[]
@@ -393,10 +400,11 @@ export interface TermApiShape {
 		buttons?: [string, string]
 	}) => Promise<boolean>
 	pluginList: () => Promise<PluginListResult>
+	pluginDiscover: () => Promise<PluginCandidate[]>
 	onPluginChanged: (cb: (msg: PluginChangedMsg) => void) => () => void
 	runPluginCommand: (id: string) => Promise<boolean>
 	pluginOpenDir: () => Promise<string>
-	pluginReload: () => Promise<unknown>
+	pluginReload: () => Promise<PluginStatus>
 	cliPending: () => Promise<CliCommand[]>
 	onCliCommand: (cb: (cmd: CliCommand) => void) => () => void
 	appInfo: () => Promise<AppInfo>

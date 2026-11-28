@@ -192,7 +192,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 		closeToTray: true,
 		storeDefaultsApplied: false,
 	},
-	plugins: {enabled: false},
+	plugins: {enabled: false, trusted: []},
 	quake: {
 		enabled: false,
 		hotkey: 'Alt+`',

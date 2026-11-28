@@ -12,6 +12,33 @@ them into realistic release phases.
 all green. Items below were checked against current code seams before being
 added.
 
+## Now
+
+- [ ] FEAT-007: Opt-in spoken readout for background-pane completion
+
+## Later
+
+- [ ] FEAT-017: Custom completion sound file (optional path)
+- [ ] FEAT-019: Cache git remote URL per repo root (TTL)
+- [ ] FEAT-026: Complete plugin API surface (git snapshot + pty prompt hook)
+- [ ] FEAT-027: Focus-trap tests + modal audit
+- [ ] FEAT-016 (scoped): Recent commits list in Git footer menu
+- [ ] FEAT-028: Read-only inline diff preview from Changes row
+- [ ] FEAT-029: Changes row actions (Reveal / Copy path)
+- [ ] FEAT-022: Per-project auto-start profile
+- [ ] FEAT-018: Built-in snippet templates
+- [ ] FEAT-030: Named session layouts
+- [ ] FEAT-020: Animated quake dropdown (respect reduced-motion)
+- [ ] FEAT-031: Opt-in sync of recent dirs/commands in Gist portable subset
+- [ ] FEAT-032: Raise coverage for panes + focusTrap
+- [ ] FEAT-033: Windows CI job for `bun run build:electron`
+- [ ] Share plugin trust gate: free announcement draft in SHARE.md
+
+## Done
+
+- [x] FEAT-005: Plugin trust gate — confirm before first load; persist
+      `plugins.trusted` allowlist; Settings → Plugins shows source/errors
+
 ## Done / shipping
 
 - Tabs, split panes (horizontal + vertical), find, command palette, session

@@ -3,6 +3,7 @@ import path from 'node:path'
 import {pathToFileURL} from 'node:url'
 import type {
 	PluginApi,
+	PluginCandidate,
 	PluginCommand,
 	PluginLoadError,
 	PluginModule,
@@ -33,6 +34,7 @@ type Listener<T extends unknown[]> = (...args: T) => void
 interface LoadedPlugin {
 	name: string
 	dir: string
+	entry: string
 	module: PluginModule
 	commandIds: Set<string>
 }
@@ -44,6 +46,7 @@ const commands = new Map<
 const statusBar = new Map<string, PluginStatusBarSegment & {owner: string}>()
 const loaded: LoadedPlugin[] = []
 const errors: PluginLoadError[] = []
+const untrusted: PluginCandidate[] = []
 
 const spawnListeners = new Set<Listener<[PtySpawnInfo]>>()
 const dataListeners = new Set<Listener<[string, string]>>()
@@ -159,6 +162,7 @@ function unloadAll(): void {
 	}
 	loaded.length = 0
 	errors.length = 0
+	untrusted.length = 0
 	for (const [id, seg] of statusBar) {
 		if (loaded.every(p => p.name !== seg.owner)) statusBar.delete(id)
 	}
@@ -183,15 +187,11 @@ function findEntry(dir: string): string | null {
 }
 
 /**
- * (Re)load every plugin in `~/.involvex-term/plugins`. Each subdirectory
- * with an `index.mjs`/`index.js` (or a `package.json` "main") is a plugin.
- * A plugin that throws during load only affects itself; errors are
- * surfaced via `pluginStatus()` for the Settings UI.
+ * Scan `~/.involvex-term/plugins` for folders with a resolvable entry.
+ * Does not import anything — used for the trust confirm UI.
  */
-export async function loadPlugins(appVersion: string): Promise<void> {
-	unloadAll()
-	ready = true
-	if (!fs.existsSync(pluginsDir())) return
+export function discoverPlugins(): PluginCandidate[] {
+	if (!fs.existsSync(pluginsDir())) return []
 	let names: string[]
 	try {
 		names = fs
@@ -200,12 +200,38 @@ export async function loadPlugins(appVersion: string): Promise<void> {
 			.map(d => d.name)
 	} catch (e) {
 		console.warn('[pluginManager] cannot read plugins dir:', e)
-		return
+		return []
 	}
+	const out: PluginCandidate[] = []
 	for (const name of names) {
 		const dir = path.join(pluginsDir(), name)
 		const entry = findEntry(dir)
 		if (!entry) continue
+		out.push({name, dir, entry})
+	}
+	return out
+}
+
+/**
+ * (Re)load every trusted plugin in `~/.involvex-term/plugins`. Each
+ * subdirectory with an `index.mjs`/`index.js` (or a `package.json` "main")
+ * is a candidate. Names not in `trusted` are listed in status as
+ * `untrusted` and never imported. A plugin that throws during load only
+ * affects itself; errors are surfaced via `pluginStatus()`.
+ */
+export async function loadPlugins(
+	appVersion: string,
+	trusted: readonly string[] = [],
+): Promise<void> {
+	unloadAll()
+	ready = true
+	const trustedSet = new Set(trusted)
+	const candidates = discoverPlugins()
+	for (const {name, dir, entry} of candidates) {
+		if (!trustedSet.has(name)) {
+			untrusted.push({name, dir, entry})
+			continue
+		}
 		try {
 			const mod = (await import(
 				pathToFileURL(entry).href + `?t=${Date.now()}`
@@ -217,13 +243,19 @@ export async function loadPlugins(appVersion: string): Promise<void> {
 			const entryRecord: LoadedPlugin = {
 				name,
 				dir,
+				entry,
 				module,
 				commandIds: new Set(),
 			}
 			loaded.push(entryRecord)
 			await module.activate(makeApi(name, dir, appVersion))
 		} catch (e) {
-			errors.push({name, error: e instanceof Error ? e.message : String(e)})
+			errors.push({
+				name,
+				error: e instanceof Error ? e.message : String(e),
+				dir,
+				entry,
+			})
 			console.warn(`[plugin:${name}] failed to load:`, e)
 		}
 	}
@@ -239,8 +271,14 @@ export function pluginStatus(enabled: boolean): PluginStatus {
 	return {
 		dir: pluginsDir(),
 		enabled: enabled && ready,
-		loaded: loaded.map(p => ({name: p.name, commands: [...p.commandIds]})),
-		errors,
+		loaded: loaded.map(p => ({
+			name: p.name,
+			commands: [...p.commandIds],
+			dir: p.dir,
+			entry: p.entry,
+		})),
+		untrusted: [...untrusted],
+		errors: [...errors],
 	}
 }
 

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- Plugin trust gate (FEAT-005): plugins stay discovered-only until the folder
+  name is on `plugins.trusted`; Settings → Plugins confirms on enable, lists
+  awaiting-trust with entry paths, and shows load errors with source
+
 ### Changed
 
 - Docs: roadmap refreshed with verified v0.12–v0.14 shipable phases, scoped
