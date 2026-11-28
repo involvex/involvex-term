@@ -1217,6 +1217,25 @@ export default function SettingsModal({
 									<label>
 										<input
 											type="checkbox"
+											checked={settings.terminal.completionSpeech === true}
+											onChange={e =>
+												set({
+													terminal: {
+														...settings.terminal,
+														completionSpeech: e.target.checked,
+													},
+												})
+											}
+										/>{' '}
+										Speak when a background pane finishes
+									</label>
+									<p className="footer-dim">
+										Uses the system voice (Web Speech API). Off by default —
+										works with or without the toast above.
+									</p>
+									<label>
+										<input
+											type="checkbox"
 											checked={settings.terminal.clipboardPersist === true}
 											onChange={e =>
 												set({

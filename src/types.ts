@@ -153,6 +153,8 @@ export interface AppSettings {
 		defaultProfileId: string
 		profiles: ShellProfile[]
 		completionBell: boolean
+		/** Opt-in Web Speech readout when a background pane completes. */
+		completionSpeech: boolean
 		scrollback: number
 		scrollbar: boolean
 		/** Use @xterm/addon-webgl when available (smoother floods; GPU). */

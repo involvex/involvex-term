@@ -4,6 +4,9 @@
 
 ### Added
 
+- Opt-in spoken readout when a background pane finishes (FEAT-007):
+  `terminal.completionSpeech` via Web Speech API; works with or without the
+  toast
 - Plugin trust gate (FEAT-005): plugins stay discovered-only until the folder
   name is on `plugins.trusted`; Settings → Plugins confirms on enable, lists
   awaiting-trust with entry paths, and shows load errors with source

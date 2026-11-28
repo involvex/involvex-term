@@ -35,7 +35,7 @@ keep IDs stable. Grouped release view lives in [`ROADMAP.md`](ROADMAP.md).
 
 | ID       | Category      | Description                                                                        | Impact | Effort | Why now / seam                                    |
 | -------- | ------------- | ---------------------------------------------------------------------------------- | ------ | ------ | ------------------------------------------------- |
-| FEAT-007 | Accessibility | Opt-in spoken readout for background-pane completion (Web Speech API)              | Medium | Low    | Reuses completion toast event                     |
+| FEAT-007 | Accessibility | ~~Opt-in spoken readout for background-pane completion~~ (shipped)                 | Medium | Low    | `terminal.completionSpeech` + Web Speech API      |
 | FEAT-017 | Configuration | Custom notification sound file for background-pane completion                      | Low    | Low    | Same completion event                             |
 | FEAT-019 | Performance   | Cache git remote URLs per repo root with TTL/invalidation                          | Low    | Low    | Mirror `repoRootCache` in `gitEngine.ts`          |
 | FEAT-022 | Configuration | Per-project auto-start profile (repo root/cwd mapping → profile)                   | Medium | Medium | `ptySpawn` takes profileId; OSC7 cwd tracked      |

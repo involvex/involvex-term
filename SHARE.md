@@ -2,15 +2,18 @@
 
 ## Audience
 
-Windows terminal users who run or write local Involvex Term plugins.
+Windows terminal users who keep long builds or agents in background panes.
 
 ## Announcement
 
-Involvex Term now confirms before loading a local plugin for the first time.
-Plugin folders under `~/.involvex-term/plugins` stay off the allowlist until
-you trust them in Settings → Plugins (or when enabling plugins). Entry paths
-and load errors are shown in that same panel. Details:
+Involvex Term can optionally speak when a background pane finishes — Settings →
+Terminal → “Speak when a background pane finishes” (`terminal.completionSpeech`).
+It uses the system voice (Web Speech API), works with or without the existing
+completion toast, and stays off by default.
 https://github.com/involvex/involvex-term
+
+Also recent: local plugins now require an explicit trust confirm before first
+load (Settings → Plugins).
 
 ## Free channels (pick one)
 
