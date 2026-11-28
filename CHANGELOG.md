@@ -2,8 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- Plugin trust gate (FEAT-005): plugins stay discovered-only until the folder
+  name is on `plugins.trusted`; Settings → Plugins confirms on enable, lists
+  awaiting-trust with entry paths, and shows load errors with source
+
 ### Changed
 
+- Docs: roadmap refreshed with verified v0.12–v0.14 shipable phases, scoped
+  FEAT-016, new FEAT-026–033 backlog IDs, and explicit cert/design gates;
+  `suggestions.md` synced as the stable ID backlog
 - Docs: Microsoft Store listing is live
   (https://apps.microsoft.com/detail/9NBNBH9CJ507); dual-channel install CTAs
   on README / docs site; ROADMAP v0.11 marked shipped

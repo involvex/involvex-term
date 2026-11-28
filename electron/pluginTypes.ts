@@ -81,11 +81,22 @@ export interface PluginModule {
 export interface PluginLoadError {
 	name: string
 	error: string
+	dir?: string
+	entry?: string
+}
+
+/** A plugin folder with a resolvable entry that has not been imported yet. */
+export interface PluginCandidate {
+	name: string
+	dir: string
+	entry: string
 }
 
 export interface PluginStatus {
 	dir: string
 	enabled: boolean
-	loaded: Array<{name: string; commands: string[]}>
+	loaded: Array<{name: string; commands: string[]; dir: string; entry: string}>
+	/** Discovered but not imported — waiting on the trusted allowlist. */
+	untrusted: PluginCandidate[]
 	errors: PluginLoadError[]
 }

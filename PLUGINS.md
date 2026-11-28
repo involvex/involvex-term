@@ -13,12 +13,19 @@ sandboxing. Only enable plugins you wrote yourself or fully trust, the same
 way you'd trust a shell profile script. Plugins are **off by default**
 (`plugins.enabled: false` in settings).
 
+Even when plugins are enabled, a folder is **not imported** until its name
+is on the `plugins.trusted` allowlist. Enabling plugins prompts to trust
+any folders already present; new folders appear under **Awaiting trust**
+in Settings → Plugins until you click **Trust and load**.
+
 ## Installing a plugin
 
-1. Enable plugins: **Settings → Plugins → Enable plugins**.
-2. Copy (or symlink, while developing) the plugin's folder into
+1. Copy (or symlink, while developing) the plugin's folder into
    `~/.involvex-term/plugins/<name>/`.
-3. Click **Reload plugins** in Settings → Plugins (or restart the app).
+2. Enable plugins: **Settings → Plugins → Enable plugins** (confirm trust
+   for any pending folders), or click **Trust and load** on a listed plugin.
+3. Click **Reload plugins** in Settings → Plugins after editing a trusted
+   plugin (or restart the app).
 
 A plugin folder needs one of:
 

@@ -582,8 +582,14 @@ export default function SettingsModal({
 	const [pluginStatus, setPluginStatus] = useState<{
 		dir: string
 		enabled: boolean
-		loaded: Array<{name: string; commands: string[]}>
-		errors: Array<{name: string; error: string}>
+		loaded: Array<{
+			name: string
+			commands: string[]
+			dir: string
+			entry: string
+		}>
+		untrusted: Array<{name: string; dir: string; entry: string}>
+		errors: Array<{name: string; error: string; dir?: string; entry?: string}>
 	} | null>(null)
 	/**
 	 * Remembers which rejection list was dismissed rather than a boolean, so a
@@ -672,7 +678,7 @@ export default function SettingsModal({
 		return () => {
 			cancelled = true
 		}
-	}, [tab, settings.plugins?.enabled])
+	}, [tab, settings.plugins?.enabled, settings.plugins?.trusted])
 	return (
 		<div
 			className="modal-backdrop"
@@ -1993,7 +1999,8 @@ export default function SettingsModal({
 									<code>~/.involvex-term/plugins/&lt;name&gt;/index.mjs</code>{' '}
 									to add command-palette commands and status-bar text. Plugins
 									run with full Node access in the main process — only enable
-									ones you wrote or trust. See the{' '}
+									ones you wrote or trust. Each plugin folder must be confirmed
+									once before it loads. See the{' '}
 									<a
 										href="#"
 										onClick={e => {
@@ -2012,11 +2019,50 @@ export default function SettingsModal({
 									<input
 										type="checkbox"
 										checked={settings.plugins?.enabled === true}
-										onChange={e =>
-											set({
-												plugins: {enabled: e.target.checked},
-											})
-										}
+										onChange={e => {
+											const enabled = e.target.checked
+											const trusted = settings.plugins?.trusted ?? []
+											if (!enabled) {
+												set({
+													plugins: {
+														enabled: false,
+														trusted,
+													},
+												})
+												return
+											}
+											void (async () => {
+												const api = termApi()
+												if (!api) return
+												const candidates = await api.pluginDiscover()
+												const pending = candidates.filter(
+													c => !trusted.includes(c.name),
+												)
+												let nextTrusted = trusted
+												if (pending.length > 0) {
+													const detail = pending
+														.map(p => `${p.name}\n  ${p.entry}`)
+														.join('\n\n')
+													const ok = await api.dialogConfirm({
+														title: 'Trust plugins?',
+														message: `Load ${pending.length} untrusted plugin${pending.length === 1 ? '' : 's'}? They run with full Node access in the main process.`,
+														detail,
+														buttons: ['Trust and enable', 'Cancel'],
+													})
+													if (!ok) return
+													nextTrusted = [
+														...trusted,
+														...pending.map(p => p.name),
+													]
+												}
+												set({
+													plugins: {
+														enabled: true,
+														trusted: nextTrusted,
+													},
+												})
+											})()
+										}}
 									/>
 								</label>
 								<div className="settings-btn-row">
@@ -2034,7 +2080,7 @@ export default function SettingsModal({
 										onClick={() =>
 											void termApi()
 												?.pluginReload()
-												.then(s => setPluginStatus(s as typeof pluginStatus))
+												.then(s => setPluginStatus(s))
 										}
 									>
 										Reload plugins
@@ -2042,6 +2088,9 @@ export default function SettingsModal({
 								</div>
 								{pluginStatus && (
 									<>
+										<p className="footer-dim">
+											Plugins directory: <code>{pluginStatus.dir}</code>
+										</p>
 										<h3>Loaded ({pluginStatus.loaded.length})</h3>
 										{pluginStatus.loaded.length === 0 ? (
 											<p className="footer-dim">No plugins loaded.</p>
@@ -2057,9 +2106,48 @@ export default function SettingsModal({
 																{p.commands.length === 1 ? '' : 's'}
 															</span>
 														)}
+														<div className="footer-dim">
+															<code>{p.entry}</code>
+														</div>
 													</li>
 												))}
 											</ul>
+										)}
+										{(pluginStatus.untrusted?.length ?? 0) > 0 && (
+											<>
+												<h3>
+													Awaiting trust ({pluginStatus.untrusted.length})
+												</h3>
+												<ul className="plugin-list">
+													{pluginStatus.untrusted.map(p => (
+														<li key={p.name}>
+															<strong>{p.name}</strong>
+															<div className="footer-dim">
+																<code>{p.entry}</code>
+															</div>
+															<button
+																type="button"
+																className="settings-btn"
+																onClick={() => {
+																	const trusted = [
+																		...(settings.plugins?.trusted ?? []),
+																		p.name,
+																	]
+																	set({
+																		plugins: {
+																			enabled:
+																				settings.plugins?.enabled === true,
+																			trusted,
+																		},
+																	})
+																}}
+															>
+																Trust and load
+															</button>
+														</li>
+													))}
+												</ul>
+											</>
 										)}
 										{pluginStatus.errors.length > 0 && (
 											<>
@@ -2069,6 +2157,11 @@ export default function SettingsModal({
 														<li key={e.name}>
 															<strong>{e.name}</strong>:{' '}
 															<span className="footer-dim">{e.error}</span>
+															{e.entry && (
+																<div className="footer-dim">
+																	<code>{e.entry}</code>
+																</div>
+															)}
 														</li>
 													))}
 												</ul>

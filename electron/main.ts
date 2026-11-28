@@ -33,6 +33,7 @@ import {
 import {buildMenu} from './hotkeys.js'
 import {getOpencodeStatus, opencodeAvailable} from './opencodeEngine.js'
 import {
+	discoverPlugins,
 	initPluginHost,
 	loadPlugins,
 	notifyPtyData,
@@ -979,6 +980,11 @@ function registerIpc() {
 		// successful one and the change silently reappeared on the next
 		// launch.
 		const pluginsToggled = next.plugins?.enabled !== settings.plugins?.enabled
+		const prevTrusted = settings.plugins?.trusted ?? []
+		const nextTrusted = next.plugins?.trusted ?? []
+		const trustedChanged =
+			prevTrusted.length !== nextTrusted.length ||
+			prevTrusted.some((n, i) => n !== nextTrusted[i])
 		let saved: typeof settings
 		try {
 			saved = saveSettings(next)
@@ -999,7 +1005,8 @@ function registerIpc() {
 		// to remove. Apply failures are logged instead, and the renderer can
 		// still re-read the file.
 		try {
-			if (pluginsToggled) await applyPluginsEnabled()
+			if (pluginsToggled || (settings.plugins.enabled && trustedChanged))
+				await applyPluginsEnabled()
 			if (win) await applyLoadedSettings()
 		} catch (e) {
 			console.warn('[settings:set] saved, but applying the result failed:', e)
@@ -1012,6 +1019,7 @@ function registerIpc() {
 		statusBar: pluginStatusBarList(),
 		status: pluginStatus(settings.plugins.enabled),
 	}))
+	ipcMain.handle('plugin:discover', () => discoverPlugins())
 	ipcMain.handle('plugin:runCommand', (_e, {id}: {id: string}) =>
 		runPluginCommand(id),
 	)
@@ -1020,7 +1028,8 @@ function registerIpc() {
 		return shell.openPath(pluginsDir())
 	})
 	ipcMain.handle('plugin:reload', async () => {
-		if (settings.plugins.enabled) await loadPlugins(app.getVersion())
+		if (settings.plugins.enabled)
+			await loadPlugins(app.getVersion(), settings.plugins.trusted ?? [])
 		return pluginStatus(settings.plugins.enabled)
 	})
 	ipcMain.handle('window:toggle-app', () => {
@@ -1040,7 +1049,8 @@ function registerIpc() {
 }
 
 async function applyPluginsEnabled(): Promise<void> {
-	if (settings.plugins.enabled) await loadPlugins(app.getVersion())
+	if (settings.plugins.enabled)
+		await loadPlugins(app.getVersion(), settings.plugins.trusted ?? [])
 	else await unloadPlugins()
 }
 
@@ -1202,7 +1212,8 @@ function createWindow() {
 			})
 		},
 	})
-	if (settings.plugins.enabled) void loadPlugins(app.getVersion())
+	if (settings.plugins.enabled)
+		void loadPlugins(app.getVersion(), settings.plugins.trusted ?? [])
 }
 
 function quitApp(): void {
