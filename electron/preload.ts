@@ -118,6 +118,8 @@ export interface TermApi {
 		title?: string
 		buttons?: [string, string]
 	}) => Promise<boolean>
+	dialogPickAudio: () => Promise<string | null>
+	audioLocalDataUrl: (filePath: string) => Promise<string | null>
 	pluginList: () => Promise<{
 		commands: Array<{id: string; title: string; hint?: string}>
 		statusBar: Array<{id: string; text: string; title?: string}>
@@ -317,6 +319,9 @@ const api: TermApi = {
 	agentWhich: binary => ipcRenderer.invoke('agent:which', {binary}),
 	dialogSaveText: opts => ipcRenderer.invoke('dialog:saveText', opts),
 	dialogConfirm: opts => ipcRenderer.invoke('dialog:confirm', opts),
+	dialogPickAudio: () => ipcRenderer.invoke('dialog:pickAudio'),
+	audioLocalDataUrl: filePath =>
+		ipcRenderer.invoke('audio:localDataUrl', {path: filePath}),
 	pluginList: () => ipcRenderer.invoke('plugin:list'),
 	pluginDiscover: () => ipcRenderer.invoke('plugin:discover'),
 	onPluginChanged: cb => sub('plugin:changed', cb as never),

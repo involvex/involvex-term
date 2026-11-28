@@ -21,6 +21,7 @@ import {
 	type PaneLaunchBinding,
 } from './lib/agentLabels'
 import {defaultAgentTools, resolveActiveAgent} from './lib/agents'
+import {playCompletionSound} from './lib/completionSound'
 import {speakBackgroundCompletion} from './lib/completionSpeech'
 import {focusPaneInTabs} from './lib/focusPane'
 import {matchHotkey} from './lib/hotkeys'
@@ -145,6 +146,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 		],
 		completionBell: true,
 		completionSpeech: false,
+		completionSound: '',
 		scrollback: 5000,
 		scrollbar: true,
 		webgl: false,
@@ -1089,7 +1091,9 @@ export default function App() {
 
 	const showCompletionToast = useCallback((paneId: string) => {
 		const terminal = settingsRef.current.terminal
-		if (!terminal.completionBell && !terminal.completionSpeech) return
+		const soundPath = (terminal.completionSound ?? '').trim()
+		if (!terminal.completionBell && !terminal.completionSpeech && !soundPath)
+			return
 		const tab = tabsRef.current.find(t => findLeaf(t.root, paneId))
 		const label = tab?.title || 'Background pane'
 		if (terminal.completionBell) {
@@ -1100,6 +1104,12 @@ export default function App() {
 		speakBackgroundCompletion(label, {
 			enabled: terminal.completionSpeech === true,
 		})
+		if (soundPath) {
+			const api = termApi()
+			void playCompletionSound(soundPath, {
+				resolveSrc: p => api?.audioLocalDataUrl(p) ?? null,
+			})
+		}
 	}, [])
 
 	// Focus a pane within its tab.
@@ -1988,7 +1998,8 @@ export default function App() {
 								fg={settings.theme.fg}
 								completionBell={
 									settings.terminal.completionBell ||
-									settings.terminal.completionSpeech === true
+									settings.terminal.completionSpeech === true ||
+									!!(settings.terminal.completionSound ?? '').trim()
 								}
 								scrollback={settings.terminal.scrollback}
 								scrollbar={settings.terminal.scrollbar}

@@ -1233,6 +1233,65 @@ export default function SettingsModal({
 										Uses the system voice (Web Speech API). Off by default —
 										works with or without the toast above.
 									</p>
+									<label className="wide">
+										<span>Custom completion sound</span>
+										<input
+											type="text"
+											value={settings.terminal.completionSound ?? ''}
+											placeholder="Optional path to .wav / .mp3 / …"
+											onChange={e =>
+												set({
+													terminal: {
+														...settings.terminal,
+														completionSound: e.target.value,
+													},
+												})
+											}
+										/>
+									</label>
+									<div className="settings-btn-row">
+										<button
+											type="button"
+											className="settings-btn"
+											onClick={() => {
+												void termApi()
+													?.dialogPickAudio()
+													.then(picked => {
+														if (!picked) return
+														set({
+															terminal: {
+																...settings.terminal,
+																completionSound: picked,
+															},
+														})
+													})
+											}}
+										>
+											Browse…
+										</button>
+										<button
+											type="button"
+											className="settings-btn"
+											disabled={
+												!(settings.terminal.completionSound ?? '').trim()
+											}
+											onClick={() =>
+												set({
+													terminal: {
+														...settings.terminal,
+														completionSound: '',
+													},
+												})
+											}
+										>
+											Clear
+										</button>
+									</div>
+									<p className="footer-dim">
+										Played via HTMLAudioElement when a background pane finishes.
+										Invalid or missing files are ignored. Stays local (not
+										Gist-synced).
+									</p>
 									<label>
 										<input
 											type="checkbox"

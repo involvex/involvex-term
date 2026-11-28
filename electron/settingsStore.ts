@@ -157,6 +157,11 @@ const TerminalSchema = z.object({
 	 * completes. Opt-in — off by default.
 	 */
 	completionSpeech: z.boolean().default(false),
+	/**
+	 * Optional local audio file played when a background pane completes.
+	 * Empty = no custom sound. Absolute path; not part of Gist portable sync.
+	 */
+	completionSound: z.string().default(''),
 	/** xterm scrollback lines. */
 	scrollback: z.number().min(200).max(50000).default(5000),
 	/** Show the terminal viewport scrollbar. */
