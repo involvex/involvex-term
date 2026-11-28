@@ -31,6 +31,7 @@ import {
 	stashPush,
 } from './gitEngine.js'
 import {buildMenu} from './hotkeys.js'
+import {readLocalAudioDataUrl} from './localAudio.js'
 import {getOpencodeStatus, opencodeAvailable} from './opencodeEngine.js'
 import {
 	discoverPlugins,
@@ -728,6 +729,30 @@ function registerIpc() {
 				noLink: true,
 			})
 			return response === 0
+		},
+	)
+
+	ipcMain.handle('dialog:pickAudio', async () => {
+		if (!win || win.isDestroyed()) return null
+		const {canceled, filePaths} = await dialog.showOpenDialog(win, {
+			title: 'Choose completion sound',
+			filters: [
+				{
+					name: 'Audio',
+					extensions: ['wav', 'mp3', 'ogg', 'm4a', 'aac', 'webm', 'flac'],
+				},
+			],
+			properties: ['openFile'],
+		})
+		if (canceled || !filePaths[0]) return null
+		return filePaths[0]
+	})
+
+	ipcMain.handle(
+		'audio:localDataUrl',
+		(_e, {path: filePath}: {path: string}) => {
+			if (typeof filePath !== 'string') return null
+			return readLocalAudioDataUrl(filePath)
 		},
 	)
 

@@ -14,11 +14,10 @@ added.
 
 ## Now
 
-- [ ] FEAT-017: Custom completion sound file (optional path)
+- [ ] FEAT-019: Cache git remote URL per repo root (TTL)
 
 ## Later
 
-- [ ] FEAT-019: Cache git remote URL per repo root (TTL)
 - [ ] FEAT-026: Complete plugin API surface (git snapshot + pty prompt hook)
 - [ ] FEAT-027: Focus-trap tests + modal audit
 - [ ] FEAT-016 (scoped): Recent commits list in Git footer menu
@@ -33,9 +32,11 @@ added.
 - [ ] FEAT-033: Windows CI job for `bun run build:electron`
 - [ ] Share plugin trust gate: free announcement draft in SHARE.md
 - [ ] Share completion speech: free announcement draft in SHARE.md
+- [ ] Share completion sound: free announcement draft in SHARE.md
 
 ## Done
 
+- [x] FEAT-017: Custom completion sound file (`terminal.completionSound`)
 - [x] FEAT-007: Opt-in spoken readout for background-pane completion
       (`terminal.completionSpeech`, Web Speech API)
 - [x] FEAT-005: Plugin trust gate — confirm before first load; persist

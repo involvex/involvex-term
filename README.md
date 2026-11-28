@@ -198,7 +198,8 @@ Stored at `~/.involvex-term/settings.json` (zod-validated, watched live):
 		"scrollback": 5000,
 		"scrollbar": true,
 		"completionBell": true,
-		"completionSpeech": false
+		"completionSpeech": false,
+		"completionSound": ""
 	},
 	"agent": {
 		"activeId": "opencode",

@@ -4,6 +4,9 @@
 
 ### Added
 
+- Custom background-pane completion sound (FEAT-017): optional
+  `terminal.completionSound` path; HTMLAudioElement via local data URL;
+  invalid/missing files ignored; not Gist-synced
 - Opt-in spoken readout when a background pane finishes (FEAT-007):
   `terminal.completionSpeech` via Web Speech API; works with or without the
   toast

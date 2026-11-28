@@ -155,6 +155,8 @@ export interface AppSettings {
 		completionBell: boolean
 		/** Opt-in Web Speech readout when a background pane completes. */
 		completionSpeech: boolean
+		/** Optional local audio file path for background-pane completion. */
+		completionSound: string
 		scrollback: number
 		scrollbar: boolean
 		/** Use @xterm/addon-webgl when available (smoother floods; GPU). */
@@ -401,6 +403,8 @@ export interface TermApiShape {
 		title?: string
 		buttons?: [string, string]
 	}) => Promise<boolean>
+	dialogPickAudio: () => Promise<string | null>
+	audioLocalDataUrl: (filePath: string) => Promise<string | null>
 	pluginList: () => Promise<PluginListResult>
 	pluginDiscover: () => Promise<PluginCandidate[]>
 	onPluginChanged: (cb: (msg: PluginChangedMsg) => void) => () => void
