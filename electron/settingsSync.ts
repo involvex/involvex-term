@@ -79,6 +79,7 @@ const PortableSchema = z.object({
 		defaultProfileId: z.string(),
 		profiles: z.array(PortableProfileSchema),
 		completionBell: z.boolean(),
+		completionSpeech: z.boolean().optional(),
 		scrollback: z.number(),
 		scrollbar: z.boolean(),
 		webgl: z.boolean().optional(),
@@ -345,6 +346,7 @@ export function extractPortable(
 				.filter(p => p.kind !== 'custom')
 				.map(p => ({id: p.id, name: p.name, kind: p.kind})),
 			completionBell: settings.terminal.completionBell,
+			completionSpeech: settings.terminal.completionSpeech,
 			scrollback: settings.terminal.scrollback,
 			scrollbar: settings.terminal.scrollbar,
 			webgl: settings.terminal.webgl,
@@ -402,6 +404,10 @@ export function mergePortable(
 			defaultProfileId,
 			profiles,
 			completionBell: portable.terminal.completionBell,
+			completionSpeech:
+				portable.terminal.completionSpeech ??
+				local.terminal.completionSpeech ??
+				false,
 			scrollback: portable.terminal.scrollback,
 			scrollbar: portable.terminal.scrollbar,
 			webgl: portable.terminal.webgl ?? local.terminal.webgl ?? false,

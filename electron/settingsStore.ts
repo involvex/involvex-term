@@ -152,6 +152,11 @@ const TerminalSchema = z.object({
 	profiles: z.array(ProfileSchema).default(defaultProfiles()),
 	/** Toast when a background pane goes idle after output. */
 	completionBell: z.boolean().default(true),
+	/**
+	 * Speak a short phrase via Web Speech API when a background pane
+	 * completes. Opt-in — off by default.
+	 */
+	completionSpeech: z.boolean().default(false),
 	/** xterm scrollback lines. */
 	scrollback: z.number().min(200).max(50000).default(5000),
 	/** Show the terminal viewport scrollbar. */
