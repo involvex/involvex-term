@@ -44,7 +44,22 @@ export default {
 			})
 		})
 
-		this._cleanup = () => clearInterval(timer)
+		// Prompt OSC + read-only git snapshot (FEAT-026).
+		const offPrompt = api.pty.onPrompt(info => {
+			void api.git.get(info.cwd).then(git => {
+				const label = git.repoRoot
+					? `${git.branch || '?'}${git.isDirty ? '*' : ''}`
+					: 'no-repo'
+				api.log(
+					`prompt ${info.paneId} cwd=${info.cwd} hadOutput=${info.hadOutput} git=${label}`,
+				)
+			})
+		})
+
+		this._cleanup = () => {
+			clearInterval(timer)
+			offPrompt()
+		}
 	},
 
 	deactivate() {

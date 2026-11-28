@@ -17,6 +17,7 @@ const {
 	discoverPlugins,
 	initPluginHost,
 	loadPlugins,
+	notifyPtyPrompt,
 	pluginCommandList,
 	pluginStatus,
 	pluginStatusBarList,
@@ -215,5 +216,87 @@ describe('pluginManager', () => {
 		expect(pluginCommandList().length).toBe(1)
 		await unloadPlugins()
 		expect(pluginCommandList().length).toBe(0)
+	})
+
+	it('exposes api.git.get via the host gitSnapshot seam', async () => {
+		initPluginHost({
+			settingsSnapshot: () => ({
+				version: '9.9.9',
+				theme: {bg: '#000', fg: '#fff'},
+			}),
+			onChanged: () => {},
+			gitSnapshot: async cwd => ({
+				repoRoot: cwd,
+				branch: 'main',
+				isDirty: true,
+			}),
+		})
+		writePlugin(
+			'gitty',
+			`export default {
+				async activate(api) {
+					const snap = await api.git.get('/tmp/repo')
+					api.commands.register(
+						{id: 'gitty.snap', title: JSON.stringify(snap)},
+						() => {},
+					)
+				},
+			}`,
+		)
+		await loadPlugins('1.0.0', ['gitty'])
+		expect(pluginCommandList()[0]?.title).toBe(
+			JSON.stringify({
+				repoRoot: '/tmp/repo',
+				branch: 'main',
+				isDirty: true,
+			}),
+		)
+	})
+
+	it('fans out notifyPtyPrompt to onPrompt listeners', async () => {
+		writePlugin(
+			'prompter',
+			`export default {
+				activate(api) {
+					api.pty.onPrompt(info => {
+						globalThis.__promptInfo = info
+					})
+				},
+			}`,
+		)
+		await loadPlugins('1.0.0', ['prompter'])
+		notifyPtyPrompt({
+			paneId: 'p1',
+			cwd: '/repos/demo',
+			hadOutput: true,
+		})
+		expect(
+			(globalThis as unknown as {__promptInfo?: unknown}).__promptInfo,
+		).toEqual({
+			paneId: 'p1',
+			cwd: '/repos/demo',
+			hadOutput: true,
+		})
+	})
+
+	it('isolates a throwing onPrompt listener', async () => {
+		writePlugin(
+			'bad-prompt',
+			`export default {
+				activate(api) {
+					api.pty.onPrompt(() => {
+						throw new Error('prompt boom')
+					})
+					api.pty.onPrompt(info => {
+						globalThis.__promptOk = info.paneId
+					})
+				},
+			}`,
+		)
+		await loadPlugins('1.0.0', ['bad-prompt'])
+		notifyPtyPrompt({paneId: 'p2', cwd: '/x', hadOutput: false})
+		expect((globalThis as unknown as {__promptOk?: string}).__promptOk).toBe(
+			'p2',
+		)
 	})
 })

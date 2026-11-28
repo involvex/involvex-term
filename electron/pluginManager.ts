@@ -5,11 +5,13 @@ import type {
 	PluginApi,
 	PluginCandidate,
 	PluginCommand,
+	PluginGitSnapshot,
 	PluginLoadError,
 	PluginModule,
 	PluginSettingsSnapshot,
 	PluginStatus,
 	PluginStatusBarSegment,
+	PtyPromptInfo,
 	PtySpawnInfo,
 } from './pluginTypes.js'
 import {settingsDir} from './settingsStore.js'
@@ -51,18 +53,28 @@ const untrusted: PluginCandidate[] = []
 const spawnListeners = new Set<Listener<[PtySpawnInfo]>>()
 const dataListeners = new Set<Listener<[string, string]>>()
 const exitListeners = new Set<Listener<[string]>>()
+const promptListeners = new Set<Listener<[PtyPromptInfo]>>()
+
+const EMPTY_GIT_SNAPSHOT: PluginGitSnapshot = {
+	repoRoot: null,
+	branch: '',
+	isDirty: false,
+}
 
 let onChanged: (() => void) | null = null
 let getSettingsSnapshot: (() => PluginSettingsSnapshot) | null = null
+let getGitSnapshot: ((cwd: string) => Promise<PluginGitSnapshot>) | null = null
 let ready = false
 
-/** Wired by main.ts so plugins see the current app version/theme. */
+/** Wired by main.ts so plugins see the current app version/theme/git. */
 export function initPluginHost(opts: {
 	settingsSnapshot: () => PluginSettingsSnapshot
 	onChanged: () => void
+	gitSnapshot?: (cwd: string) => Promise<PluginGitSnapshot>
 }): void {
 	getSettingsSnapshot = opts.settingsSnapshot
 	onChanged = opts.onChanged
+	getGitSnapshot = opts.gitSnapshot ?? null
 }
 
 function notify(): void {
@@ -116,6 +128,16 @@ function makeApi(name: string, dir: string, appVersion: string): PluginApi {
 			onExit: cb => {
 				exitListeners.add(cb)
 				return () => exitListeners.delete(cb)
+			},
+			onPrompt: cb => {
+				promptListeners.add(cb)
+				return () => promptListeners.delete(cb)
+			},
+		},
+		git: {
+			get(cwd: string) {
+				if (!getGitSnapshot) return Promise.resolve(EMPTY_GIT_SNAPSHOT)
+				return getGitSnapshot(cwd)
 			},
 		},
 		settings: {
@@ -329,6 +351,15 @@ export function notifyPtyExit(paneId: string): void {
 			cb(paneId)
 		} catch (e) {
 			console.warn('[pluginManager] onExit listener threw:', e)
+		}
+	}
+}
+export function notifyPtyPrompt(info: PtyPromptInfo): void {
+	for (const cb of promptListeners) {
+		try {
+			cb(info)
+		} catch (e) {
+			console.warn('[pluginManager] onPrompt listener threw:', e)
 		}
 	}
 }

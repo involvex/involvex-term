@@ -39,6 +39,7 @@ import {
 	loadPlugins,
 	notifyPtyData,
 	notifyPtyExit,
+	notifyPtyPrompt,
 	notifyPtySpawn,
 	pluginCommandList,
 	pluginsDir,
@@ -518,13 +519,20 @@ function registerIpc() {
 					// Prompt chunks flush immediately so the renderer sees output
 					// before pty:prompt; everything else joins the next turn.
 					enqueuePtyData(id, cleaned, win, sawPrompt)
-					if (sawPrompt)
+					if (sawPrompt) {
+						// eslint-disable-next-line no-control-regex
+						const hadOutput = /[^\s\x1b]/.test(cleaned)
 						safeSend(win, `pty:prompt-${id}`, {
 							// Regex test scans without copying; cleaned.trim()
 							// allocated a full duplicate per prompt chunk.
-							// eslint-disable-next-line no-control-regex
-							hadOutput: /[^\s\x1b]/.test(cleaned),
+							hadOutput,
 						})
+						notifyPtyPrompt({
+							paneId: id,
+							cwd: getPty(id)?.cwd ?? '',
+							hadOutput,
+						})
+					}
 					notifyPtyData(id, cleaned)
 				})
 				entry.pty.onExit(() => {
@@ -1229,6 +1237,14 @@ function createWindow() {
 			version: app.getVersion(),
 			theme: {bg: settings.theme.bg, fg: settings.theme.fg},
 		}),
+		gitSnapshot: async cwd => {
+			const s = await getGitStatus(cwd)
+			return {
+				repoRoot: s.repoRoot,
+				branch: s.branch,
+				isDirty: s.isDirty,
+			}
+		},
 		onChanged: () => {
 			if (!win || win.isDestroyed()) return
 			safeSend(win, 'plugin:changed', {

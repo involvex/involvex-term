@@ -86,7 +86,7 @@ Shows (or replaces) a small text segment at the right of the footer, after
 the built-in Git/sys/agent modules. `title` is a tooltip. Segments persist
 until you `clear(id)` or the plugin is unloaded.
 
-### `api.pty.onSpawn(cb)` / `onData(cb)` / `onExit(cb)`
+### `api.pty.onSpawn(cb)` / `onData(cb)` / `onExit(cb)` / `onPrompt(cb)`
 
 Read-only observers over every pane's pty lifecycle:
 
@@ -94,12 +94,26 @@ Read-only observers over every pane's pty lifecycle:
 onSpawn(cb: (info: {paneId: string; cwd: string; shell: string}) => void): () => void
 onData(cb: (paneId: string, data: string) => void): () => void
 onExit(cb: (paneId: string) => void): () => void
+onPrompt(cb: (info: {paneId: string; cwd: string; hadOutput: boolean}) => void): () => void
 ```
 
 Each returns an unsubscribe function. `onData` receives output **after**
 OSC 7/9;9/633 cwd sequences have been stripped — you cannot inject into or
 alter what xterm renders from here (there's no write hook; that's
 intentional, so a broken plugin can't corrupt terminal output).
+
+`onPrompt` fires when a prompt OSC is detected (same signal as the
+background-pane completion toast). The first prompt per pane is shell init;
+`hadOutput` is true when the cleaned chunk had non-whitespace content.
+
+### `api.git.get(cwd)`
+
+```ts
+get(cwd: string): Promise<{repoRoot: string | null; branch: string; isDirty: boolean}>
+```
+
+Read-only fast git status for a working directory (hits the host TTL cache;
+no stash/ahead/behind). Debounce if you call this from every `onPrompt`.
 
 ### `api.settings.get()`
 
