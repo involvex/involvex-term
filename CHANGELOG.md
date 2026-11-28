@@ -4,6 +4,8 @@
 
 ### Added
 
+- Plugin API: read-only `api.git.get(cwd)` snapshot and `api.pty.onPrompt`;
+  mirrored in `@involvex/term-sdk` 0.1.1; hello-plugin smoke (FEAT-026)
 - Cache git remote URLs per repo root + remote name with TTL; cleared by
   `invalidateGitCache` on fetch/pull/push/checkout (FEAT-019)
 - Custom background-pane completion sound (FEAT-017): optional

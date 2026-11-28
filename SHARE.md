@@ -2,13 +2,13 @@
 
 ## Audience
 
-Developers watching the git footer / remote link in Involvex Term.
+Authors of local Involvex Term plugins (and anyone extending the terminal).
 
 ## Announcement
 
-Involvex Term now caches each repo’s remote URL (per root + remote name) for a
-few seconds and clears it on fetch/pull/push/checkout — fewer git spawns when
-the footer refreshes, same correctness. Part of the ongoing git polish track.
+Plugin API update: plugins can read a slim git snapshot via `api.git.get(cwd)`
+and listen for prompt OSC events with `api.pty.onPrompt`. Types are in
+`@involvex/term-sdk` 0.1.1. See PLUGINS.md and `examples/plugins/hello-plugin`.
 https://github.com/involvex/involvex-term
 
 ## Free channels (pick one)

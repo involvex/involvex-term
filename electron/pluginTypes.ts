@@ -22,6 +22,13 @@ export interface PtySpawnInfo {
 	shell: string
 }
 
+/** Fired when a pane emits a fresh prompt OSC (7 / 633 / 9;9). Read-only. */
+export interface PtyPromptInfo {
+	paneId: string
+	cwd: string
+	hadOutput: boolean
+}
+
 export interface PluginGitSnapshot {
 	repoRoot: string | null
 	branch: string
@@ -57,6 +64,20 @@ export interface PluginApi {
 		/** Fires on every chunk of pty output. Read-only — cannot transform it. */
 		onData(cb: (paneId: string, data: string) => void): () => void
 		onExit(cb: (paneId: string) => void): () => void
+		/**
+		 * Fires when a prompt OSC is detected for a pane. Same signal the
+		 * completion toast uses — the first prompt per pane is shell init.
+		 */
+		onPrompt(cb: (info: PtyPromptInfo) => void): () => void
+	}
+
+	/**
+	 * Read-only git snapshot for a cwd (fast status path; no stash/ahead).
+	 * Hits the host's short TTL cache — debounce in the plugin if you call
+	 * from every prompt.
+	 */
+	git: {
+		get(cwd: string): Promise<PluginGitSnapshot>
 	}
 
 	/** Snapshot of user-facing settings a plugin may want to read. */

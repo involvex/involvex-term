@@ -1,7 +1,7 @@
 {
 	"name": "@involvex/term-sdk",
-	"version": "0.1.0",
-	"description": "Type-only SDK for writing Involvex-Term plugins (commands, status bar, pty hooks)",
+	"version": "0.1.1",
+	"description": "Type-only SDK for writing Involvex-Term plugins (commands, status bar, git snapshot, pty hooks)",
 	"keywords": [
 		"involvex-term",
 		"terminal",

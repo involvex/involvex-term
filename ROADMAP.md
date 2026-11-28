@@ -14,11 +14,10 @@ added.
 
 ## Now
 
-- [ ] FEAT-026: Complete plugin API surface (git snapshot + pty prompt hook)
+- [ ] FEAT-027: Focus-trap tests + modal audit
 
 ## Later
 
-- [ ] FEAT-027: Focus-trap tests + modal audit
 - [ ] FEAT-016 (scoped): Recent commits list in Git footer menu
 - [ ] FEAT-028: Read-only inline diff preview from Changes row
 - [ ] FEAT-029: Changes row actions (Reveal / Copy path)
@@ -33,9 +32,11 @@ added.
 - [ ] Share completion speech: free announcement draft in SHARE.md
 - [ ] Share completion sound: free announcement draft in SHARE.md
 - [ ] Share remote URL cache: free announcement draft in SHARE.md
+- [ ] Share plugin API git/prompt: free announcement draft in SHARE.md
 
 ## Done
 
+- [x] FEAT-026: Plugin API — `api.git.get` + `api.pty.onPrompt`; SDK 0.1.1
 - [x] FEAT-019: Cache git remote URL per repo root (TTL + invalidate on action)
 - [x] FEAT-017: Custom completion sound file (`terminal.completionSound`)
 - [x] FEAT-007: Opt-in spoken readout for background-pane completion
