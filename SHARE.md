@@ -2,14 +2,15 @@
 
 ## Audience
 
-Accessibility-minded terminal users and anyone opening Settings / palette /
-Process Manager often.
+Git-heavy terminal users who already use the Involvex Term footer for
+branch/dirty status and want a quick glance at recent history without leaving
+the pane.
 
 ## Announcement
 
-Involvex Term’s dialog focus trap now has unit coverage (Tab / Shift+Tab cycle
-and focus restore on close). Process Manager also traps focus and sets
-`aria-modal`, matching Settings, About, and the command palette.
+Involvex Term’s Git footer now has **Recent commits…** — last five
+`--oneline` entries, read-only. Click a row to copy `hash subject` to the
+clipboard. No stage/commit UI; the shell still owns the workflow.
 https://github.com/involvex/involvex-term
 
 ## Free channels (pick one)

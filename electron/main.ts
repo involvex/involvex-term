@@ -25,6 +25,7 @@ import {
 	invalidateGitCache,
 	listBranches,
 	listChanges,
+	listRecentCommits,
 	pullFfOnly,
 	pushCurrent,
 	stashPop,
@@ -625,6 +626,9 @@ function registerIpc() {
 	)
 	ipcMain.handle('git:changes', async (_e, {cwd}: {cwd: string}) =>
 		listChanges(cwd),
+	)
+	ipcMain.handle('git:commits', async (_e, {cwd}: {cwd: string}) =>
+		listRecentCommits(cwd),
 	)
 
 	// Live cwd per pty (tracked via OSC7) — used for session snapshots.

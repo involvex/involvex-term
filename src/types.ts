@@ -74,6 +74,11 @@ export interface GitChanges {
 	untracked: GitChangeEntry[]
 }
 
+export interface GitCommitEntry {
+	hash: string
+	subject: string
+}
+
 export type GitActionResult = {ok: boolean; error?: string}
 
 export interface ShellProfile {
@@ -356,6 +361,7 @@ export interface TermApiShape {
 	gitStash: (cwd: string) => Promise<GitActionResult>
 	gitStashPop: (cwd: string) => Promise<GitActionResult>
 	gitChanges: (cwd: string) => Promise<GitChanges>
+	gitCommits: (cwd: string) => Promise<GitCommitEntry[]>
 	onGitChanged: (
 		cb: (msg: {tabId: string} & Partial<GitStatus>) => void,
 	) => () => void

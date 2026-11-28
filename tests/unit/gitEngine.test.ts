@@ -6,8 +6,37 @@ import {
 	getRemoteUrl,
 	invalidateGitCache,
 	parseNameStatus,
+	parseOnelineLog,
 	REMOTE_URL_TTL_MS,
 } from '../../electron/gitEngine.ts'
+
+describe('parseOnelineLog (FEAT-016)', () => {
+	it('parses hash and subject', () => {
+		const raw =
+			'753052f Merge pull request #57 from involvex/feat/focus-trap-tests\n' +
+			'537b9c3 fix: silence unused sel in focusTrap test stub\n'
+		expect(parseOnelineLog(raw)).toEqual([
+			{
+				hash: '753052f',
+				subject: 'Merge pull request #57 from involvex/feat/focus-trap-tests',
+			},
+			{
+				hash: '537b9c3',
+				subject: 'fix: silence unused sel in focusTrap test stub',
+			},
+		])
+	})
+
+	it('skips blank lines and non-oneline noise', () => {
+		expect(parseOnelineLog('\n\nnot a commit\n')).toEqual([])
+	})
+
+	it('keeps subjects with spaces and punctuation', () => {
+		expect(parseOnelineLog('abc1234 feat: foo (bar) — baz\n')).toEqual([
+			{hash: 'abc1234', subject: 'feat: foo (bar) — baz'},
+		])
+	})
+})
 
 describe('parseNameStatus', () => {
 	it('parses modified and added paths', () => {

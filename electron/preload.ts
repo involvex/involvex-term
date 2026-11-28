@@ -36,6 +36,7 @@ export interface TermApi {
 		unstaged: Array<{path: string; status: string; kind: string}>
 		untracked: Array<{path: string; status: string; kind: string}>
 	}>
+	gitCommits: (cwd: string) => Promise<Array<{hash: string; subject: string}>>
 	onGitChanged: (
 		cb: (msg: {tabId: string} & Record<string, unknown>) => void,
 	) => () => void
@@ -288,6 +289,7 @@ const api: TermApi = {
 	gitStash: cwd => ipcRenderer.invoke('git:stash', {cwd}),
 	gitStashPop: cwd => ipcRenderer.invoke('git:stashPop', {cwd}),
 	gitChanges: cwd => ipcRenderer.invoke('git:changes', {cwd}),
+	gitCommits: cwd => ipcRenderer.invoke('git:commits', {cwd}),
 	onGitChanged: cb => sub('git:changed', cb as never),
 	onGitChangedFor: (tabId, cb) => sub(`git:changed-${tabId}`, cb as never),
 	sysGet: () => ipcRenderer.invoke('sys:get'),

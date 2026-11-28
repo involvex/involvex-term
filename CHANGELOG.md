@@ -4,6 +4,8 @@
 
 ### Added
 
+- Git footer **Recent commits…**: last 5 `--oneline` entries (read-only);
+  click copies `hash subject` (FEAT-016)
 - Focus-trap unit tests (Tab / Shift+Tab cycle, restore on close); Process
   Manager dialog uses `trapFocus` + `aria-modal` (FEAT-027)
 - Plugin API: read-only `api.git.get(cwd)` snapshot and `api.pty.onPrompt`;
